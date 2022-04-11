@@ -3,14 +3,14 @@ import os
 import numpy as np
 from astropy.io import fits
 
-from breadboard_functions import load_breadboard_client
+from BEC1_Analysis.code.breadboard_functions import load_breadboard_client
 
 IMAGE_FORMATS_LIST = ['.fits']
 
-MEASUREMENT_TYPES_LIST = ['top_double', 'side_na', 'side_low_mag_li', 'side_high_mag']
+IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
 
-MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['top_image_A', 'top_image_B'], 'side_na': ['side_image'],
-                                'side_low_mag_li':['side_image'], 'side_high_mag_li':['side_image']}
+MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['top_image_A', 'top_image_B'],
+                                'side_low_mag':['side_image'], 'side_high_mag':['side_image']}
 
 class Measurement():
 
@@ -30,8 +30,8 @@ class Measurement():
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
                     hold_images_in_memory = True, measurement_parameters = None):
         self.breadboard_client = load_breadboard_client() 
-        if(not measurement_directory):
-            measurement_directory = os.getcwd() 
+        if(not measurement_directory_path):
+            measurement_directory_path = os.getcwd() 
         self.measurement_directory_path = measurement_directory_path 
         self.imaging_type = imaging_type
         self.image_format = image_format
@@ -54,19 +54,24 @@ class Measurement():
             run_image_pathname_dict = {}
             run_id_image_pathnames = [os.path.join(self.measurement_directory_path, f) for f in os.listdir(self.measurement_directory_path) if str(run_id) in f]
             for run_id_image_pathname in run_id_image_pathnames:
-                for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.measurement_type]:
+                for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
                     if image_name in run_id_image_pathname:
                         run_image_pathname_dict[image_name] = run_id_image_pathname 
                         break 
-            current_run = Run(run_id, run_image_pathname_dict, self.bc, hold_images_in_memory= self.hold_images_in_memory, image_format = self.image_format)
+            current_run = Run(run_id, run_image_pathname_dict, self.breadboard_client, hold_images_in_memory= self.hold_images_in_memory, 
+                                image_format = self.image_format)
             runs_dict[run_id] = current_run 
         self.runs_dict = runs_dict 
 
 
     @staticmethod
     def _parse_run_id_from_filename(image_filename):
-        run_id_string = image_filename.split("_")[0] 
+        run_id_string = image_filename.split("_")[0]
         return int(run_id_string)
+
+    @staticmethod 
+    def load_experiment_parameters():
+        return None
             
 
 
@@ -88,7 +93,7 @@ class Run():
         self.breadboard_client = breadboard_client
         if(not parameters):
             self.parameters = self.load_parameters() 
-        self.load_images = load_images 
+        self.hold_images_in_memory = hold_images_in_memory
         self.image_dict = {} 
         if not image_format in IMAGE_FORMATS_LIST:
             raise RuntimeError("Image format is not supported.")
@@ -102,7 +107,7 @@ class Run():
     
 
     def get_image(self, image_name):
-        if(hold_images_in_memory):
+        if(self.hold_images_in_memory):
             return self.image_dict[image_name] 
         else:
             return self.load_image(self.image_dict[image_name]) 
@@ -111,8 +116,7 @@ class Run():
     #TODO check formatting of returned dict from breadboard
     #TODO add support for recently uploaded runs
     def load_parameters(self):
-        return self.bc.get_runs_df_from_ids(self.run_id)
-
+        return self.breadboard_client.get_runs_df_from_ids(self.run_id)
 
     def get_parameter_value(self, value_name):
         return self.parameters[value_name]

@@ -132,3 +132,8 @@ dmypy.json
 #Mac system files
 
 .DS_STORE
+
+#Local and secret files 
+
+*secret.*
+*local.*
