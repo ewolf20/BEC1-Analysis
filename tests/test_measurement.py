@@ -46,7 +46,7 @@ class TestMeasurement:
         my_runs_dict = my_measurement.runs_dict
         assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID
         my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
-        my_run_image = my_run.get_image('side_image')
+        my_run_image = my_run.get_image('Side')
         assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
 
 

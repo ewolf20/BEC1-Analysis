@@ -6,14 +6,13 @@ from astropy.io import fits
 from BEC1_Analysis.code.breadboard_functions import load_breadboard_client
 
 IMAGE_FORMATS_LIST = ['.fits']
-
 IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
-
-MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['top_image_A', 'top_image_B'],
-                                'side_low_mag':['side_image'], 'side_high_mag':['side_image']}
+MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['TopA', 'TopB'],
+                                'side_low_mag':['Side'], 'side_high_mag':['Side']}
 
 class Measurement():
 
+    DATETIME_FORMAT_STRING = "%Y-%m-%d--%H-%M-%S"
 
     """Initialization method.
     
@@ -25,10 +24,11 @@ class Measurement():
     image_format: str, the filetype of the images being processed
     hold_images_in_memory: bool, Whether images are kept loaded in memory, or loaded on an as-needed basis and then released.
     analysis_parameters: dict {parname:value} of analysis-level params, e.g. a list of run ids which are flagged as bad shots or 
-    the coordinates of a background box."""
+    the coordinates of a background box.
+    run_parameters_verbose: Whether the runs store """
 
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = True, measurement_parameters = None):
+                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False):
         self.breadboard_client = load_breadboard_client() 
         if(not measurement_directory_path):
             measurement_directory_path = os.getcwd() 
@@ -41,6 +41,7 @@ class Measurement():
         else:
             self.experiment_parameters = experiment_parameters
         self.measurement_parameters = measurement_parameters
+        self.run_parameters_verbose = run_parameters_verbose
         
 
     """Initializes the runs dict.
@@ -57,17 +58,45 @@ class Measurement():
                 for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
                     if image_name in run_id_image_pathname:
                         run_image_pathname_dict[image_name] = run_id_image_pathname 
-                        break 
+                        break
             current_run = Run(run_id, run_image_pathname_dict, self.breadboard_client, hold_images_in_memory= self.hold_images_in_memory, 
                                 image_format = self.image_format)
             runs_dict[run_id] = current_run 
-        self.runs_dict = runs_dict 
+        self.runs_dict = runs_dict
+
+
+    """
+    Returns a list of the unique run ids in the measurement folder, plus optionally the parameters for each.
+    Parameters:
+
+    return_parameters: Whether the method should query breadboard for the run information, or leave it to be filled by the individual runs. 
+
+    Returns: a tuple (sorted_run_ids_list, sorted_run_parameters_list). sorted_run_ids_list is a list of run_ids sorted in ascending order; sorted_run_parameters_list is the corresponding parameters dicts """
+    def _get_run_information(self, return_parameters = False, verbose_parameters = False):
+        unique_run_ids_list = list(set([Measurement._parse_run_id_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f]))
+        sorted_run_ids_list = sorted(unique_run_ids_list)
+        if(return_parameters):
+            for sorted_run_id in sorted_run_ids_list:
+                for filename in os.listdir(self.measurement_directory_path):
+                    if(sorted_run_id in filename):
+                        run_datetime = Measurement.parse_datetime_from_filename(filename)
+
+        
+
+
 
 
     @staticmethod
     def _parse_run_id_from_filename(image_filename):
         run_id_string = image_filename.split("_")[0]
         return int(run_id_string)
+
+    
+    @staticmethod
+    def _parse_datetime_from_filename(filename):
+        pass
+        
+
 
     @staticmethod 
     def load_experiment_parameters():
@@ -87,8 +116,10 @@ class Run():
     breadboard_client: A client for querying breadboard to obtain the run parameters.
     image_format: The file extension of the image files
     parameters: The run parameters. If None, these are initialized by querying breadboard.
+    parameters_verbose: Only used if parameters is None. If True, the parameters as queried from breadboard include all cicero information, not just list bound variables. 
     """
-    def __init__(self, run_id, image_pathnames_dict, breadboard_client = None, hold_images_in_memory = True, image_format = ".fits", parameters = None):
+    def __init__(self, run_id, image_pathnames_dict, breadboard_client = None, hold_images_in_memory = True, image_format = ".fits", parameters = None, 
+                parameters_verbose = False):
         self.run_id = run_id
         self.breadboard_client = breadboard_client
         if(not parameters):
@@ -104,6 +135,7 @@ class Run():
                 self.image_dict[key] = self.load_image(image_pathname)
             else:
                 self.image_dict[key] = image_pathname
+        self.parameters_verbose = parameters_verbose
     
 
     def get_image(self, image_name):
@@ -116,7 +148,7 @@ class Run():
     #TODO check formatting of returned dict from breadboard
     #TODO add support for recently uploaded runs
     def load_parameters(self):
-        return self.breadboard_client.get_runs_df_from_ids(self.run_id)
+        return self.breadboard_client.get_runs_df_from_ids(self.run_id, verbose = self.parameters_verbose)
 
     def get_parameter_value(self, value_name):
         return self.parameters[value_name]
