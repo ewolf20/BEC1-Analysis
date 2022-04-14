@@ -1,5 +1,5 @@
 import hashlib
-import io
+import json
 import os 
 import sys 
 
@@ -9,8 +9,8 @@ sys.path.insert(0, path_to_analysis)
 
 TEST_MEASUREMENT_DIRECTORY_PATH = "./resources"
 
-TEST_IMAGE_FILE_PATH = "./resources/805277_04-06-2022_8_49_08_side_image.fits"
-TEST_IMAGE_FILE_NAME = "805277_04-06-2022_8_49_08_side_image.fits"
+TEST_IMAGE_FILE_PATH = "resources/805277_2022-04-06--8-49-08_Side.fits"
+TEST_IMAGE_FILE_NAME = "805277_2022-04-06--8-49-08_Side.fits"
 
 TEST_IMAGE_RUN_ID = 805277
 TEST_IMAGE_PATHNAME_DICT = {'side_image': TEST_IMAGE_FILE_PATH}
@@ -19,7 +19,7 @@ TEST_IMAGE_ARRAY_SHA_256_HEX_STRING =  '8995013339fed807810ad04c32f5f0db96ea34ca
 TEST_IMAGE_PARAMETERS_SHA_256_HEX_STRING = '8501acefd3c455d5712c5e569d2cf66e6259f912cb564e7a586ffe456ce16733'
 
 from BEC1_Analysis.code.measurement import Run, Measurement
-from satyendra.code.utility_functions import load_breadboard_client
+from satyendra.code.breadboard_functions import load_breadboard_client
 
 
 
@@ -27,6 +27,11 @@ def check_sha_hash(bytes, checksum_string):
     m = hashlib.sha256() 
     m.update(bytes) 
     return m.hexdigest() == checksum_string
+
+def get_sha_hash_string(my_bytes):
+    m = hashlib.sha256() 
+    m.update(my_bytes) 
+    return m.hexdigest()
 
 class TestMeasurement:
 
@@ -41,19 +46,34 @@ class TestMeasurement:
 
     @staticmethod 
     def test_initialize_runs_dict():
+        RUN_PARAMS_SHA_CHECKSUM = '9693e102bc60e7a8944743c883e51d154a7527a705c07af6df6cc5f7fc96ecec'
         my_measurement = TestMeasurement.initialize_measurement() 
         my_measurement._initialize_runs_dict()
         my_runs_dict = my_measurement.runs_dict
         assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID
         my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
         my_run_image = my_run.get_image('Side')
+        my_run_params = my_run.get_parameters()
+        my_run_params_bytes = json.dumps(my_run_params).encode("ASCII")
         assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
+        assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
+
+    @staticmethod
+    def test_label_badshots():
+        my_measurement = TestMeasurement.initialize_measurement() 
+        my_measurement._initialize_runs_dict() 
+        my_run = my_measurement.runs_dict[TEST_IMAGE_RUN_ID]
+        assert not my_run.is_badshot
+        my_measurement.label_badshots(lambda f: True)
+        assert my_run.is_badshot
+        
+
+
 
 
     @staticmethod
     def test_parse_run_id_from_filename():
         assert TEST_IMAGE_RUN_ID == Measurement._parse_run_id_from_filename(TEST_IMAGE_FILE_NAME)
-
 
 
 class TestRun:
