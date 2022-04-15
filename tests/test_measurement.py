@@ -21,8 +21,6 @@ TEST_IMAGE_PARAMETERS_SHA_256_HEX_STRING = '8501acefd3c455d5712c5e569d2cf66e6259
 from BEC1_Analysis.code.measurement import Run, Measurement
 from satyendra.code.breadboard_functions import load_breadboard_client
 
-
-
 def check_sha_hash(bytes, checksum_string):
     m = hashlib.sha256() 
     m.update(bytes) 
@@ -66,9 +64,15 @@ class TestMeasurement:
         assert not my_run.is_badshot
         my_measurement.label_badshots(lambda f: True)
         assert my_run.is_badshot
-        
 
-
+    #Does not test the interactive box setting.
+    @staticmethod
+    def test_set_box():
+        my_measurement = TestMeasurement.initialize_measurement() 
+        my_measurement._initialize_runs_dict() 
+        box_coordinates = [1, 2, 3, 4]
+        my_measurement.set_box('foo', box_coordinates = box_coordinates)
+        assert my_measurement.measurement_parameters['foo'] == box_coordinates
 
 
     @staticmethod
@@ -106,12 +110,3 @@ class TestRun:
         my_image_without_memory = TestRun.my_run_without_memory.get_image('side_image')
         assert check_sha_hash(my_image_with_memory.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
         assert check_sha_hash(my_image_without_memory.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
-
-
-    @staticmethod
-    def check_sha_hash(bytes, checksum_string):
-        m = hashlib.sha256() 
-        m.update(bytes) 
-        return m.hexdigest() == checksum_string
-    
-

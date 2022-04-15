@@ -2,6 +2,9 @@ import datetime
 import os
 import sys
 
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.widgets import RectangleSelector
 import numpy as np
 from astropy.io import fits
 
@@ -90,6 +93,82 @@ class Measurement():
             current_run = self.runs_dict[run_id]
             if not current_run.is_badshot:
                 current_run.is_badshot = badshot_function(current_run, **self.measurement_parameters)
+
+
+    """
+    Set a rectangular box with user input.
+    
+    run_to_use: The run to use for setting the box position. Default 0, i.e. the first run 
+    in the runs_dict, but if this is a bad shot, can be changed."""
+    def set_box(self, label, run_to_use = 0, box_coordinates = None):
+        if(not box_coordinates):
+            for i, key in enumerate(self.runs_dict):
+                if(i == run_to_use):
+                    my_run = self.runs_dict[key] 
+                    break 
+            for key in my_run.image_dict:
+                my_image_array = my_run.get_image(key)
+                break
+            my_with_atoms_image = my_image_array[0]
+            x_1, x_2, y_1, y_2 = Measurement._draw_box(my_with_atoms_image)
+            x_min = int(min(x_1, x_2))
+            y_min = int(min(y_1, y_2))
+            x_max = int(max(x_1, x_2))
+            y_max = int(max(y_1, y_2))      
+            self.measurement_parameters[label] = [x_min, y_min, x_max, y_max]
+        else:
+            self.measurement_parameters[label] = box_coordinates
+
+
+    """
+    Alias to set_box('norm_box'), for convenience."""
+    def set_norm_box(self, run_to_use, box_coordinates = None):
+        self.set_box('norm_box', run_to_use = run_to_use, box_coordinates = box_coordinates)
+
+    @staticmethod
+    def _draw_box(my_image):
+        ax = plt.gca()
+        ax.imshow(my_image, cmap = 'gray')
+        x_1 = None 
+        y_1 = None 
+        x_2 = None 
+        y_2 = None
+        def line_select_callback(eclick, erelease):
+            nonlocal x_1 
+            nonlocal x_2 
+            nonlocal y_1 
+            nonlocal y_2
+            x_1, y_1 = eclick.xdata, eclick.ydata
+            x_2, y_2 = erelease.xdata, erelease.ydata 
+        props = {'facecolor':'none', 'edgecolor':'red', 'linewidth':1}
+        rect = RectangleSelector(ax, line_select_callback, props = props)
+        plt.show()
+        return((x_1, x_2, y_1, y_2))
+
+
+
+
+    
+    def check_box(self, label, run_to_use = 0):
+        for i, key in enumerate(self.runs_dict):
+            if(i == run_to_use):
+                my_run = self.runs_dict[key] 
+                break 
+        for key in my_run.image_dict:
+            my_image_array = my_run.get_image(key)
+            break
+        my_with_atoms_image = my_image_array[0]
+        box_coordinates = self.measurement_parameters[label]
+        x_min, y_min, x_max, y_max = box_coordinates
+        width = x_max - x_min
+        height = y_max - y_min
+        rect = patches.Rectangle((x_min, y_min), width, height, linewidth = 1, edgecolor = 'r', facecolor = 'none') 
+        ax = plt.gca()
+        ax.imshow(my_with_atoms_image, cmap = 'gray')
+        ax.add_patch(rect)
+        plt.show()
+        
+
 
 
     @staticmethod
