@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import sys
 
@@ -60,14 +61,20 @@ class Measurement():
     """Initializes the runs dict.
     
     Creates a dictionary {run_id:Run} of runs in the measurement. Each individual run is an object containing the run parameters and images."""
-    def _initialize_runs_dict(self):
+    def _initialize_runs_dict(self, use_saved_params = False, saved_params_filename = "run_params_dump.json"):
         unique_run_ids_list = list(set([Measurement._parse_run_id_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f]))
         datetimes_list = list([Measurement._parse_datetime_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f])
         min_datetime = min(datetimes_list) 
         max_datetime = max(datetimes_list)
         sorted_run_ids_list = sorted(unique_run_ids_list)
-        run_parameters_list = breadboard_functions.get_run_parameter_dicts_from_ids(self.breadboard_client, sorted_run_ids_list,
+        if(not use_saved_params):
+            run_parameters_list = breadboard_functions.get_run_parameter_dicts_from_ids(self.breadboard_client, sorted_run_ids_list,
                                                                                     start_datetime = min_datetime, end_datetime = max_datetime)
+        else:
+            with open(saved_params_filename) as run_params_json:
+                run_parameters_dict = json.load(run_params_json)
+            unsorted_run_parameters_list = [(int(key), run_parameters_dict[key]) for key in run_parameters_dict]
+            run_parameters_list = [f[1] for f in sorted(unsorted_run_parameters_list, key = lambda x: x[0])]
         runs_dict = {}
         for run_id, run_parameters in zip(sorted_run_ids_list, run_parameters_list):
             run_image_pathname_dict = {}
@@ -82,13 +89,29 @@ class Measurement():
             runs_dict[run_id] = current_run
         self.runs_dict = runs_dict
 
+
+
+    """
+    Dumps the parameters of the runs dict to a .json file.
+    
+    When called, save a dictionary {run_ID, params} of the parameters of each run in the current 
+    runs dict. Avoids repeating calls to breadboard."""
+    def dump_runs_dict_params(self, dump_filename = "run_params_dump.json"):
+        with open(dump_filename, 'w') as dump_file:
+            dump_dict = {} 
+            for run_id in self.runs_dict:
+                current_run = self.runs_dict[run_id] 
+                dump_dict[run_id] = current_run.get_parameters() 
+            dump_file.write(json.dumps(dump_dict))
+
     
     """
     Labels runs as bad shots.
     
     Uses the function badshot_function to label runs as bad shots. badshot function has calling signature (Run, **kwargs), 
-    with **kwargs intended for passing in self.measurement_parameters. Runs which are already labeled as bad shots are unchanged."""
-    def label_badshots(self, badshot_function):
+    with **kwargs intended for passing in self.measurement_parameters. Runs which are already labeled as bad shots are unchanged.
+    If badshots_array is passed, instead labels the run_ids in badshots_array as bad shots."""
+    def label_badshots(self, badshot_function, badshots_array = None):
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
             if not current_run.is_badshot:
@@ -122,7 +145,7 @@ class Measurement():
 
     """
     Alias to set_box('norm_box'), for convenience."""
-    def set_norm_box(self, run_to_use, box_coordinates = None):
+    def set_norm_box(self, run_to_use=0, box_coordinates = None):
         self.set_box('norm_box', run_to_use = run_to_use, box_coordinates = box_coordinates)
 
     @staticmethod
@@ -134,9 +157,9 @@ class Measurement():
         x_2 = None 
         y_2 = None
         def line_select_callback(eclick, erelease):
-            nonlocal x_1 
-            nonlocal x_2 
-            nonlocal y_1 
+            nonlocal x_1
+            nonlocal x_2
+            nonlocal y_1
             nonlocal y_2
             x_1, y_1 = eclick.xdata, eclick.ydata
             x_2, y_2 = erelease.xdata, erelease.ydata 
@@ -144,9 +167,6 @@ class Measurement():
         rect = RectangleSelector(ax, line_select_callback, props = props)
         plt.show()
         return((x_1, x_2, y_1, y_2))
-
-
-
 
     
     def check_box(self, label, run_to_use = 0):
@@ -168,8 +188,7 @@ class Measurement():
         ax.add_patch(rect)
         plt.show()
         
-
-
+    
 
     @staticmethod
     def _parse_run_id_from_filename(image_filename):
@@ -181,8 +200,6 @@ class Measurement():
     def _parse_datetime_from_filename(filename):
         datetime_string = filename.split(FILENAME_DELIMITER_CHAR)[1]
         return datetime.datetime.strptime(datetime_string, DATETIME_FORMAT_STRING)
-
-
 
     @staticmethod 
     def load_experiment_parameters():
@@ -230,11 +247,11 @@ class Run():
                 self.image_dict[key] = image_pathname
 
 
-    def get_image(self, image_name):
+    def get_image(self, image_name, memmap = False):
         if(self.hold_images_in_memory):
             return self.image_dict[image_name]
         else:
-            return self.load_image(self.image_dict[image_name])
+            return self.load_image(self.image_dict[image_name], memmap = memmap)
 
 
     #TODO check formatting of returned dict from breadboard
@@ -248,9 +265,9 @@ class Run():
     def get_parameters(self):
         return self.parameters
 
-    def load_image(self, image_pathname):
+    def load_image(self, image_pathname, memmap = False):
         if(self.image_format == ".fits"):
-            with fits.open(image_pathname) as hdul:
+            with fits.open(image_pathname, memmap = memmap) as hdul:
                 return hdul[0].data
         else:
             raise RuntimeError("The image format is not supported.")
