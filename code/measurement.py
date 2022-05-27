@@ -111,11 +111,27 @@ class Measurement():
     Uses the function badshot_function to label runs as bad shots. badshot function has calling signature (Run, **kwargs), 
     with **kwargs intended for passing in self.measurement_parameters. Runs which are already labeled as bad shots are unchanged.
     If badshots_array is passed, instead labels the run_ids in badshots_array as bad shots."""
-    def label_badshots(self, badshot_function, badshots_array = None):
+    def label_badshots(self, badshot_function, badshots_list = None):
+        if(not badshots_list):
+            for run_id in self.runs_dict:
+                current_run = self.runs_dict[run_id]
+                if not current_run.is_badshot:
+                    current_run.is_badshot = badshot_function(current_run, **self.measurement_parameters)
+        else:
+            for run_id in self.runs_dict:
+                if run_id in badshots_list:
+                    current_run = self.runs_dict[run_id]
+                    current_run.is_badshot = True
+
+
+    def get_badshots_list(self):
+        badshots_list = []
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
-            if not current_run.is_badshot:
-                current_run.is_badshot = badshot_function(current_run, **self.measurement_parameters)
+            if current_run.is_badshot:
+                badshots_list.append(run_id) 
+        return badshots_list
+
 
 
     """
@@ -133,7 +149,7 @@ class Measurement():
                 my_image_array = my_run.get_image(key)
                 break
             my_with_atoms_image = my_image_array[0]
-            x_1, x_2, y_1, y_2 = Measurement._draw_box(my_with_atoms_image)
+            x_1, x_2, y_1, y_2 = Measurement._draw_box(my_with_atoms_image, label)
             x_min = int(min(x_1, x_2))
             y_min = int(min(y_1, y_2))
             x_max = int(max(x_1, x_2))
@@ -149,7 +165,7 @@ class Measurement():
         self.set_box('norm_box', run_to_use = run_to_use, box_coordinates = box_coordinates)
 
     @staticmethod
-    def _draw_box(my_image):
+    def _draw_box(my_image, label):
         ax = plt.gca()
         ax.imshow(my_image, cmap = 'gray')
         x_1 = None 
@@ -165,6 +181,7 @@ class Measurement():
             x_2, y_2 = erelease.xdata, erelease.ydata 
         props = {'facecolor':'none', 'edgecolor':'red', 'linewidth':1}
         rect = RectangleSelector(ax, line_select_callback, props = props)
+        plt.suptitle("Set box: " + label)
         plt.show()
         return((x_1, x_2, y_1, y_2))
 
@@ -265,9 +282,19 @@ class Run():
     def get_parameters(self):
         return self.parameters
 
+
+    """
+    Loads the image located at a pathname.
+
+    Where memmap is true, loads a reference to the image location, rather than 
+    the whole image into memory. To do so requires image to be unscaled.
+
+    WARNING: An unscaled image is offset by -32768 thanks to unsigned integer issues. This 
+    is safe for typical use, because this offset cancels when dark counts are subtracted.
+    """
     def load_image(self, image_pathname, memmap = False):
         if(self.image_format == ".fits"):
-            with fits.open(image_pathname, memmap = memmap) as hdul:
+            with fits.open(image_pathname, memmap = memmap, do_not_scale_image_data = memmap) as hdul:
                 return hdul[0].data
         else:
             raise RuntimeError("The image format is not supported.")
