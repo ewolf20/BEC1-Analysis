@@ -1,0 +1,6 @@
+Amp: 5.0
+Center: 120
+Linewidth = 2.5
+Offset: 10
+Noise: normal, mean 0, sigma = 1.0
+
