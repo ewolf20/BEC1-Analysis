@@ -12,12 +12,9 @@ TEST_DATA_DIRECTORY_PATH = "./resources/test_data"
 
 from BEC1_Analysis.code import data_fitting_functions
 
-
+#TODO: Make this test work properly
 def test_fit_imaging_resonance_lorentzian():
     LORENTZIAN_TEST_DATA_PATH = os.path.join(TEST_DATA_DIRECTORY_PATH, 'Imaging_Lorentzian_Test_Data.npy') 
     test_frequencies, test_values = np.load(LORENTZIAN_TEST_DATA_PATH)
     lorentzian_fit = data_fitting_functions.fit_imaging_resonance_lorentzian(test_frequencies, test_values)
-    plt.plot(test_frequencies, test_values, 'o')
-    plt.plot(test_frequencies, lorentzian_fit.best_fit, 'x')
-    plt.show()
-    print(lorentzian_fit.fit_report())
+    assert True

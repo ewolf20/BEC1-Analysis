@@ -69,7 +69,8 @@ class Measurement():
         sorted_run_ids_list = sorted(unique_run_ids_list)
         if(not use_saved_params):
             run_parameters_list = breadboard_functions.get_run_parameter_dicts_from_ids(self.breadboard_client, sorted_run_ids_list,
-                                                                                    start_datetime = min_datetime, end_datetime = max_datetime)
+                                                                                    start_datetime = min_datetime, end_datetime = max_datetime, 
+                                                                                    verbose = self.run_parameters_verbose)
         else:
             with open(saved_params_filename) as run_params_json:
                 run_parameters_dict = json.load(run_params_json)
@@ -96,7 +97,7 @@ class Measurement():
     
     When called, save a dictionary {run_ID, params} of the parameters of each run in the current 
     runs dict. Avoids repeating calls to breadboard."""
-    def dump_runs_dict_params(self, dump_filename = "run_params_dump.json"):
+    def dump_runs_dict(self, dump_filename = "run_params_dump.json"):
         with open(dump_filename, 'w') as dump_file:
             dump_dict = {} 
             for run_id in self.runs_dict:

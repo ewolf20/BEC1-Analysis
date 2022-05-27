@@ -62,7 +62,7 @@ class TestMeasurement:
         my_measurement = TestMeasurement.initialize_measurement() 
         my_measurement._initialize_runs_dict()
         try:
-            my_measurement.dump_runs_dict_params(dump_filename = 'foo.txt')
+            my_measurement.dump_runs_dict(dump_filename = 'foo.txt')
             my_measurement._initialize_runs_dict(use_saved_params = True, saved_params_filename = 'foo.txt')
         finally:
             os.remove('foo.txt')
