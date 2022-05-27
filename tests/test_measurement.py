@@ -81,7 +81,7 @@ class TestMeasurement:
         my_measurement._initialize_runs_dict() 
         my_run = my_measurement.runs_dict[TEST_IMAGE_RUN_ID]
         assert not my_run.is_badshot
-        my_measurement.label_badshots(lambda f: True)
+        my_measurement.label_badshots(lambda f: list(f))
         assert my_run.is_badshot
 
     #Does not test the interactive box setting.

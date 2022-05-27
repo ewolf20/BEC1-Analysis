@@ -109,20 +109,18 @@ class Measurement():
     """
     Labels runs as bad shots.
     
-    Uses the function badshot_function to label runs as bad shots. badshot function has calling signature (Run, **kwargs), 
-    with **kwargs intended for passing in self.measurement_parameters. Runs which are already labeled as bad shots are unchanged.
-    If badshots_array is passed, instead labels the run_ids in badshots_array as bad shots."""
+    Uses the function badshot_function to label runs as bad shots. badshot function has calling signature (runs_dict, **kwargs), 
+    with **kwargs intended for passing in self.measurement_parameters, and returns a list of run_ids which are bad shots.
+
+    If badshots_list is passed, instead labels the run_ids in badshots_array as bad shots."""
     def label_badshots(self, badshot_function, badshots_list = None):
         if(not badshots_list):
-            for run_id in self.runs_dict:
+            badshots_list = badshot_function(self.runs_dict, **self.measurement_parameters)
+        for run_id in self.runs_dict:
+            if run_id in badshots_list:
                 current_run = self.runs_dict[run_id]
-                if not current_run.is_badshot:
-                    current_run.is_badshot = badshot_function(current_run, **self.measurement_parameters)
-        else:
-            for run_id in self.runs_dict:
-                if run_id in badshots_list:
-                    current_run = self.runs_dict[run_id]
-                    current_run.is_badshot = True
+                current_run.is_badshot = True
+                current_run.parameters['badshot'] = True
 
 
     def get_badshots_list(self):
@@ -192,9 +190,7 @@ class Measurement():
             if(i == run_to_use):
                 my_run = self.runs_dict[key] 
                 break 
-        for key in my_run.image_dict:
-            my_image_array = my_run.get_image(key)
-            break
+        my_image_array = my_run.get_default_image()
         my_with_atoms_image = my_image_array[0]
         box_coordinates = self.measurement_parameters[label]
         x_min, y_min, x_max, y_max = box_coordinates
@@ -270,6 +266,12 @@ class Run():
             return self.image_dict[image_name]
         else:
             return self.load_image(self.image_dict[image_name], memmap = memmap)
+
+    """
+    Gives the first image in the run's imagedict; returns for any imaging type."""
+    def get_default_image(self, memmap = False):
+        for image_name in self.image_dict:
+            return self.get_image(image_name, memmap = memmap)
 
 
     #TODO check formatting of returned dict from breadboard

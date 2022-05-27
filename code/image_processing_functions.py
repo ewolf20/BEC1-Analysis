@@ -11,7 +11,9 @@ to normalize the image_with_atoms and the image_without_atoms to have the same c
 
 Note: ROI and norm_box use coordinates in the form [x_min, y_min, x_max, y_max]"""
 def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, clean_strategy = "default_clipped"):
-    image_with_atoms, image_without_atoms, image_dark = image_stack
+    image_with_atoms = image_stack[0]
+    image_without_atoms = image_stack[1]
+    image_dark = image_stack[2]
     if(norm_box_coordinates):
         norm_x_min, norm_y_min, norm_x_max, norm_y_max = norm_box_coordinates
         norm_with_atoms = image_with_atoms[norm_y_min:norm_y_max, norm_x_min:norm_x_max]
