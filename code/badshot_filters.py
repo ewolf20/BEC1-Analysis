@@ -17,7 +17,7 @@ def norm_box_filter(runs_dict, **kwargs):
         current_run = runs_dict[run_id]
         if not current_run.is_badshot:
             current_image_stack = current_run.get_default_image()
-            current_abs_image = image_processing_functions.get_absorption_image(current_image_stack, ROI = kwargs['norm box'])
+            current_abs_image = image_processing_functions.get_absorption_image(current_image_stack, ROI = kwargs['norm_box'])
             counts_dict[run_id] = image_processing_functions.pixel_sum(current_abs_image)
     counts_list_sorted = sorted([counts_dict[id] for id in counts_dict])
     median_counts = counts_list_sorted[len(counts_list_sorted) // 2]

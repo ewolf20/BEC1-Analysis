@@ -113,7 +113,7 @@ class Measurement():
     with **kwargs intended for passing in self.measurement_parameters, and returns a list of run_ids which are bad shots.
 
     If badshots_list is passed, instead labels the run_ids in badshots_array as bad shots."""
-    def label_badshots(self, badshot_function, badshots_list = None):
+    def label_badshots(self, badshot_function = None, badshots_list = None):
         if(not badshots_list):
             badshots_list = badshot_function(self.runs_dict, **self.measurement_parameters)
         for run_id in self.runs_dict:
