@@ -1,9 +1,6 @@
 import numpy as np
 
 
-
-
-
 """
 Returns an absorption image, i.e. the ratio of the light counts at a given pixel with and without 
 atoms, corrected by the dark image counts. If norm_box_coordinates is specified, uses those coordinates
@@ -100,6 +97,10 @@ def pixel_sum(image, sum_region = None):
         return sum(sum(image))
 
 
+def pixel_sum_atom_count(atom_density_image, pixel_size, sum_region = None):
+    atom_counts = atom_density_image * pixel_size 
+    return pixel_sum(atom_counts, sum_region = sum_region)
+
 
 LI6_NATURAL_LINEWIDTH_MHZ = 5.87
 LI6_RESONANT_CROSS_SECTION_UM2 = 0.2150
@@ -112,7 +113,7 @@ Convert an OD absorption image to an array of 2D atom densities, in units of um^
 Warning: All inverse-time units are in units of MHz by convention. All length units are in um."""
 
 def get_atom_density_absorption(image_stack, ROI = None, norm_box_coordinates = None, abs_clean_strategy = 'default_clipped', od_clean_strategy = 'default_clipped',
-                                flag = 'beer-lambert', detuning = 0, linewidth = None, res_cross_section = None, species = '6Li', intensity = None):
+                                flag = 'beer-lambert', detuning = 0, linewidth = None, res_cross_section = None, species = '6Li', saturation_counts = None):
     if not linewidth:
         if(species == "6Li"):
             linewidth = LI6_NATURAL_LINEWIDTH_MHZ
@@ -122,15 +123,18 @@ def get_atom_density_absorption(image_stack, ROI = None, norm_box_coordinates = 
             raise ValueError("Species flag not recognized. Valid options are '6Li' and '23Na'.")
     if not res_cross_section:
         if(species == "6Li"):
-            linewidth = LI6_RESONANT_CROSS_SECTION_UM2
+            res_cross_section = LI6_RESONANT_CROSS_SECTION_UM2
         elif(species == "23Na"):
-            linewidth = NA23_RESONANT_CROSS_SECTION_UM2
+            res_cross_section = NA23_RESONANT_CROSS_SECTION_UM2
         else:
             raise ValueError("Species flag not recognized. Valid options are '6Li' and '23Na'.")
+    od_image = get_absorption_od_image(image_stack, ROI = ROI, norm_box_coordinates=norm_box_coordinates, 
+                                        abs_clean_strategy=abs_clean_strategy, od_clean_strategy=od_clean_strategy)
     if(flag == 'beer-lambert'):
-        od_image = get_absorption_od_image(image_stack, ROI = ROI, norm_box_coordinates=norm_box_coordinates, 
-                                            abs_clean_strategy=abs_clean_strategy, od_clean_strategy=od_clean_strategy)
         return get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, res_cross_section)
+    elif(flag == 'sat_beer-lambert'):
+        return get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning, linewidth, res_cross_section, saturation_counts, 
+                                                            ROI = ROI, norm_box_coordinates = norm_box_coordinates)
     else:
         raise ValueError("Flag not recognized. Valid options are 'beer-lambert', 'sat_beer-lambert', and 'doppler_beer-lambert'")
 
@@ -142,5 +146,11 @@ def get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, r
     return atom_density_um2
 
 
-
-
+def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning, linewidth, res_cross_section,
+                                                saturation_counts, ROI = None, norm_box_coordinates = None):
+    beer_lambert_term = ((1 + np.square(2 * detuning / linewidth)) / res_cross_section ) * od_image
+    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates=norm_box_coordinates)
+    with_atoms_dark_subtracted, without_atoms_dark_subtracted = _roi_crop_helper(image_stack, ROI = ROI)
+    without_atoms_dark_subtracted = without_atoms_dark_subtracted * with_without_light_ratio
+    saturation_term = (1.0 / res_cross_section) * (without_atoms_dark_subtracted - with_atoms_dark_subtracted) / saturation_counts
+    return beer_lambert_term + saturation_term

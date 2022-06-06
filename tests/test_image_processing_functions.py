@@ -63,3 +63,22 @@ def test_pixel_sum():
     roi_sum = image_processing_functions.pixel_sum(od_image_full, sum_region = ROI)
     assert np.abs(full_image_sum - FULL_IMAGE_TARGET_SUM) < 1.0
     assert np.abs(roi_sum - ROI_TARGET_SUM) < 1.0
+
+
+def test_pixel_sum_atom_count():
+    test_array = np.ones((20, 20)) 
+    test_pixel_size = 3
+    assert np.abs(image_processing_functions.pixel_sum_atom_count(test_array, test_pixel_size) - 1200) < 1.0
+
+
+def test_get_atom_density_absorption():
+    test_image_array = load_test_image()
+    IMAGE_SHA_CHECKSUM = '48a07f3605fee705cdad24be32ea91f0d04a212a12bacaba43f91d3db29ab10f'
+    IMAGE_DETUNED_SHA_CHECKSUM = '51c2741068278bdd5bc8fb9c3af128037823460e1cab45247d29597e36ee33d5'
+    IMAGE_SATURATED_SHA_CHECKSUM = '63d3ba5bef27273df22244c14277e2a2e81bea3a3038854c1de5a5ba28d85801'
+    atom_number_image_full = image_processing_functions.get_atom_density_absorption(test_image_array)
+    atom_number_image_full_detuned = image_processing_functions.get_atom_density_absorption(test_image_array, detuning = 3)
+    atom_number_image_full_sat = image_processing_functions.get_atom_density_absorption(test_image_array, flag = 'sat_beer-lambert', saturation_counts = 1000000)
+    assert check_sha_hash(atom_number_image_full.data.tobytes(), IMAGE_SHA_CHECKSUM)
+    assert check_sha_hash(atom_number_image_full_detuned.data.tobytes(), IMAGE_DETUNED_SHA_CHECKSUM)
+    assert check_sha_hash(atom_number_image_full_sat.data.tobytes(), IMAGE_SATURATED_SHA_CHECKSUM)
