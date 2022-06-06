@@ -11,8 +11,30 @@ to normalize the image_with_atoms and the image_without_atoms to have the same c
 
 Note: ROI and norm_box use coordinates in the form [x_min, y_min, x_max, y_max]"""
 def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, clean_strategy = "default_clipped"):
-    image_with_atoms = image_stack[0]
-    image_without_atoms = image_stack[1]
+    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates)
+    dark_subtracted_image_with_atoms, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI)
+    absorption_image = dark_subtracted_image_with_atoms / (dark_subtracted_image_without_atoms * with_without_light_ratio)
+    absorption_image = _clean_absorption_image(absorption_image, strategy = clean_strategy)
+    return absorption_image
+
+
+def _roi_crop_helper(image_stack, ROI = None):
+    image_with_atoms = image_stack[0] 
+    image_without_atoms = image_stack[1] 
+    image_dark = image_stack[2]
+    if(ROI):
+        roi_x_min, roi_y_min, roi_x_max, roi_y_max = ROI 
+        image_with_atoms_ROI = image_with_atoms[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
+        image_without_atoms_ROI = image_without_atoms[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
+        image_dark_ROI = image_dark[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
+        return (image_with_atoms_ROI - image_dark_ROI, image_without_atoms_ROI - image_dark_ROI)
+    else:
+        return (image_with_atoms - image_dark, image_without_atoms - image_dark)
+
+
+def _norm_box_helper(image_stack, norm_box_coordinates = None):
+    image_with_atoms = image_stack[0] 
+    image_without_atoms = image_stack[1] 
     image_dark = image_stack[2]
     if(norm_box_coordinates):
         norm_x_min, norm_y_min, norm_x_max, norm_y_max = norm_box_coordinates
@@ -22,19 +44,10 @@ def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, c
         with_atoms_light_sum = sum(sum(norm_with_atoms - norm_dark))
         without_atoms_light_sum = sum(sum(norm_without_atoms - norm_dark))
         with_without_light_ratio = with_atoms_light_sum / without_atoms_light_sum 
+        return with_without_light_ratio
     else:
-        with_without_light_ratio = 1
-    if(ROI):
-        roi_x_min, roi_y_min, roi_x_max, roi_y_max = ROI
-        image_with_atoms_ROI = image_with_atoms[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
-        image_without_atoms_ROI = image_without_atoms[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
-        image_dark_ROI = image_dark[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
-        absorption_image = (image_with_atoms_ROI - image_dark_ROI) / ((image_without_atoms_ROI - image_dark_ROI) * with_without_light_ratio)
-    else:
-        image_without_atoms = image_without_atoms * with_without_light_ratio 
-        absorption_image = (image_with_atoms - image_dark) / ((image_without_atoms - image_dark) * with_without_light_ratio)
-    absorption_image = _clean_absorption_image(absorption_image, strategy = clean_strategy)
-    return absorption_image
+        return 1
+        
 
 """Cleans an absorption image.
 
@@ -88,6 +101,45 @@ def pixel_sum(image, sum_region = None):
 
 
 
+LI6_NATURAL_LINEWIDTH_MHZ = 5.87
+LI6_RESONANT_CROSS_SECTION_UM2 = 0.2150
+
+NA23_NATURAL_LINEWIDTH_MHZ = 9.79
+NA23_RESONANT_CROSS_SECTION_UM2 = 0.1657
+
+"""
+Convert an OD absorption image to an array of 2D atom densities, in units of um^{-2}. Wrapper around individual methods which handle saturation etc.
+Warning: All inverse-time units are in units of MHz by convention. All length units are in um."""
+
+def get_atom_density_absorption(image_stack, ROI = None, norm_box_coordinates = None, abs_clean_strategy = 'default_clipped', od_clean_strategy = 'default_clipped',
+                                flag = 'beer-lambert', detuning = 0, linewidth = None, res_cross_section = None, species = '6Li', intensity = None):
+    if not linewidth:
+        if(species == "6Li"):
+            linewidth = LI6_NATURAL_LINEWIDTH_MHZ
+        elif(species == "23Na"):
+            linewidth = NA23_NATURAL_LINEWIDTH_MHZ
+        else:
+            raise ValueError("Species flag not recognized. Valid options are '6Li' and '23Na'.")
+    if not res_cross_section:
+        if(species == "6Li"):
+            linewidth = LI6_RESONANT_CROSS_SECTION_UM2
+        elif(species == "23Na"):
+            linewidth = NA23_RESONANT_CROSS_SECTION_UM2
+        else:
+            raise ValueError("Species flag not recognized. Valid options are '6Li' and '23Na'.")
+    if(flag == 'beer-lambert'):
+        od_image = get_absorption_od_image(image_stack, ROI = ROI, norm_box_coordinates=norm_box_coordinates, 
+                                            abs_clean_strategy=abs_clean_strategy, od_clean_strategy=od_clean_strategy)
+        return get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, res_cross_section)
+    else:
+        raise ValueError("Flag not recognized. Valid options are 'beer-lambert', 'sat_beer-lambert', and 'doppler_beer-lambert'")
+
+
+
+def get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, res_cross_section):
+    effective_cross_section = res_cross_section / (1 + np.square(2 * detuning / linewidth)) 
+    atom_density_um2 = od_image / effective_cross_section 
+    return atom_density_um2
 
 
 
