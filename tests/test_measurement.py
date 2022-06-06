@@ -21,9 +21,9 @@ TEST_IMAGE_PARAMETERS_SHA_256_HEX_STRING = '8501acefd3c455d5712c5e569d2cf66e6259
 from BEC1_Analysis.code.measurement import Run, Measurement
 from satyendra.code.breadboard_functions import load_breadboard_client
 
-def check_sha_hash(bytes, checksum_string):
+def check_sha_hash(my_bytes, checksum_string):
     m = hashlib.sha256() 
-    m.update(bytes) 
+    m.update(my_bytes) 
     return m.hexdigest() == checksum_string
 
 def get_sha_hash_string(my_bytes):
