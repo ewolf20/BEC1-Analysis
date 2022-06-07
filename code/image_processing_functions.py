@@ -29,7 +29,22 @@ def _roi_crop_helper(image_stack, ROI = None):
         return (image_with_atoms - image_dark, image_without_atoms - image_dark)
 
 
-def _norm_box_helper(image_stack, norm_box_coordinates = None):
+#TODO: Figure out issue with roa!
+"""
+Helper function for finding the multiplier for the without_atoms image to compensate for light intensity shifts.
+
+The norm_strategy flag dictates how normalization is done. One can either have:
+
+aor: Average of ratios - takes the ratio of with atoms to without atoms pixel-by-pixel, averages this ratio, and then 
+demands the average be 1
+
+roa: ratio of averages - takes the average pixel brightness of the with and without atoms images, then takes the ratio 
+of these averages and demands that this be 1.
+
+A priori we would expect roa to be better, but in the experimental data I've seen so far it's much worse. Need to figure this
+out."""
+
+def _norm_box_helper(image_stack, norm_box_coordinates = None, norm_strategy = "aor"):
     image_with_atoms = image_stack[0] 
     image_without_atoms = image_stack[1] 
     image_dark = image_stack[2]
@@ -38,13 +53,15 @@ def _norm_box_helper(image_stack, norm_box_coordinates = None):
         norm_with_atoms = image_with_atoms[norm_y_min:norm_y_max, norm_x_min:norm_x_max]
         norm_without_atoms = image_without_atoms[norm_y_min:norm_y_max, norm_x_min:norm_x_max] 
         norm_dark = image_dark[norm_y_min:norm_y_max, norm_x_min:norm_x_max]
-        with_atoms_light_sum = sum(sum(norm_with_atoms - norm_dark))
-        without_atoms_light_sum = sum(sum(norm_without_atoms - norm_dark))
-        with_without_light_ratio = with_atoms_light_sum / without_atoms_light_sum 
+        if(norm_strategy == "roa"):
+            with_atoms_light_sum = sum(sum(norm_with_atoms - norm_dark))
+            without_atoms_light_sum = sum(sum(norm_without_atoms - norm_dark))
+            with_without_light_ratio = with_atoms_light_sum / without_atoms_light_sum
+        elif(norm_strategy == "aor"):
+            with_without_light_ratio = sum(sum((norm_with_atoms - norm_dark) / (norm_without_atoms - norm_dark))) / norm_with_atoms.size
         return with_without_light_ratio
     else:
         return 1
-        
 
 """Cleans an absorption image.
 
