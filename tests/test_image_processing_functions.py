@@ -11,7 +11,7 @@ path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
 
-TEST_MEASUREMENT_DIRECTORY_PATH = "./resources"
+RESOURCES_DIRECTORY_PATH = "./resources"
 
 TEST_IMAGE_FILE_PATH = "resources/805277_2022-04-06--8-49-08_Side.fits"
 TEST_IMAGE_FILE_NAME = "805277_2022-04-06--8-49-08_Side.fits"
@@ -82,3 +82,53 @@ def test_get_atom_density_absorption():
     assert check_sha_hash(atom_number_image_full.data.tobytes(), IMAGE_SHA_CHECKSUM)
     assert check_sha_hash(atom_number_image_full_detuned.data.tobytes(), IMAGE_DETUNED_SHA_CHECKSUM)
     assert check_sha_hash(atom_number_image_full_sat.data.tobytes(), IMAGE_SATURATED_SHA_CHECKSUM)
+
+
+POLROT_DETUNING_1A = 5
+POLROT_DETUNING_2A = -10
+POLROT_DETUNING_1B = 10
+POLROT_DETUNING_2B = -5
+
+def _generate_fake_polrot_images():
+    IMAGE_PIXEL_SIZE = 300
+    SIGMA_1 = 2.0 
+    SIGMA_2 = 1.3
+    li_cross_section = image_processing_functions._get_res_cross_section_from_species('6Li')
+    li_linewidth = image_processing_functions._get_linewidth_from_species('6Li')
+    fake_image_x = np.linspace(-5, 5, IMAGE_PIXEL_SIZE)
+    fake_image_y = np.linspace(-5, 5, IMAGE_PIXEL_SIZE)
+    fake_image_x_grid, fake_image_y_grid = np.meshgrid(fake_image_x, fake_image_y) 
+    def gaussian_density_function(x, y, sigma):
+        return np.exp(-(np.square(x) + np.square(y)) / (2 * np.square(sigma))) 
+    fake_density_1 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_1)
+    fake_density_2 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_2)
+    fake_od_naught_1 = fake_density_1 * li_cross_section
+    fake_od_naught_2 = fake_density_2 * li_cross_section
+    polrot_image_function = image_processing_functions._polrot_images_function_factory(POLROT_DETUNING_1A, POLROT_DETUNING_1B, POLROT_DETUNING_2A, 
+                                                                                        POLROT_DETUNING_2B, li_linewidth, 0, 0, np.inf)
+    image_A, image_B = polrot_image_function(np.array([fake_od_naught_1, fake_od_naught_2]))
+    return (image_A, image_B)
+
+"""
+Makes sure that the polrot _generation_, and thus the polrot image function, hasn't changed"""
+def test_polrot_images_function():
+    image_A, image_B = _generate_fake_polrot_images()
+    saved_image_A = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Image_A.npy"))
+    saved_image_B = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Image_B.npy"))
+    assert np.all(np.abs(saved_image_A - image_A) < 1e-6)
+    assert np.all(np.abs(saved_image_B - image_B) < 1e-6)
+
+
+    
+
+def test_get_atom_density_from_polrot_images():
+    fake_image_A, fake_image_B = _generate_fake_polrot_images()
+    reconstructed_density_1, reconstructed_density_2 = image_processing_functions.get_atom_density_from_polrot_images(fake_image_A, fake_image_B, 
+                                                                                                                    POLROT_DETUNING_1A, POLROT_DETUNING_1B,
+                                                                                                                    POLROT_DETUNING_2A, POLROT_DETUNING_2B)
+    saved_density_1 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_1.npy"))
+    saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
+    assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4) 
+    assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-4)
+    
+

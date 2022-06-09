@@ -170,7 +170,8 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
-    polrot_absorption_function = polrot_absorption_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth)
+    polrot_absorption_function = _polrot_images_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                                                    intensity_A, intensity_B, intensity_sat)
     atom_densities_array_1 = np.zeros(abs_image_A.shape)
     atom_densities_array_2 = np.zeros(abs_image_B.shape)
     for i in range(len(abs_image_A)):
@@ -185,10 +186,12 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
             atom_density_2 = od_naught_2 / res_cross_section
             atom_densities_array_1[i][j] = atom_density_1 
             atom_densities_array_2[i][j] = atom_density_2
+    return (atom_densities_array_1, atom_densities_array_2)
 
 
-def polrot_absorption_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth):
-    def polrot_absorption_function(od_naught_vector):
+def _polrot_images_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                        intensity_A, intensity_B, intensity_sat):
+    def polrot_images_function(od_naught_vector):
         od_naught_1 = od_naught_vector[0] 
         od_naught_2 = od_naught_vector[1]
         od_1A = od_naught_1 * _polrot_effective_od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
@@ -202,7 +205,7 @@ def polrot_absorption_function_factory(detuning_1A, detuning_1B, detuning_2A, de
         absorption_profile_A = 0.5 + np.square(abs_A) / 2 - abs_A * np.sin(phi_A)
         absorption_profile_B = 0.5 + np.square(abs_B) / 2 - abs_B * np.sin(phi_B)
         return np.array([absorption_profile_A, absorption_profile_B]) 
-    return polrot_absorption_function
+    return polrot_images_function
 
 def _get_linewidth_from_species(species):
     LI6_NATURAL_LINEWIDTH_MHZ = 5.87
