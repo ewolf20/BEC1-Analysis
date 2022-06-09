@@ -1,6 +1,5 @@
 import numpy as np 
-from lmfit import Model, Parameters
-
+from scipy.optimize import curve_fit
 
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None):
@@ -14,29 +13,47 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         amp_guess = max(counts) - data_average 
     else:
         amp_guess = data_average - min(counts)
-    fit_params = Parameters() 
-    fit_params.add('amp', value = amp_guess, vary = True)
-    if(linewidth):
-        fit_params.add('gamma', value = linewidth, vary = False) 
-    else:
-        fit_params.add('gamma', value = gamma_guess, vary = True)
+    params = np.ones(4)
+    params[0] = amp_guess 
     if(center):
-        fit_params.add('center', value = center, vary = False)
+        params[1] = center 
     else:
-        fit_params.add('center', value = center_guess, vary = True)
+        params[1] = center_guess 
+    if(linewidth):
+        params[2] = linewidth 
+    else:
+        params[2] = gamma_guess
     if(offset):
-        fit_params.add('offset', value = offset, vary = False) 
+        params[3] = offset 
     else:
-        fit_params.add('offset', value = offset_guess, vary = True)
-    if(errors):
-        weights = 1.0 / errors 
-    else:
-        weights = None
-    lorentzian_model = Model(lorentzian_function)
-    lorentzian_fit = lorentzian_model.fit(counts, freq = frequencies, params = fit_params, weights = weights)
-    return lorentzian_fit
+        params[3] = offset_guess
+    results = curve_fit(imaging_lorentzian_function, frequencies, counts, p0 = params, sigma = errors)
+    return results
 
 
-def lorentzian_function(freq, amp, center, gamma, offset):
+def imaging_lorentzian_function(freq, amp, center, gamma, offset):
     return amp * 1.0 / (np.square(freq - center) + np.square(gamma) / 4) + offset
     
+
+"""
+Convenience function for getting a pretty_printable fit report from scipy.optimize.curve_fit"""
+def fit_report(model_function, popt, pcov):
+    report_string = ''
+    report_string = report_string + "Model function: " + model_function.__name__ + "\n \n"
+    varnames_tuple = get_varnames_from_function(model_function) 
+    my_sigmas = np.sqrt(np.diag(pcov))
+    for varname, value, sigma in zip(varnames_tuple, popt, my_sigmas):
+        report_string = report_string + "Parameter: " + varname + "\tValue: " + str(value) + " ± " + str(sigma) + "\t(" + str(100 * sigma / value) + "%)" + "\n"
+    report_string = report_string + "\n"
+    report_string = report_string + "Correlations (unreported are <0.1): \n" 
+    for i in range(len(popt)):
+        for j in range(i + 1, len(popt)):
+            covariance = pcov[i][j] 
+            correlation = covariance / (my_sigmas[i] * my_sigmas[j]) 
+            if(np.abs(correlation) > 0.1):
+                report_string = report_string + varnames_tuple[i] + " and " + varnames_tuple[j] + " :\t" + str(correlation) + '\n' 
+    return report_string
+
+def get_varnames_from_function(my_func):
+    arg_names = my_func.__code__.co_varnames[1:my_func.__code__.co_argcount]
+    return arg_names
