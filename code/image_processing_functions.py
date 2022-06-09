@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import fsolve
 
 
 """
@@ -119,12 +120,6 @@ def pixel_sum_atom_count(atom_density_image, pixel_size, sum_region = None):
     return pixel_sum(atom_counts, sum_region = sum_region)
 
 
-LI6_NATURAL_LINEWIDTH_MHZ = 5.87
-LI6_RESONANT_CROSS_SECTION_UM2 = 0.2150
-
-NA23_NATURAL_LINEWIDTH_MHZ = 9.79
-NA23_RESONANT_CROSS_SECTION_UM2 = 0.1657
-
 """
 Convert an OD absorption image to an array of 2D atom densities, in units of um^{-2}. Wrapper around individual methods which handle saturation etc.
 Warning: All inverse-time units are in units of MHz by convention. All length units are in um."""
@@ -132,19 +127,9 @@ Warning: All inverse-time units are in units of MHz by convention. All length un
 def get_atom_density_absorption(image_stack, ROI = None, norm_box_coordinates = None, abs_clean_strategy = 'default_clipped', od_clean_strategy = 'default_clipped',
                                 flag = 'beer-lambert', detuning = 0, linewidth = None, res_cross_section = None, species = '6Li', saturation_counts = None):
     if not linewidth:
-        if(species == "6Li"):
-            linewidth = LI6_NATURAL_LINEWIDTH_MHZ
-        elif(species == "23Na"):
-            linewidth = NA23_NATURAL_LINEWIDTH_MHZ
-        else:
-            raise ValueError("Species flag not recognized. Valid options are '6Li' and '23Na'.")
+        linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
-        if(species == "6Li"):
-            res_cross_section = LI6_RESONANT_CROSS_SECTION_UM2
-        elif(species == "23Na"):
-            res_cross_section = NA23_RESONANT_CROSS_SECTION_UM2
-        else:
-            raise ValueError("Species flag not recognized. Valid options are '6Li' and '23Na'.")
+        res_cross_section = _get_res_cross_section_from_species(species)
     od_image = get_absorption_od_image(image_stack, ROI = ROI, norm_box_coordinates=norm_box_coordinates, 
                                         abs_clean_strategy=abs_clean_strategy, od_clean_strategy=od_clean_strategy)
     if(flag == 'beer-lambert'):
@@ -171,3 +156,72 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
     without_atoms_dark_subtracted = without_atoms_dark_subtracted * with_without_light_ratio
     saturation_term = (1.0 / res_cross_section) * (without_atoms_dark_subtracted - with_atoms_dark_subtracted) / saturation_counts
     return beer_lambert_term + saturation_term
+
+
+
+
+def _polrot_effective_od_lorentzian(detuning, linewidth, intensity, intensity_sat):
+    return 1.0 / (1 + np.square(2 * detuning / linewidth) + np.square(intensity / intensity_sat)) 
+
+
+def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
+                                        res_cross_section = None, intensity_A = 0, intensity_B = 0, intensity_sat = np.inf, species = '6Li'):
+    if not linewidth:
+        linewidth = _get_linewidth_from_species(species)
+    if not res_cross_section:
+        res_cross_section = _get_res_cross_section_from_species(species)
+    polrot_absorption_function = polrot_absorption_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth)
+    atom_densities_array_1 = np.zeros(abs_image_A.shape)
+    atom_densities_array_2 = np.zeros(abs_image_B.shape)
+    for i in range(len(abs_image_A)):
+        for j in range(len(abs_image_A[0])):
+            absorption_A = abs_image_A[i][j] 
+            absorption_B = abs_image_B[i][j]
+            def current_function(od_naught_vector):
+                return polrot_absorption_function(od_naught_vector) - np.array([absorption_A, absorption_B])
+            root = fsolve(current_function, [0, 0]) 
+            od_naught_1, od_naught_2 = root 
+            atom_density_1 = od_naught_1 / res_cross_section 
+            atom_density_2 = od_naught_2 / res_cross_section
+            atom_densities_array_1[i][j] = atom_density_1 
+            atom_densities_array_2[i][j] = atom_density_2
+
+
+def polrot_absorption_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth):
+    def polrot_absorption_function(od_naught_vector):
+        od_naught_1 = od_naught_vector[0] 
+        od_naught_2 = od_naught_vector[1]
+        od_1A = od_naught_1 * _polrot_effective_od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
+        od_1B = od_naught_1 * _polrot_effective_od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat) 
+        od_2A = od_naught_2 * _polrot_effective_od_lorentzian(detuning_2A, linewidth, intensity_A, intensity_sat) 
+        od_2B = od_naught_2 * _polrot_effective_od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
+        phi_A = - detuning_1A / linewidth * od_1A - detuning_2A / linewidth * od_2A 
+        phi_B = - detuning_1B / linewidth * od_1B - detuning_2B / linewidth * od_2B
+        abs_A = np.exp(-od_1A / 2) * np.exp(-od_2A / 2) 
+        abs_B = np.exp(-od_1B / 2) * np.exp(-od_2B / 2) 
+        absorption_profile_A = 0.5 + np.square(abs_A) / 2 - abs_A * np.sin(phi_A)
+        absorption_profile_B = 0.5 + np.square(abs_B) / 2 - abs_B * np.sin(phi_B)
+        return np.array([absorption_profile_A, absorption_profile_B]) 
+    return polrot_absorption_function
+
+def _get_linewidth_from_species(species):
+    LI6_NATURAL_LINEWIDTH_MHZ = 5.87
+    NA23_NATURAL_LINEWIDTH_MHZ = 9.79
+    if(species == "6Li"):
+        linewidth = LI6_NATURAL_LINEWIDTH_MHZ
+    elif(species == "23Na"):
+        linewidth = NA23_NATURAL_LINEWIDTH_MHZ
+    else:
+        raise ValueError("Species flag not recognized. Valid options are '6Li' and '23Na'.")
+    return linewidth
+
+def _get_res_cross_section_from_species(species):
+    LI6_RESONANT_CROSS_SECTION_UM2 = 0.2150
+    NA23_RESONANT_CROSS_SECTION_UM2 = 0.1657
+    if(species == "6Li"):
+        res_cross_section = LI6_RESONANT_CROSS_SECTION_UM2
+    elif(species == "23Na"):
+        res_cross_section = NA23_RESONANT_CROSS_SECTION_UM2
+    else:
+        raise ValueError("Species flag not recognized. Valid options are '6Li' and '23Na'.")
+    return res_cross_section
