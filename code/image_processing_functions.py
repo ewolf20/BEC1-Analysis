@@ -115,7 +115,7 @@ def pixel_sum(image, sum_region = None):
         return sum(sum(image))
 
 
-def pixel_sum_atom_count(atom_density_image, pixel_size, sum_region = None):
+def atom_count_pixel_sum(atom_density_image, pixel_size, sum_region = None):
     atom_counts = atom_density_image * pixel_size 
     return pixel_sum(atom_counts, sum_region = sum_region)
 
@@ -189,6 +189,7 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
     return (atom_densities_array_1, atom_densities_array_2)
 
 
+#TODO Implementing this function in python makes the numerics slow. Should port to C or Julia or something
 def _polrot_images_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                         intensity_A, intensity_B, intensity_sat):
     def polrot_images_function(od_naught_vector):
@@ -202,8 +203,8 @@ def _polrot_images_function_factory(detuning_1A, detuning_1B, detuning_2A, detun
         phi_B = - detuning_1B / linewidth * od_1B - detuning_2B / linewidth * od_2B
         abs_A = np.exp(-od_1A / 2) * np.exp(-od_2A / 2) 
         abs_B = np.exp(-od_1B / 2) * np.exp(-od_2B / 2) 
-        absorption_profile_A = 0.5 + np.square(abs_A) / 2 - abs_A * np.sin(phi_A)
-        absorption_profile_B = 0.5 + np.square(abs_B) / 2 - abs_B * np.sin(phi_B)
+        absorption_profile_A = 0.5 + np.square(abs_A) / 2 + abs_A * np.sin(phi_A)
+        absorption_profile_B = 0.5 + np.square(abs_B) / 2 + abs_B * np.sin(phi_B)
         return np.array([absorption_profile_A, absorption_profile_B]) 
     return polrot_images_function
 

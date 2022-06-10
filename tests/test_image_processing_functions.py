@@ -65,10 +65,10 @@ def test_pixel_sum():
     assert np.abs(roi_sum - ROI_TARGET_SUM) < 1.0
 
 
-def test_pixel_sum_atom_count():
+def test_atom_count_pixel_sum():
     test_array = np.ones((20, 20)) 
     test_pixel_size = 3
-    assert np.abs(image_processing_functions.pixel_sum_atom_count(test_array, test_pixel_size) - 1200) < 1.0
+    assert np.abs(image_processing_functions.atom_count_pixel_sum(test_array, test_pixel_size) - 1200) < 1.0
 
 
 def test_get_atom_density_absorption():
@@ -110,7 +110,7 @@ def _generate_fake_polrot_images():
     return (image_A, image_B)
 
 """
-Makes sure that the polrot _generation_, and thus the polrot image function, hasn't changed"""
+Makes sure that the polrot _generation_, and thus thcd BEBe polrot image function, hasn't changed"""
 def test_polrot_images_function():
     image_A, image_B = _generate_fake_polrot_images()
     saved_image_A = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Image_A.npy"))
