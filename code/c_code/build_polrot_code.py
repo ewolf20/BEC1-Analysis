@@ -10,7 +10,7 @@ source_string = r"""
     }
 
     static int give_polrot_image(float *od_vector, double detuning_1A, double detuning_1B, double detuning_2A, double detuning_2B, 
-                                double intensity_A, double intensity_B, double intensity_sat, double res_cross_section, double linewidth,
+                                double linewidth, double intensity_A, double intensity_B, double intensity_sat,
                                 double *buff_out) {
         double od_naught_1 = od_vector[0];
         double od_naught_2 = od_vector[1];
@@ -32,7 +32,7 @@ source_string = r"""
 
 ffibuilder = FFI()
 ffibuilder.cdef("""int give_polrot_image(float *, double detuning_1A, double detuning_1B, double detuning_2A, double detuning_2B, 
-                                        double intensity_A, double intensity_B, double intensity_sat, double res_cross_section, double linewidth,
+                                        double linewidth, double intensity_A, double intensity_B, double intensity_sat,
                                          double *);""")
 
 ffibuilder.set_source("_polrot_code", source_string)

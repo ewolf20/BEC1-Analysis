@@ -104,13 +104,22 @@ def _generate_fake_polrot_images():
     fake_density_2 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_2)
     fake_od_naught_1 = fake_density_1 * li_cross_section
     fake_od_naught_2 = fake_density_2 * li_cross_section
-    polrot_image_function = image_processing_functions._polrot_images_function_factory(POLROT_DETUNING_1A, POLROT_DETUNING_1B, POLROT_DETUNING_2A, 
-                                                                                        POLROT_DETUNING_2B, li_linewidth, 0, 0, np.inf)
-    image_A, image_B = polrot_image_function(np.array([fake_od_naught_1, fake_od_naught_2]))
+    polrot_image_function = image_processing_functions.wrapped_polrot_image_function
+    image_A = np.zeros(fake_image_x_grid.shape) 
+    image_B = np.zeros(fake_image_x_grid.shape) 
+    for i in range(IMAGE_PIXEL_SIZE):
+        for j in range(IMAGE_PIXEL_SIZE):
+            fake_od_naught_1_pixel = fake_od_naught_1[i][j] 
+            fake_od_naught_2_pixel = fake_od_naught_2[i][j]
+            fake_od_pixel_array = np.array([fake_od_naught_1_pixel, fake_od_naught_2_pixel])
+            image_A_pixel, image_B_pixel = polrot_image_function(fake_od_pixel_array, POLROT_DETUNING_1A, POLROT_DETUNING_1B, 
+                                                            POLROT_DETUNING_2A, POLROT_DETUNING_2B, li_linewidth, 0, 0, np.inf)
+            image_A[i][j] = image_A_pixel
+            image_B[i][j] = image_B_pixel
     return (image_A, image_B)
 
 """
-Makes sure that the polrot _generation_, and thus thcd BEBe polrot image function, hasn't changed"""
+Makes sure that the polrot _generation_, and thus the base polrot image function, hasn't changed"""
 def test_polrot_images_function():
     image_A, image_B = _generate_fake_polrot_images()
     saved_image_A = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Image_A.npy"))

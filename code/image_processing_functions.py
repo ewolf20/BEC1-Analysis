@@ -1,6 +1,9 @@
 import numpy as np
 from scipy.optimize import fsolve
 
+from .c_code._polrot_code import ffi as polrot_image_ffi
+from .c_code._polrot_code import lib as polrot_image_lib
+
 
 """
 Returns an absorption image, i.e. the ratio of the light counts at a given pixel with and without 
@@ -158,55 +161,45 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
     return beer_lambert_term + saturation_term
 
 
-
-
-def _polrot_effective_od_lorentzian(detuning, linewidth, intensity, intensity_sat):
-    return 1.0 / (1 + np.square(2 * detuning / linewidth) + np.square(intensity / intensity_sat)) 
-
-
 def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
-                                        res_cross_section = None, intensity_A = 0, intensity_B = 0, intensity_sat = np.inf, species = '6Li'):
+                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, species = '6Li'):
+    if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
+        raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
-    polrot_absorption_function = _polrot_images_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                                                    intensity_A, intensity_B, intensity_sat)
     atom_densities_array_1 = np.zeros(abs_image_A.shape)
     atom_densities_array_2 = np.zeros(abs_image_B.shape)
+    if not intensities_A:
+        intensity_A = 0
+        intensity_B = 0 
+        intensity_sat = np.inf
+        solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensity_A, intensity_B, intensity_sat)
     for i in range(len(abs_image_A)):
         for j in range(len(abs_image_A[0])):
-            absorption_A = abs_image_A[i][j] 
+            if(intensity_A):
+                solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensities_A[i][j], 
+                                        intensities_B[i][j], intensities_sat[i][j])
+            absorption_A = abs_image_A[i][j]
             absorption_B = abs_image_B[i][j]
-            def current_function(od_naught_vector):
-                return polrot_absorption_function(od_naught_vector) - np.array([absorption_A, absorption_B])
-            root = fsolve(current_function, [0, 0]) 
-            od_naught_1, od_naught_2 = root 
+            def current_function(od_naught_vector, *args):
+                return wrapped_polrot_image_function(od_naught_vector, *args) - np.array([absorption_A, absorption_B])
+            root = fsolve(current_function, [0, 0], args = solver_extra_args) 
+            od_naught_1, od_naught_2 = root
             atom_density_1 = od_naught_1 / res_cross_section 
             atom_density_2 = od_naught_2 / res_cross_section
             atom_densities_array_1[i][j] = atom_density_1 
             atom_densities_array_2[i][j] = atom_density_2
     return (atom_densities_array_1, atom_densities_array_2)
 
-
-#TODO Implementing this function in python makes the numerics slow. Should port to C or Julia or something
-def _polrot_images_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                        intensity_A, intensity_B, intensity_sat):
-    def polrot_images_function(od_naught_vector):
-        od_naught_1 = od_naught_vector[0] 
-        od_naught_2 = od_naught_vector[1]
-        od_1A = od_naught_1 * _polrot_effective_od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
-        od_1B = od_naught_1 * _polrot_effective_od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat) 
-        od_2A = od_naught_2 * _polrot_effective_od_lorentzian(detuning_2A, linewidth, intensity_A, intensity_sat) 
-        od_2B = od_naught_2 * _polrot_effective_od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
-        phi_A = - detuning_1A / linewidth * od_1A - detuning_2A / linewidth * od_2A 
-        phi_B = - detuning_1B / linewidth * od_1B - detuning_2B / linewidth * od_2B
-        abs_A = np.exp(-od_1A / 2) * np.exp(-od_2A / 2) 
-        abs_B = np.exp(-od_1B / 2) * np.exp(-od_2B / 2) 
-        absorption_profile_A = 0.5 + np.square(abs_A) / 2 + abs_A * np.sin(phi_A)
-        absorption_profile_B = 0.5 + np.square(abs_B) / 2 + abs_B * np.sin(phi_B)
-        return np.array([absorption_profile_A, absorption_profile_B]) 
-    return polrot_images_function
+def wrapped_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                    intensity_A, intensity_B, intensity_sat):
+    wrapped_od_naught = polrot_image_ffi.new("float[]", list(od_naught_vector))
+    output_buffer = polrot_image_ffi.new("double[]", 2)
+    status_code = polrot_image_lib.give_polrot_image(wrapped_od_naught, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
+                                                intensity_A, intensity_B, intensity_sat, output_buffer)
+    return np.array([output_buffer[0], output_buffer[1]])
 
 def _get_linewidth_from_species(species):
     LI6_NATURAL_LINEWIDTH_MHZ = 5.87
