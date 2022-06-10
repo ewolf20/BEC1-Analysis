@@ -77,7 +77,7 @@ def _clean_absorption_image(abs_image, strategy = 'default'):
     if(strategy == "default"):
         return np.nan_to_num(abs_image)
     elif(strategy == 'default_clipped'):
-        ABSORPTION_LIMIT = 1.3
+        ABSORPTION_LIMIT = 2.0
         nan_cleaned_image = np.nan_to_num(abs_image)
         return np.clip(nan_cleaned_image, 0, ABSORPTION_LIMIT)
     elif(strategy == 'none'):

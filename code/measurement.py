@@ -10,6 +10,8 @@ from matplotlib.widgets import RectangleSelector
 import numpy as np
 from astropy.io import fits
 
+from .image_processing_functions import get_absorption_image
+
 
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_satyendra = path_to_file + "/../../"
@@ -149,7 +151,7 @@ class Measurement():
             for key in my_run.image_dict:
                 my_image_array = my_run.get_image(key)
                 break
-            my_with_atoms_image = my_image_array[0]
+            my_with_atoms_image = get_absorption_image(my_image_array)
             x_1, x_2, y_1, y_2 = Measurement._draw_box(my_with_atoms_image, label)
             x_min = int(min(x_1, x_2))
             y_min = int(min(y_1, y_2))
