@@ -163,12 +163,12 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
 
 def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
                                         res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, species = '6Li'):
-    if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
-        raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
+    if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
+        raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
     atom_densities_array_1 = np.zeros(abs_image_A.shape)
     atom_densities_array_2 = np.zeros(abs_image_B.shape)
     if not intensities_A:
@@ -193,6 +193,10 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
             atom_densities_array_2[i][j] = atom_density_2
     return (atom_densities_array_1, atom_densities_array_2)
 
+
+"""
+Warning: Due to the underlying C implementation, this does not support vectorized arguments! OD naught vector must be a 1D vector of length 2, 
+containing the optical densities of both species, and all others must be scalars!"""
 def wrapped_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                     intensity_A, intensity_B, intensity_sat):
     wrapped_od_naught = polrot_image_ffi.new("float[]", list(od_naught_vector))
