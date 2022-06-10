@@ -1,4 +1,5 @@
 import datetime
+import importlib.resources as pkg_resources
 import json
 import os
 import sys
@@ -61,6 +62,7 @@ class Measurement():
     """Initializes the runs dict.
     
     Creates a dictionary {run_id:Run} of runs in the measurement. Each individual run is an object containing the run parameters and images."""
+    #TODO: Update so that the error is more descriptive when the wrong measurement type is specified
     def _initialize_runs_dict(self, use_saved_params = False, saved_params_filename = "run_params_dump.json"):
         unique_run_ids_list = list(set([Measurement._parse_run_id_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f]))
         datetimes_list = list([Measurement._parse_datetime_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f])
@@ -114,7 +116,7 @@ class Measurement():
 
     If badshots_list is passed, instead labels the run_ids in badshots_array as bad shots."""
     def label_badshots(self, badshot_function = None, badshots_list = None):
-        if(not badshots_list):
+        if(not badshots_list and badshot_function):
             badshots_list = badshot_function(self.runs_dict, **self.measurement_parameters)
         for run_id in self.runs_dict:
             if run_id in badshots_list:
@@ -217,8 +219,10 @@ class Measurement():
 
     @staticmethod 
     def load_experiment_parameters():
-        return None
-            
+        from .. import secrets as s 
+        with pkg_resources.path(s, "experiment_parameters_secret.json") as parameters_path:
+            with open(parameters_path) as parameters_file:
+                return json.load(parameters_file)
 
 
         
