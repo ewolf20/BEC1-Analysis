@@ -27,17 +27,18 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         params[3] = offset 
     else:
         params[3] = offset_guess
-    results = curve_fit(imaging_lorentzian_function, frequencies, counts, p0 = params, sigma = errors)
+    results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = params, sigma = errors)
     return results
 
 
-def imaging_lorentzian_function(freq, amp, center, gamma, offset):
-    return amp * 1.0 / (np.square(freq - center) + np.square(gamma) / 4) + offset
+def imaging_resonance_lorentzian(freq, amp, center, gamma, offset):
+    return amp * 1.0 / (np.square(2.0 * (freq - center) / gamma) + 1) + offset
     
 
 """
 Convenience function for getting a pretty_printable fit report from scipy.optimize.curve_fit"""
-def fit_report(model_function, popt, pcov):
+def fit_report(model_function, fit_results):
+    popt, pcov = fit_results
     report_string = ''
     report_string = report_string + "Model function: " + model_function.__name__ + "\n \n"
     varnames_tuple = get_varnames_from_function(model_function) 

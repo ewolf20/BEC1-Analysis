@@ -21,7 +21,7 @@ from BEC1_Analysis.code import image_processing_functions
 
 def load_test_image():
     with fits.open(TEST_IMAGE_FILE_PATH) as hdul:
-        return hdul[0].data
+        return hdul[0].data.astype(np.int32)
 
 def check_sha_hash(bytes, checksum_string):
     m = hashlib.sha256() 
@@ -36,7 +36,7 @@ def get_sha_hash_string(my_bytes):
 def test_get_absorption_image():
     DEFAULT_FULL_SHA_CHECKSUM = 'ac99dcb7ba1e002c79aa0f55fde1204254fdd377a34c2e897a7eb79a569c57e2'
     DEFAULT_CLIPPED_FULL_SHA_CHECKSUM = 'cf07ab0015c1408a22255399d85a2873da1bcf9b0867acf5f1fbf8e225d670fb'
-    ROI_SHA_CHECKSUM = '50ec4965eb71198577fc260efae986aefbdfc39b31249ba402226a08c9eb0567'
+    ROI_SHA_CHECKSUM = '10f2035f854f69996ec888e758ae3a9dbbd92b8fa781111f7206261e32fdda85'
     ROI = [270, 0, 480, 180] 
     test_image_array = load_test_image()
     absorption_image_full_default = image_processing_functions.get_absorption_image(test_image_array, clean_strategy = 'default')
