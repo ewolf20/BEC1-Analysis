@@ -72,16 +72,23 @@ def test_atom_count_pixel_sum():
 
 
 def test_get_atom_density_absorption():
+    ROI = [270, 0, 480, 180]
     test_image_array = load_test_image()
-    IMAGE_SHA_CHECKSUM = '48a07f3605fee705cdad24be32ea91f0d04a212a12bacaba43f91d3db29ab10f'
-    IMAGE_DETUNED_SHA_CHECKSUM = '51c2741068278bdd5bc8fb9c3af128037823460e1cab45247d29597e36ee33d5'
-    IMAGE_SATURATED_SHA_CHECKSUM = '63d3ba5bef27273df22244c14277e2a2e81bea3a3038854c1de5a5ba28d85801'
+    EXPECTED_SUM = 5721445.3266
+    EXPECTED_DETUNED_SUM = 11699116.9036
+    EXPECTED_SAT_SUM = 5750309.7486
     atom_number_image_full = image_processing_functions.get_atom_density_absorption(test_image_array)
     atom_number_image_full_detuned = image_processing_functions.get_atom_density_absorption(test_image_array, detuning = 3)
     atom_number_image_full_sat = image_processing_functions.get_atom_density_absorption(test_image_array, flag = 'sat_beer-lambert', saturation_counts = 1000000)
-    assert check_sha_hash(atom_number_image_full.data.tobytes(), IMAGE_SHA_CHECKSUM)
-    assert check_sha_hash(atom_number_image_full_detuned.data.tobytes(), IMAGE_DETUNED_SHA_CHECKSUM)
-    assert check_sha_hash(atom_number_image_full_sat.data.tobytes(), IMAGE_SATURATED_SHA_CHECKSUM)
+    atom_count_full = image_processing_functions.atom_count_pixel_sum(atom_number_image_full, 27.5, sum_region = ROI)
+    atom_count_full_detuned = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_detuned, 27.5, sum_region = ROI)
+    atom_count_full_sat = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_sat, 27.5, sum_region = ROI)
+    print(atom_count_full) 
+    print(atom_count_full_detuned) 
+    print(atom_count_full_sat)
+    assert np.abs(atom_count_full - EXPECTED_SUM) < 0.001
+    assert np.abs(atom_count_full_detuned - EXPECTED_DETUNED_SUM) < 0.001
+    assert np.abs(atom_count_full_sat - EXPECTED_SAT_SUM) < 0.001
 
 
 POLROT_DETUNING_1A = 5
@@ -137,7 +144,7 @@ def test_get_atom_density_from_polrot_images():
                                                                                                                     POLROT_DETUNING_2A, POLROT_DETUNING_2B)
     saved_density_1 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_1.npy"))
     saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
-    assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4) 
+    assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4)
     assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-4)
     
 
