@@ -14,14 +14,15 @@ from BEC1_Analysis.code import data_fitting_functions
 
 #TODO: Make this test work properly
 def test_fit_imaging_resonance_lorentzian():
-    EXPECTED_AMP = 4.78
-    EXPECTED_CENTER = 119.94
-    EXPECTED_GAMMA = 2.37 
-    EXPECTED_OFFSET = 10.18
+    EXPECTED_AMP = 30.20
+    EXPECTED_CENTER = 313.99
+    EXPECTED_GAMMA = 4.92
+    EXPECTED_OFFSET = 10.05
     LORENTZIAN_TEST_DATA_PATH = os.path.join(TEST_DATA_DIRECTORY_PATH, 'Imaging_Lorentzian_Test_Data.npy') 
     test_frequencies, test_values = np.load(LORENTZIAN_TEST_DATA_PATH)
     lorentzian_results = data_fitting_functions.fit_imaging_resonance_lorentzian(test_frequencies, test_values)
-    popt, pcov = lorentzian_results 
+    fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, lorentzian_results)
+    popt, pcov = lorentzian_results
     amp, center, gamma, offset = popt 
     assert np.abs(amp - EXPECTED_AMP) < 0.01
     assert np.abs(center - EXPECTED_CENTER) < 0.01
