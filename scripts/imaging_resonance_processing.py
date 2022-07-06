@@ -42,12 +42,17 @@ def main():
     counts_list = []
     for run_id in my_measurement.runs_dict:
         print(str(run_id))
-        current_run = my_measurement.runs_dict[run_id] 
+        current_run = my_measurement.runs_dict[run_id]
         current_image_stack = current_run.get_image(run_image_name, memmap = True)
         current_od_image = image_processing_functions.get_absorption_od_image(current_image_stack, ROI = my_measurement.measurement_parameters['ROI'])
         current_counts = image_processing_functions.pixel_sum(current_od_image)
         counts_list.append(current_counts)
-        frequencies_list.append(current_run.parameters[frequency_key])
+        nominal_frequency = current_run.parameters[frequency_key] 
+        if(imaging_mode_string == "side_lf"):
+            frequency_multiplier = my_measurement.experiment_parameters["li_lf_freq_multiplier"]
+        else:
+            frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+        frequencies_list.append(nominal_frequency * frequency_multiplier)
     frequencies_array = np.array(frequencies_list)
     counts_array = np.array(counts_list)
     data_saving_path = os.path.join(workfolder_pathname, "Data_" + imaging_mode_string + ".npy")
