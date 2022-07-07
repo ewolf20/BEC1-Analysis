@@ -15,6 +15,8 @@ RESOURCES_DIRECTORY_PATH = "./resources"
 
 TEST_IMAGE_FILE_PATH = "resources/805277_2022-04-06--8-49-08_Side.fits"
 TEST_IMAGE_FILE_NAME = "805277_2022-04-06--8-49-08_Side.fits"
+ABSORPTION_NUMPY_ARRAY_FILEPATH = "resources/Test_Image_Absorption.npy" 
+OD_NUMPY_ARRAY_FILEPATH = "resources/Test_Image_OD.npy"
 
 
 from BEC1_Analysis.code import image_processing_functions 
@@ -34,29 +36,27 @@ def get_sha_hash_string(my_bytes):
     return m.hexdigest()
 
 def test_get_absorption_image():
-    DEFAULT_FULL_SHA_CHECKSUM = 'ac99dcb7ba1e002c79aa0f55fde1204254fdd377a34c2e897a7eb79a569c57e2'
-    DEFAULT_CLIPPED_FULL_SHA_CHECKSUM = 'cf07ab0015c1408a22255399d85a2873da1bcf9b0867acf5f1fbf8e225d670fb'
-    ROI_SHA_CHECKSUM = '10f2035f854f69996ec888e758ae3a9dbbd92b8fa781111f7206261e32fdda85'
-    ROI = [270, 0, 480, 180] 
+    ROI = [270, 0, 480, 180]
     test_image_array = load_test_image()
-    absorption_image_full_default = image_processing_functions.get_absorption_image(test_image_array, clean_strategy = 'default')
-    absorption_image_full_default_clipped = image_processing_functions.get_absorption_image(test_image_array, clean_strategy = 'default_clipped')
-    assert check_sha_hash(absorption_image_full_default.data.tobytes(), DEFAULT_FULL_SHA_CHECKSUM)
-    assert check_sha_hash(absorption_image_full_default_clipped.data.tobytes(), DEFAULT_CLIPPED_FULL_SHA_CHECKSUM) 
+    absorption_image_full = image_processing_functions.get_absorption_image(test_image_array)
+    saved_absorption_image_full = np.load(ABSORPTION_NUMPY_ARRAY_FILEPATH)
+    assert np.all(np.abs(absorption_image_full - saved_absorption_image_full) < 1e-4)
     absorption_image_ROI = image_processing_functions.get_absorption_image(test_image_array, ROI = ROI)
-    assert check_sha_hash(absorption_image_ROI, ROI_SHA_CHECKSUM)
+    xmin, ymin, xmax, ymax = ROI 
+    saved_absorption_image_ROI = saved_absorption_image_full[ymin:ymax, xmin:xmax]
+    assert np.all(np.abs(absorption_image_ROI - saved_absorption_image_ROI) < 1e-4)
 
 
 def test_get_absorption_od_image():
-    OD_IMAGE_CHECKSUM = 'eba885a09e45b672613b13e27776319bc7231362c18e20e11c64b5d6de8a193a'
     test_image_array = load_test_image() 
     od_image_full = image_processing_functions.get_absorption_od_image(test_image_array)
-    assert check_sha_hash(od_image_full.data.tobytes(), OD_IMAGE_CHECKSUM)
+    saved_od_image = np.load(OD_NUMPY_ARRAY_FILEPATH)
+    assert np.all(np.abs(od_image_full - saved_od_image) < 1e-4)
 
 def test_pixel_sum():
     ROI = [270, 0, 480, 180] 
-    ROI_TARGET_SUM = 44731.2998268131
-    FULL_IMAGE_TARGET_SUM = 169928.56906968268
+    ROI_TARGET_SUM = 44835.131246112694
+    FULL_IMAGE_TARGET_SUM = 266372.87341004313
     test_image_array = load_test_image() 
     od_image_full = image_processing_functions.get_absorption_od_image(test_image_array)
     full_image_sum = image_processing_functions.pixel_sum(od_image_full)
@@ -72,16 +72,20 @@ def test_atom_count_pixel_sum():
 
 
 def test_get_atom_density_absorption():
+    ROI = [270, 0, 480, 180] 
+    EXPECTED_SUM = 5738896.80
+    EXPECTED_DETUNED_SUM = 11734801.39
+    EXPECTED_SAT_SUM = 5756960.91
     test_image_array = load_test_image()
-    IMAGE_SHA_CHECKSUM = '48a07f3605fee705cdad24be32ea91f0d04a212a12bacaba43f91d3db29ab10f'
-    IMAGE_DETUNED_SHA_CHECKSUM = '51c2741068278bdd5bc8fb9c3af128037823460e1cab45247d29597e36ee33d5'
-    IMAGE_SATURATED_SHA_CHECKSUM = '63d3ba5bef27273df22244c14277e2a2e81bea3a3038854c1de5a5ba28d85801'
     atom_number_image_full = image_processing_functions.get_atom_density_absorption(test_image_array)
     atom_number_image_full_detuned = image_processing_functions.get_atom_density_absorption(test_image_array, detuning = 3)
     atom_number_image_full_sat = image_processing_functions.get_atom_density_absorption(test_image_array, flag = 'sat_beer-lambert', saturation_counts = 1000000)
-    assert check_sha_hash(atom_number_image_full.data.tobytes(), IMAGE_SHA_CHECKSUM)
-    assert check_sha_hash(atom_number_image_full_detuned.data.tobytes(), IMAGE_DETUNED_SHA_CHECKSUM)
-    assert check_sha_hash(atom_number_image_full_sat.data.tobytes(), IMAGE_SATURATED_SHA_CHECKSUM)
+    atom_count = image_processing_functions.atom_count_pixel_sum(atom_number_image_full, 27.52, sum_region = ROI)
+    atom_count_detuned = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_detuned, 27.52, sum_region = ROI) 
+    atom_count_sat = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_sat, 27.52, sum_region = ROI)
+    assert np.abs(atom_count - EXPECTED_SUM) < 0.01 
+    assert np.abs(atom_count_detuned - EXPECTED_DETUNED_SUM) < 0.01 
+    assert np.abs(atom_count_sat - EXPECTED_SAT_SUM) < 0.01
 
 
 POLROT_DETUNING_1A = 5
