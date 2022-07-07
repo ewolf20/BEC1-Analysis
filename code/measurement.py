@@ -305,6 +305,6 @@ class Run():
     def load_image(self, image_pathname, memmap = False):
         if(self.image_format == ".fits"):
             with fits.open(image_pathname, memmap = memmap, do_not_scale_image_data = memmap) as hdul:
-                return hdul[0].data.astype(np.int32, copy = False)
+                return hdul[0].data
         else:
             raise RuntimeError("The image format is not supported.")

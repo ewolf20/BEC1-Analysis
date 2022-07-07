@@ -21,7 +21,7 @@ from BEC1_Analysis.code import image_processing_functions
 
 def load_test_image():
     with fits.open(TEST_IMAGE_FILE_PATH) as hdul:
-        return hdul[0].data.astype(np.int32)
+        return hdul[0].data
 
 def check_sha_hash(bytes, checksum_string):
     m = hashlib.sha256() 
