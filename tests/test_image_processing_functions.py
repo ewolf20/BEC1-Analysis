@@ -141,7 +141,7 @@ def test_get_atom_density_from_polrot_images():
                                                                                                                     POLROT_DETUNING_2A, POLROT_DETUNING_2B)
     saved_density_1 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_1.npy"))
     saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
-    assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4) 
+    assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4)
     assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-4)
     
 

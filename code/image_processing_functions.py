@@ -122,8 +122,8 @@ def pixel_sum(image, sum_region = None):
         return sum(sum(image))
 
 
-def atom_count_pixel_sum(atom_density_image, pixel_size, sum_region = None):
-    atom_counts = atom_density_image * pixel_size 
+def atom_count_pixel_sum(atom_density_image, pixel_area, sum_region = None):
+    atom_counts = atom_density_image * pixel_area 
     return pixel_sum(atom_counts, sum_region = sum_region)
 
 
