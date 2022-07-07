@@ -3,6 +3,8 @@ import json
 import os 
 import sys 
 
+import matplotlib.pyplot as plt 
+
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
@@ -16,7 +18,7 @@ TEST_IMAGE_RUN_ID = 805277
 TEST_IMAGE_PATHNAME_DICT = {'side_image': TEST_IMAGE_FILE_PATH}
 
 TEST_IMAGE_ARRAY_SHA_256_HEX_STRING =  '8995013339fed807810ad04c32f5f0db96ea34ca4e3d924d408c35f22da8facb'
-TEST_IMAGE_PARAMETERS_SHA_256_HEX_STRING = '8501acefd3c455d5712c5e569d2cf66e6259f912cb564e7a586ffe456ce16733'
+RUN_PARAMS_SHA_CHECKSUM = '9693e102bc60e7a8944743c883e51d154a7527a705c07af6df6cc5f7fc96ecec'
 
 from BEC1_Analysis.code.measurement import Run, Measurement
 from satyendra.code.breadboard_functions import load_breadboard_client
@@ -44,7 +46,6 @@ class TestMeasurement:
 
     @staticmethod 
     def test_initialize_runs_dict():
-        RUN_PARAMS_SHA_CHECKSUM = '9693e102bc60e7a8944743c883e51d154a7527a705c07af6df6cc5f7fc96ecec'
         my_measurement = TestMeasurement.initialize_measurement() 
         my_measurement._initialize_runs_dict()
         my_runs_dict = my_measurement.runs_dict
@@ -72,6 +73,7 @@ class TestMeasurement:
         my_run_image = my_run.get_image('Side')
         my_run_params = my_run.get_parameters()
         my_run_params_bytes = json.dumps(my_run_params).encode("ASCII")
+        print(get_sha_hash_string(my_run_image.data.tobytes()))
         assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
         assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
 
@@ -118,10 +120,10 @@ class TestRun:
 
     @staticmethod 
     def test_load_parameters():
-        my_parameters_df = TestRun.my_run_without_memory.get_parameters()
-        my_parameters_json_string = my_parameters_df.to_json() 
+        my_parameters_dict = TestRun.my_run_without_memory.get_parameters()
+        my_parameters_json_string = json.dumps(my_parameters_dict)
         my_parameters_json_bytes = my_parameters_json_string.encode("ASCII") 
-        assert check_sha_hash(my_parameters_json_bytes, TEST_IMAGE_PARAMETERS_SHA_256_HEX_STRING)
+        assert check_sha_hash(my_parameters_json_bytes, RUN_PARAMS_SHA_CHECKSUM)
         
 
     @staticmethod

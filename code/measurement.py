@@ -83,10 +83,11 @@ class Measurement():
         runs_dict = {}
         for run_id, run_parameters in zip(sorted_run_ids_list, run_parameters_list):
             run_image_pathname_dict = {}
-            run_id_image_pathnames = [os.path.join(self.measurement_directory_path, f) for f in os.listdir(self.measurement_directory_path) if str(run_id) in f]
-            for run_id_image_pathname in run_id_image_pathnames:
+            run_id_image_filenames = [f for f in os.listdir(self.measurement_directory_path) if str(run_id) in f]
+            for run_id_image_filename in run_id_image_filenames:
                 for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
-                    if image_name in run_id_image_pathname:
+                    if image_name in run_id_image_filename:
+                        run_id_image_pathname = os.path.join(self.measurement_directory_path, run_id_image_filename)
                         run_image_pathname_dict[image_name] = run_id_image_pathname 
                         break
             current_run = Run(run_id, run_image_pathname_dict, self.breadboard_client, hold_images_in_memory= self.hold_images_in_memory, 
@@ -255,7 +256,7 @@ class Run():
         else:
             self.is_badshot = False
         self.hold_images_in_memory = hold_images_in_memory
-        self.image_dict = {} 
+        self.image_dict = {}
         if not image_format in IMAGE_FORMATS_LIST:
             raise RuntimeError("Image format is not supported.")
         self.image_format = image_format
@@ -283,7 +284,7 @@ class Run():
     #TODO check formatting of returned dict from breadboard
     #TODO add support for recently uploaded runs
     def load_parameters(self):
-        return self.breadboard_client.get_runs_df_from_ids(self.run_id, verbose = self.parameters_verbose)
+        return breadboard_functions.get_run_parameter_dict_from_id(self.breadboard_client, self.run_id, verbose = self.parameters_verbose)
 
     def get_parameter_value(self, value_name):
         return self.parameters[value_name]

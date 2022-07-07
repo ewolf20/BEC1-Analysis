@@ -3,11 +3,13 @@ from scipy.optimize import curve_fit
 
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None):
+    #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
+    INITIAL_GAMMA_GUESS = 5.0
     data_average = sum(counts) / len(counts)
     frequency_average = sum(frequencies) / len(frequencies)
     frequency_range = max(frequencies) - min(frequencies) 
     center_guess = frequency_average
-    gamma_guess = frequency_range
+    gamma_guess = INITIAL_GAMMA_GUESS
     offset_guess = data_average
     if(max(counts) - data_average > data_average - min(counts)):
         amp_guess = max(counts) - data_average 
@@ -27,17 +29,19 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         params[3] = offset 
     else:
         params[3] = offset_guess
-    results = curve_fit(imaging_lorentzian_function, frequencies, counts, p0 = params, sigma = errors)
+    print(str(params))
+    results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = params, sigma = errors)
     return results
 
 
-def imaging_lorentzian_function(freq, amp, center, gamma, offset):
-    return amp * 1.0 / (np.square(freq - center) + np.square(gamma) / 4) + offset
+def imaging_resonance_lorentzian(freq, amp, center, gamma, offset):
+    return amp * 1.0 / (np.square(2.0 * (freq - center) / gamma) + 1) + offset
     
 
 """
 Convenience function for getting a pretty_printable fit report from scipy.optimize.curve_fit"""
-def fit_report(model_function, popt, pcov):
+def fit_report(model_function, fit_results):
+    popt, pcov = fit_results
     report_string = ''
     report_string = report_string + "Model function: " + model_function.__name__ + "\n \n"
     varnames_tuple = get_varnames_from_function(model_function) 
