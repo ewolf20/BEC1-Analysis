@@ -17,7 +17,7 @@ TEST_IMAGE_FILE_NAME = "805277_2022-04-06--8-49-08_Side.fits"
 TEST_IMAGE_RUN_ID = 805277
 TEST_IMAGE_PATHNAME_DICT = {'side_image': TEST_IMAGE_FILE_PATH}
 
-TEST_IMAGE_ARRAY_SHA_256_HEX_STRING =  '24f9a2b4c821abb46daf2d4f16bffb683a3a48d4ab393ea36ca9c8fd35f469be'
+TEST_IMAGE_ARRAY_SHA_256_HEX_STRING =  '8995013339fed807810ad04c32f5f0db96ea34ca4e3d924d408c35f22da8facb'
 RUN_PARAMS_SHA_CHECKSUM = '9693e102bc60e7a8944743c883e51d154a7527a705c07af6df6cc5f7fc96ecec'
 
 from BEC1_Analysis.code.measurement import Run, Measurement
@@ -123,7 +123,6 @@ class TestRun:
         my_parameters_dict = TestRun.my_run_without_memory.get_parameters()
         my_parameters_json_string = json.dumps(my_parameters_dict)
         my_parameters_json_bytes = my_parameters_json_string.encode("ASCII") 
-        print(get_sha_hash_string(my_parameters_json_bytes))
         assert check_sha_hash(my_parameters_json_bytes, RUN_PARAMS_SHA_CHECKSUM)
         
 
