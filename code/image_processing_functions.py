@@ -1,4 +1,5 @@
 from multiprocessing import Pool
+import os 
 
 import numpy as np
 from scipy.optimize import fsolve
@@ -168,7 +169,8 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
 
 
 def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
-                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, species = '6Li'):
+                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, species = '6Li', 
+                                        ):
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
@@ -181,20 +183,26 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
         intensities_A = np.zeros(abs_image_A.shape)
         intensities_B = np.zeros(abs_image_A.shape)
         intensities_sat = np.inf * np.ones(abs_image_A.shape)
-    polrot_function = _paralellizable_polrot_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                                                res_cross_section)
-    for absorption_A, absorption_B, intensity_A, intensity_B, intensity_sat in zip(abs_image_A.flatten(), abs_image_B.flatten(), 
-                                                                            intensities_A.flatten(), intensities_B.flatten(), intensities_sat.flatten()):
-        atom_density_1, atom_density_2 = polrot_function(absorption_A, absorption_B, intensity_A, intensity_B, intensity_sat)
-        atom_densities_list_1.append(atom_density_1)
-        atom_densities_list_2.append(atom_density_2)
+    cpu_count = os.cpu_count()
+    cpus_to_use = cpu_count // 2
+    map_iterator = zip(abs_image_A.flatten(), abs_image_B.flatten(), generator_factory(detuning_1A), 
+                        generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
+                        generator_factory(linewidth), generator_factory(res_cross_section), intensities_A.flatten(), 
+                        intensities_B.flatten(), intensities_sat.flatten())
+    with Pool(cpus_to_use) as p:
+        for atom_density_1, atom_density_2 in p.starmap(parallelizable_polrot_function, map_iterator):
+            atom_densities_list_1.append(atom_density_1)
+            atom_densities_list_2.append(atom_density_2)
     atom_densities_array_1 = np.reshape(atom_densities_list_1, abs_image_A.shape)
     atom_densities_array_2 = np.reshape(atom_densities_list_2, abs_image_A.shape)
     return (atom_densities_array_1, atom_densities_array_2)
 
+def generator_factory(value):
+    while True:
+        yield value
 
-def _paralellizable_polrot_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, res_cross_section):
-    def parallelizable_polrot_function(absorption_A, absorption_B, intensity_A, intensity_B, intensity_sat):
+def parallelizable_polrot_function(absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                    res_cross_section, intensity_A, intensity_B, intensity_sat):
         solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                 intensity_A, intensity_B, intensity_sat)
         def current_function(od_naught_vector, *args):
@@ -203,9 +211,7 @@ def _paralellizable_polrot_function_factory(detuning_1A, detuning_1B, detuning_2
         od_naught_1, od_naught_2 = root 
         atom_density_1 = od_naught_1 / res_cross_section 
         atom_density_2 = od_naught_2 / res_cross_section 
-        return (atom_density_1, atom_density_2)
-    return parallelizable_polrot_function
-
+        return (atom_density_1, atom_density_2) 
 
 """
 Warning: Due to the underlying C implementation, this does not support vectorized arguments! OD naught vector must be a 1D vector of length 2, 
