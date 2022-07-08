@@ -143,5 +143,28 @@ def test_get_atom_density_from_polrot_images():
     saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
     assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4)
     assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-4)
+
+
+def test_generate_polrot_lookup_table():
+    try:
+        image_processing_functions.generate_polrot_lookup_table(POLROT_DETUNING_1A, POLROT_DETUNING_1B, POLROT_DETUNING_2A, POLROT_DETUNING_2B, 
+                                                            num_samps = 100)
+        generated_array = np.load("Polrot_Lookup_Table.npy") 
+        stored_array = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Polrot_Lookup_Table_Small.npy")) 
+        assert np.all(np.abs(generated_array - stored_array) < 1e-4) 
+    finally:
+        os.remove("Polrot_Lookup_Table.npy") 
+        os.remove("Polrot_Lookup_Table_Params.txt") 
+
+
+def test_get_polrot_densities_from_lookup_table():
+    fake_image_A, fake_image_B = _generate_fake_polrot_images() 
+    densities_lookup_1, densities_lookup_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Polrot_Lookup_Table_Full.npy"))
+    reconstructed_density_1, reconstructed_density_2 = image_processing_functions.get_polrot_densities_from_lookup_table(fake_image_A, fake_image_B, 
+                                                                                                                        densities_lookup_1, densities_lookup_2) 
+    saved_density_1 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_1.npy"))
+    saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
+    assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-3)
+    assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-3)
     
 

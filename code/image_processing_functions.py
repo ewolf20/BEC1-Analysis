@@ -168,6 +168,62 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
     return beer_lambert_term + saturation_term
 
 
+def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None, res_cross_section = None, species = '6Li',
+                                num_samps = 1000, abs_min = 0.0, abs_max = 2.0):
+    abs_values = np.linspace(abs_min, abs_max, num = num_samps, endpoint = True)
+    my_abs_A_grid = np.zeros((num_samps, num_samps)) 
+    my_abs_B_grid = np.zeros((num_samps, num_samps)) 
+    for i, abs in enumerate(abs_values):
+        my_abs_A_grid[i] = abs * np.ones(num_samps) 
+        my_abs_B_grid[:, i] = abs * np.ones(num_samps) 
+    my_densities_1_grid, my_densities_2_grid = get_atom_density_from_polrot_images(my_abs_A_grid, my_abs_B_grid, detuning_1A, detuning_1B, detuning_2A, 
+                                                detuning_2B, linewidth = linewidth, res_cross_section = res_cross_section, species = species)
+    np.save("Polrot_Lookup_Table.npy", np.stack((my_densities_1_grid, my_densities_2_grid)))
+    with open("Polrot_Lookup_Table_Params.txt", 'w') as f:
+        f.write("Detuning 1A: " + str(detuning_1A)) 
+        f.write("Detuning 1B: " + str(detuning_1B))
+        f.write("Detuning_2A: " + str(detuning_2A)) 
+        f.write("Detuning 2B: " + str(detuning_2B))
+        f.write("Absorption Min: " + str(abs_min)) 
+        f.write("Absorption Max: " + str(abs_max)) 
+        f.write("Number samples: " + str(num_samps))
+
+
+def get_polrot_densities_from_lookup_table(abs_image_A, abs_image_B, densities_1_lookup, densities_2_lookup):
+    densities_1_array = np.zeros(abs_image_A.shape)
+    densities_2_array = np.zeros(abs_image_B.shape)
+    for index, abs_A in np.ndenumerate(abs_image_A):
+        abs_B = abs_image_B[index] 
+        density_1, density_2 = _lookup_pixel_polrot_densities(densities_1_lookup, densities_2_lookup, abs_A, abs_B) 
+        densities_1_array[index] = density_1 
+        densities_2_array[index] = density_2 
+    return (densities_1_array, densities_2_array)
+
+
+def _lookup_pixel_polrot_densities(densities_1_lookup, densities_2_lookup, abs_A, abs_B, stride = None, min = None):
+    if not stride:
+        num_samps = len(densities_1_lookup) 
+        stride = 2.0 / (num_samps - 1)
+    if not min:
+        min = 0.0 
+    abs_A_index = int(np.round(abs_A / stride) )
+    abs_B_index = int(np.round(abs_B / stride) )
+    densities_1_base_value = densities_1_lookup[abs_A_index, abs_B_index] 
+    densities_2_base_value = densities_2_lookup[abs_A_index, abs_B_index]
+    #Interpolate between points
+    a_diff = abs_A - abs_A_index * stride 
+    b_diff = abs_B - abs_B_index * stride
+    densities_1_A_incremented = densities_1_lookup[abs_A_index + int(np.sign(a_diff)), abs_B_index]
+    densities_1_B_incremented = densities_1_lookup[abs_A_index, abs_B_index + int(np.sign(b_diff))]
+    densities_2_A_incremented = densities_2_lookup[abs_A_index + int(np.sign(a_diff)), abs_B_index]
+    densities_2_B_incremented = densities_2_lookup[abs_A_index, abs_B_index + int(np.sign(b_diff))]
+    corrected_density_1 = densities_1_base_value + ((densities_1_A_incremented - densities_1_base_value) * np.abs(a_diff) / stride + 
+                                                    (densities_1_B_incremented - densities_1_base_value) * np.abs(b_diff) / stride)
+    corrected_density_2 = densities_2_base_value + ((densities_2_A_incremented - densities_2_base_value) * np.abs(a_diff) / stride + 
+                                                    (densities_2_B_incremented - densities_2_base_value) * np.abs(b_diff) / stride)
+    return (corrected_density_1, corrected_density_2)
+
+
 def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
                                         res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, species = '6Li', 
                                         ):
