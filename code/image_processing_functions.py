@@ -1,3 +1,5 @@
+from multiprocessing import Pool
+
 import numpy as np
 from scipy.optimize import fsolve
 
@@ -173,29 +175,36 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
         res_cross_section = _get_res_cross_section_from_species(species)
     if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
         raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
-    atom_densities_array_1 = np.zeros(abs_image_A.shape)
-    atom_densities_array_2 = np.zeros(abs_image_B.shape)
+    atom_densities_list_1 = []
+    atom_densities_list_2 = []
     if not intensities_A:
-        intensity_A = 0
-        intensity_B = 0 
-        intensity_sat = np.inf
-        solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensity_A, intensity_B, intensity_sat)
-    for i in range(len(abs_image_A)):
-        for j in range(len(abs_image_A[0])):
-            if(intensity_A):
-                solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensities_A[i][j], 
-                                        intensities_B[i][j], intensities_sat[i][j])
-            absorption_A = abs_image_A[i][j]
-            absorption_B = abs_image_B[i][j]
-            def current_function(od_naught_vector, *args):
-                return wrapped_polrot_image_function(od_naught_vector, *args) - np.array([absorption_A, absorption_B])
-            root = fsolve(current_function, [0, 0], args = solver_extra_args) 
-            od_naught_1, od_naught_2 = root
-            atom_density_1 = od_naught_1 / res_cross_section 
-            atom_density_2 = od_naught_2 / res_cross_section
-            atom_densities_array_1[i][j] = atom_density_1 
-            atom_densities_array_2[i][j] = atom_density_2
+        intensities_A = np.zeros(abs_image_A.shape)
+        intensities_B = np.zeros(abs_image_A.shape)
+        intensities_sat = np.inf * np.ones(abs_image_A.shape)
+    polrot_function = _paralellizable_polrot_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                                                res_cross_section)
+    for absorption_A, absorption_B, intensity_A, intensity_B, intensity_sat in zip(abs_image_A.flatten(), abs_image_B.flatten(), 
+                                                                            intensities_A.flatten(), intensities_B.flatten(), intensities_sat.flatten()):
+        atom_density_1, atom_density_2 = polrot_function(absorption_A, absorption_B, intensity_A, intensity_B, intensity_sat)
+        atom_densities_list_1.append(atom_density_1)
+        atom_densities_list_2.append(atom_density_2)
+    atom_densities_array_1 = np.reshape(atom_densities_list_1, abs_image_A.shape)
+    atom_densities_array_2 = np.reshape(atom_densities_list_2, abs_image_A.shape)
     return (atom_densities_array_1, atom_densities_array_2)
+
+
+def _paralellizable_polrot_function_factory(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, res_cross_section):
+    def parallelizable_polrot_function(absorption_A, absorption_B, intensity_A, intensity_B, intensity_sat):
+        solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                intensity_A, intensity_B, intensity_sat)
+        def current_function(od_naught_vector, *args):
+            return wrapped_polrot_image_function(od_naught_vector, *args) - np.array([absorption_A, absorption_B])
+        root = fsolve(current_function, [0, 0], args = solver_extra_args)
+        od_naught_1, od_naught_2 = root 
+        atom_density_1 = od_naught_1 / res_cross_section 
+        atom_density_2 = od_naught_2 / res_cross_section 
+        return (atom_density_1, atom_density_2)
+    return parallelizable_polrot_function
 
 
 """
