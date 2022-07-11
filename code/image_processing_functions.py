@@ -189,6 +189,7 @@ def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning
         f.write("Number samples: " + str(num_samps))
 
 
+#TODO: Multiprocess this for greater speed
 def get_polrot_densities_from_lookup_table(abs_image_A, abs_image_B, densities_1_lookup, densities_2_lookup):
     densities_1_array = np.zeros(abs_image_A.shape)
     densities_2_array = np.zeros(abs_image_B.shape)
@@ -206,17 +207,31 @@ def _lookup_pixel_polrot_densities(densities_1_lookup, densities_2_lookup, abs_A
         stride = 2.0 / (num_samps - 1)
     if not min:
         min = 0.0 
-    abs_A_index = int(np.round(abs_A / stride) )
-    abs_B_index = int(np.round(abs_B / stride) )
+    abs_A_index = int(np.round(abs_A / stride))
+    abs_B_index = int(np.round(abs_B / stride))
     densities_1_base_value = densities_1_lookup[abs_A_index, abs_B_index] 
     densities_2_base_value = densities_2_lookup[abs_A_index, abs_B_index]
     #Interpolate between points
-    a_diff = abs_A - abs_A_index * stride 
+    a_diff = abs_A - abs_A_index * stride
     b_diff = abs_B - abs_B_index * stride
-    densities_1_A_incremented = densities_1_lookup[abs_A_index + int(np.sign(a_diff)), abs_B_index]
-    densities_1_B_incremented = densities_1_lookup[abs_A_index, abs_B_index + int(np.sign(b_diff))]
-    densities_2_A_incremented = densities_2_lookup[abs_A_index + int(np.sign(a_diff)), abs_B_index]
-    densities_2_B_incremented = densities_2_lookup[abs_A_index, abs_B_index + int(np.sign(b_diff))]
+    if(a_diff < 0):
+        densities_1_A_incremented = densities_1_lookup[abs_A_index - 1, abs_B_index]
+        densities_2_A_incremented = densities_2_lookup[abs_A_index - 1, abs_B_index]
+    elif(a_diff > 0):
+        densities_1_A_incremented = densities_1_lookup[abs_A_index + 1, abs_B_index]
+        densities_2_A_incremented = densities_2_lookup[abs_A_index + 1, abs_B_index]
+    else:
+        densities_1_A_incremented = 0
+        densities_2_A_incremented = 0
+    if(b_diff < 0):
+        densities_1_B_incremented = densities_1_lookup[abs_A_index, abs_B_index - 1]
+        densities_2_B_incremented = densities_2_lookup[abs_A_index, abs_B_index - 1]
+    elif(b_diff > 0):
+        densities_1_B_incremented = densities_1_lookup[abs_A_index, abs_B_index + 1]
+        densities_2_B_incremented = densities_2_lookup[abs_A_index, abs_B_index + 1]
+    else:
+        densities_1_B_incremented = 0
+        densities_2_B_incremented = 0
     corrected_density_1 = densities_1_base_value + ((densities_1_A_incremented - densities_1_base_value) * np.abs(a_diff) / stride + 
                                                     (densities_1_B_incremented - densities_1_base_value) * np.abs(b_diff) / stride)
     corrected_density_2 = densities_2_base_value + ((densities_2_A_incremented - densities_2_base_value) * np.abs(a_diff) / stride + 
