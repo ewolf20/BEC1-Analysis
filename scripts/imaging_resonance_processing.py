@@ -36,9 +36,18 @@ def main():
     my_measurement._initialize_runs_dict(use_saved_params = use_saved_params, saved_params_filename = run_params_filename)
     if(not use_saved_params):
         my_measurement.dump_runs_dict(dump_filename = run_params_filename)
-    my_measurement.set_box("ROI", box_coordinates = ROI_COORDINATES)
-    my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES)
-    frequencies_list = [] 
+    run_to_use = 0
+    box_set = False
+    while (not box_set) and run_to_use < len(my_measurement.runs_dict):
+        try:
+            my_measurement.set_box("ROI", box_coordinates = ROI_COORDINATES, run_to_use = run_to_use)
+            my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES, run_to_use = run_to_use)
+        except TypeError:
+            pass 
+        else:
+            box_set = True
+        run_to_use += 1
+    frequencies_list = []
     counts_list = []
     for run_id in my_measurement.runs_dict:
         print(str(run_id))

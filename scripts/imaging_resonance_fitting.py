@@ -13,7 +13,7 @@ from BEC1_Analysis.code import image_processing_functions, data_fitting_function
 from imaging_resonance_processing import get_workfolder_path
 
 
-UPPER_COUNTS_CUTOFF = 7e4
+UPPER_COUNTS_CUTOFF = 1e5
 LOWER_COUNTS_CUTOFF = 1e3
 
 def main():
@@ -33,7 +33,7 @@ def main():
     print(fit_report)
     plt.plot(frequencies_trimmed, counts_trimmed, 'o', label = "Data") 
     plt.plot(frequencies_sorted, fit_values_sorted, label = "Fit to data") 
-    plt.xlabel("Nominal Freq (MHz)") 
+    plt.xlabel("Actual Freq (MHz, arb offset)") 
     plt.ylabel("Counts (arb)")
     plt.legend() 
     plt.suptitle(title)
