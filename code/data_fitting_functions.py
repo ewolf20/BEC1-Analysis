@@ -29,7 +29,6 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         params[3] = offset 
     else:
         params[3] = offset_guess
-    print(str(params))
     results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = params, sigma = errors)
     return results
 
@@ -93,7 +92,7 @@ def fit_report(model_function, fit_results):
     varnames_tuple = get_varnames_from_function(model_function) 
     my_sigmas = np.sqrt(np.diag(pcov))
     for varname, value, sigma in zip(varnames_tuple, popt, my_sigmas):
-        report_string = report_string + "Parameter: " + varname + "\tValue: " + str(value) + " ± " + str(sigma) + "\t(" + str(100 * sigma / value) + "%)" + "\n"
+        report_string = report_string + "Parameter: {0}\tValue: {1:.3e} ± {2:.2e} \t({3:.2%}) \n".format(varname, value, sigma, np.abs(sigma / value))
     report_string = report_string + "\n"
     report_string = report_string + "Correlations (unreported are <0.1): \n" 
     for i in range(len(popt)):
@@ -101,7 +100,7 @@ def fit_report(model_function, fit_results):
             covariance = pcov[i][j] 
             correlation = covariance / (my_sigmas[i] * my_sigmas[j]) 
             if(np.abs(correlation) > 0.1):
-                report_string = report_string + varnames_tuple[i] + " and " + varnames_tuple[j] + " :\t" + str(correlation) + '\n' 
+                report_string = report_string + "{0} and {1}: \t {2:.2f}\n".format(varnames_tuple[i], varnames_tuple[j], correlation)
     return report_string
 
 def get_varnames_from_function(my_func):
