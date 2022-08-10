@@ -28,3 +28,30 @@ def test_fit_imaging_resonance_lorentzian():
     assert np.abs(center - EXPECTED_CENTER) < 0.01
     assert np.abs(gamma - EXPECTED_GAMMA) < 0.01 
     assert np.abs(offset - EXPECTED_OFFSET) < 0.01
+
+
+def test_fit_two_dimensional_gaussian():
+    noisy_image = simulate_2D_gaussian_image()
+    plt.imshow(noisy_image) 
+    plt.show()
+    fit_results = data_fitting_functions.fit_two_dimensional_gaussian(noisy_image)
+    assert True
+
+
+def simulate_2D_gaussian_image():
+    X_PIXEL_NUM = 490 
+    Y_PIXEL_NUM = 500 
+    y_coordinates = np.arange(X_PIXEL_NUM)
+    x_coordinates = np.arange(Y_PIXEL_NUM)
+    SIMULATED_X_CENTER = 130 
+    SIMULATED_Y_CENTER = 420 
+    SIMULATED_X_WIDTH = 45
+    SIMULATED_Y_WIDTH = 30
+    SIMULATED_AMP = 3.14
+    SIMULATED_OFFSET = 10
+    x_grid, y_grid = np.meshgrid(y_coordinates, x_coordinates)
+    simulated_noiseless_image = data_fitting_functions.two_dimensional_gaussian(x_grid, y_grid, SIMULATED_AMP, SIMULATED_X_CENTER, 
+                                                        SIMULATED_Y_CENTER, SIMULATED_X_WIDTH, SIMULATED_Y_WIDTH, SIMULATED_OFFSET)
+    NOISE_MAGNITUDE = 0.314
+    noisy_image = simulated_noiseless_image + np.random.normal(loc = 0.0, scale = NOISE_MAGNITUDE, size = simulated_noiseless_image.shape)
+    return noisy_image
