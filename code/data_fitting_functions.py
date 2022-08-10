@@ -104,5 +104,7 @@ def fit_report(model_function, fit_results):
     return report_string
 
 def get_varnames_from_function(my_func):
-    arg_names = my_func.__code__.co_varnames[1:my_func.__code__.co_argcount]
+    arg_names = my_func.__code__.co_varnames[:my_func.__code__.co_argcount]
+    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'freq']
+    arg_names = [f for f in arg_names if (not f in DEFAULT_INDEPENDENT_VARNAMES)]
     return arg_names
