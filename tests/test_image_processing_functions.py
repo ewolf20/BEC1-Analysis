@@ -106,22 +106,8 @@ def _generate_fake_polrot_images():
         return np.exp(-(np.square(x) + np.square(y)) / (2 * np.square(sigma))) 
     fake_density_1 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_1)
     fake_density_2 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_2)
-    fake_od_naught_1 = fake_density_1 * li_cross_section
-    fake_od_naught_2 = fake_density_2 * li_cross_section
-    polrot_image_function = image_processing_functions.wrapped_polrot_image_function
-    image_A = np.zeros(fake_image_x_grid.shape) 
-    image_B = np.zeros(fake_image_x_grid.shape) 
-    for i in range(IMAGE_PIXEL_SIZE):
-        for j in range(IMAGE_PIXEL_SIZE):
-            fake_od_naught_1_pixel = fake_od_naught_1[i][j] 
-            fake_od_naught_2_pixel = fake_od_naught_2[i][j]
-            fake_od_pixel_array = np.array([fake_od_naught_1_pixel, fake_od_naught_2_pixel])
-            image_A_pixel, image_B_pixel = polrot_image_function(fake_od_pixel_array, POLROT_DETUNING_1A, POLROT_DETUNING_1B, 
-                                                            POLROT_DETUNING_2A, POLROT_DETUNING_2B, li_linewidth, 0, 0, np.inf)
-            image_A[i][j] = image_A_pixel
-            image_B[i][j] = image_B_pixel
-    return (image_A, image_B)
-
+    return image_processing_functions.get_polrot_images_from_atom_density(fake_density_1, fake_density_2, POLROT_DETUNING_1A, POLROT_DETUNING_1B,
+                                                        POLROT_DETUNING_2A, POLROT_DETUNING_2B)
 """
 Makes sure that the polrot _generation_, and thus the base polrot image function, hasn't changed"""
 def test_polrot_images_function():

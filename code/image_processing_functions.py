@@ -261,7 +261,7 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
                         generator_factory(linewidth), generator_factory(res_cross_section), intensities_A.flatten(), 
                         intensities_B.flatten(), intensities_sat.flatten())
     with Pool(cpus_to_use) as p:
-        for atom_density_1, atom_density_2 in p.starmap(parallelizable_polrot_function, map_iterator):
+        for atom_density_1, atom_density_2 in p.starmap(parallelizable_polrot_density_function, map_iterator):
             atom_densities_list_1.append(atom_density_1)
             atom_densities_list_2.append(atom_density_2)
     atom_densities_array_1 = np.reshape(atom_densities_list_1, abs_image_A.shape)
@@ -272,12 +272,12 @@ def generator_factory(value):
     while True:
         yield value
 
-def parallelizable_polrot_function(absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+def parallelizable_polrot_density_function(absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                     res_cross_section, intensity_A, intensity_B, intensity_sat):
         solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                 intensity_A, intensity_B, intensity_sat)
         def current_function(od_naught_vector, *args):
-            return wrapped_polrot_image_function(od_naught_vector, *args) - np.array([absorption_A, absorption_B])
+            return wrapped_c_polrot_image_function(od_naught_vector, *args) - np.array([absorption_A, absorption_B])
         root = fsolve(current_function, [0, 0], args = solver_extra_args)
         od_naught_1, od_naught_2 = root 
         atom_density_1 = od_naught_1 / res_cross_section 
@@ -287,13 +287,53 @@ def parallelizable_polrot_function(absorption_A, absorption_B, detuning_1A, detu
 """
 Warning: Due to the underlying C implementation, this does not support vectorized arguments! OD naught vector must be a 1D vector of length 2, 
 containing the optical densities of both species, and all others must be scalars!"""
-def wrapped_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+def wrapped_c_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                     intensity_A, intensity_B, intensity_sat):
     wrapped_od_naught = polrot_image_ffi.new("float[]", list(od_naught_vector))
     output_buffer = polrot_image_ffi.new("double[]", 2)
     status_code = polrot_image_lib.give_polrot_image(wrapped_od_naught, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
                                                 intensity_A, intensity_B, intensity_sat, output_buffer)
     return np.array([output_buffer[0], output_buffer[1]])
+
+
+#Inverse function for simulating polrot images from atom density. Mostly for testing/debugging purposes.
+def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
+                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, species = '6Li', 
+                                        ):
+    if not linewidth:
+        linewidth = _get_linewidth_from_species(species)
+    if not res_cross_section:
+        res_cross_section = _get_res_cross_section_from_species(species)
+    if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
+        raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
+    image_A_list = []
+    image_B_list = []
+    if not intensities_A:
+        intensities_A = np.zeros(densities_1.shape)
+        intensities_B = np.zeros(densities_2.shape)
+        intensities_sat = np.inf * np.ones(densities_1.shape)
+    cpu_count = os.cpu_count()
+    cpus_to_use = cpu_count // 2
+    map_iterator = zip(densities_1.flatten(), densities_2.flatten(), generator_factory(detuning_1A), 
+                        generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
+                        generator_factory(linewidth), generator_factory(res_cross_section), intensities_A.flatten(), 
+                        intensities_B.flatten(), intensities_sat.flatten())
+    with Pool(cpus_to_use) as p:
+        for absorption_A, absorption_B in p.starmap(parallelizable_density_polrot_function, map_iterator):
+            image_A_list.append(absorption_A)
+            image_B_list.append(absorption_B)
+    image_A_array = np.reshape(image_A_list, densities_1.shape)
+    image_B_array = np.reshape(image_B_list, densities_1.shape)
+    return (image_A_array, image_B_array)
+
+def parallelizable_density_polrot_function(atom_density_1, atom_density_2, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                    res_cross_section, intensity_A, intensity_B, intensity_sat):
+        extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                intensity_A, intensity_B, intensity_sat)
+        od_naught_1 = atom_density_1 * res_cross_section
+        od_naught_2 = atom_density_2 * res_cross_section
+        od_naught_vector = [od_naught_1, od_naught_2] 
+        return wrapped_c_polrot_image_function(od_naught_vector, *extra_args)
 
 def _get_linewidth_from_species(species):
     LI6_NATURAL_LINEWIDTH_MHZ = 5.87
