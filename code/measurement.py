@@ -39,11 +39,15 @@ class Measurement():
     hold_images_in_memory: bool, Whether images are kept loaded in memory, or loaded on an as-needed basis and then released.
     measurement_parameters: dict {parname:value} of measurement-level params, e.g. a list of run ids which are flagged as bad shots or 
     the coordinates of a background box.
-    run_parameters_verbose: Whether the runs store """
-
+    run_parameters_verbose: Whether the runs store the entire set of experiment parameters, or just those being scanned.
+    load_breadboard: Whether to load a connection to breadboard. If False, the measurement operates in offline mode. """
+#TODO Add test for offline mode measurement!!!
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False):
-        self.breadboard_client = breadboard_functions.load_breadboard_client() 
+                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False, load_breadboard = True):
+        if(load_breadboard):
+            self.breadboard_client = breadboard_functions.load_breadboard_client() 
+        else:
+            self.breadboard_client = None
         if(not measurement_directory_path):
             measurement_directory_path = os.getcwd() 
         self.measurement_directory_path = measurement_directory_path 
