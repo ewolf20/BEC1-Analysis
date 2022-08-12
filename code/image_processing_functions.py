@@ -167,6 +167,37 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
     saturation_term = (1.0 / res_cross_section) * (without_atoms_dark_subtracted - with_atoms_dark_subtracted) / saturation_counts
     return beer_lambert_term + saturation_term
 
+"""
+Warning: Due to the underlying C implementation, this does not support vectorized arguments! OD naught vector must be a 1D vector of length 2, 
+containing the optical densities of both species, and all others must be scalars!"""
+def wrapped_c_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                    intensity_A, intensity_B, intensity_sat):
+    wrapped_od_naught = polrot_image_ffi.new("float[]", list(od_naught_vector))
+    output_buffer = polrot_image_ffi.new("double[]", 2)
+    status_code = polrot_image_lib.give_polrot_image(wrapped_od_naught, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
+                                                intensity_A, intensity_B, intensity_sat, output_buffer)
+    return np.array([output_buffer[0], output_buffer[1]])
+
+
+"""
+Polrot image function, implemented in python. More readable & accessible, but slower."""
+def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensity_A, intensity_B, intensity_sat):
+    od_naught_1, od_naught_2 = od_naughts 
+    od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
+    od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
+    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_B, intensity_sat) 
+    od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
+    phi_A = -od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth 
+    phi_B = -od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth 
+    abs_A = np.exp(-od_1A / 2.0) * np.exp(-od_2A / 2.0) 
+    abs_B = np.exp(-od_1B / 2.0) * np.exp(-od_2B / 2.0) 
+    result_A = 0.5 + np.square(abs_A) / 2.0 + abs_A * np.sin(phi_A) 
+    result_B = 0.5 + np.square(abs_B) / 2.0 + abs_B * np.sin(phi_B) 
+    return np.array([result_A, result_B])
+
+
+def od_lorentzian(detuning, linewidth, intensity, intensity_sat):
+    return 1.0 / (1 + np.square(2 * detuning / linewidth) + np.square(intensity / intensity_sat))
 
 def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None, res_cross_section = None, species = '6Li',
                                 num_samps = 1000, abs_min = 0.0, abs_max = 2.0):
@@ -283,17 +314,6 @@ def parallelizable_polrot_density_function(absorption_A, absorption_B, detuning_
         atom_density_1 = od_naught_1 / res_cross_section 
         atom_density_2 = od_naught_2 / res_cross_section 
         return (atom_density_1, atom_density_2) 
-
-"""
-Warning: Due to the underlying C implementation, this does not support vectorized arguments! OD naught vector must be a 1D vector of length 2, 
-containing the optical densities of both species, and all others must be scalars!"""
-def wrapped_c_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    intensity_A, intensity_B, intensity_sat):
-    wrapped_od_naught = polrot_image_ffi.new("float[]", list(od_naught_vector))
-    output_buffer = polrot_image_ffi.new("double[]", 2)
-    status_code = polrot_image_lib.give_polrot_image(wrapped_od_naught, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
-                                                intensity_A, intensity_B, intensity_sat, output_buffer)
-    return np.array([output_buffer[0], output_buffer[1]])
 
 
 #Inverse function for simulating polrot images from atom density. Mostly for testing/debugging purposes.
