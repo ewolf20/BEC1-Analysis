@@ -13,8 +13,8 @@ from BEC1_Analysis.code import image_processing_functions, data_fitting_function
 from imaging_resonance_processing import get_workfolder_path
 
 
-UPPER_COUNTS_CUTOFF = 1e5
-LOWER_COUNTS_CUTOFF = 1e3
+UPPER_COUNTS_CUTOFF = np.inf
+LOWER_COUNTS_CUTOFF = -np.inf
 
 def main():
     file_path = get_data_file_input() 
