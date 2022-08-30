@@ -1,5 +1,6 @@
 import hashlib
 import os 
+import random
 import sys
 
 from astropy.io import fits
@@ -106,22 +107,8 @@ def _generate_fake_polrot_images():
         return np.exp(-(np.square(x) + np.square(y)) / (2 * np.square(sigma))) 
     fake_density_1 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_1)
     fake_density_2 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_2)
-    fake_od_naught_1 = fake_density_1 * li_cross_section
-    fake_od_naught_2 = fake_density_2 * li_cross_section
-    polrot_image_function = image_processing_functions.wrapped_polrot_image_function
-    image_A = np.zeros(fake_image_x_grid.shape) 
-    image_B = np.zeros(fake_image_x_grid.shape) 
-    for i in range(IMAGE_PIXEL_SIZE):
-        for j in range(IMAGE_PIXEL_SIZE):
-            fake_od_naught_1_pixel = fake_od_naught_1[i][j] 
-            fake_od_naught_2_pixel = fake_od_naught_2[i][j]
-            fake_od_pixel_array = np.array([fake_od_naught_1_pixel, fake_od_naught_2_pixel])
-            image_A_pixel, image_B_pixel = polrot_image_function(fake_od_pixel_array, POLROT_DETUNING_1A, POLROT_DETUNING_1B, 
-                                                            POLROT_DETUNING_2A, POLROT_DETUNING_2B, li_linewidth, 0, 0, np.inf)
-            image_A[i][j] = image_A_pixel
-            image_B[i][j] = image_B_pixel
-    return (image_A, image_B)
-
+    return image_processing_functions.get_polrot_images_from_atom_density(fake_density_1, fake_density_2, POLROT_DETUNING_1A, POLROT_DETUNING_1B,
+                                                        POLROT_DETUNING_2A, POLROT_DETUNING_2B, phase_sign = -1.0)
 """
 Makes sure that the polrot _generation_, and thus the base polrot image function, hasn't changed"""
 def test_polrot_images_function():
@@ -132,13 +119,36 @@ def test_polrot_images_function():
     assert np.all(np.abs(saved_image_B - image_B) < 1e-6)
 
 
+"""
+Test for agreement between the python and c implementations of the polrot function. Values randomly chosen to be reasonable."""
+def test_polrot_c_python_agreement():
+    detuning_1A = 10
+    detuning_1B = -50 
+    detuning_2A = 13
+    detuning_2B = 63
+    li_linewidth = image_processing_functions._get_linewidth_from_species("6Li") 
+    li_cross_section = image_processing_functions._get_res_cross_section_from_species("6Li")
+    density_1 = 37.0
+    density_2 = 13.0
+    intensity_A = 0.2
+    intensity_B = 0.3
+    intensity_sat = 1.0
+    phase_sign = 1.0
+    od_naughts = np.array([density_1, density_2]) * li_cross_section
+    python_result_A, python_result_B = image_processing_functions.python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
+                                                                    li_linewidth, intensity_A, intensity_B, intensity_sat, phase_sign)
+    c_result_A, c_result_B = image_processing_functions.wrapped_c_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
+                                                                    li_linewidth, intensity_A, intensity_B, intensity_sat, phase_sign)
+    assert(np.abs(python_result_A - c_result_A) / np.abs(python_result_A) < 1e-3)
+    assert(np.abs(python_result_B - c_result_B) / np.abs(python_result_B) < 1e-3)
     
 
 def test_get_atom_density_from_polrot_images():
     fake_image_A, fake_image_B = _generate_fake_polrot_images()
     reconstructed_density_1, reconstructed_density_2 = image_processing_functions.get_atom_density_from_polrot_images(fake_image_A, fake_image_B, 
                                                                                                                     POLROT_DETUNING_1A, POLROT_DETUNING_1B,
-                                                                                                                    POLROT_DETUNING_2A, POLROT_DETUNING_2B)
+                                                                                                                    POLROT_DETUNING_2A, POLROT_DETUNING_2B,
+                                                                                                                    phase_sign = -1.0)
     saved_density_1 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_1.npy"))
     saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
     assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4)
@@ -147,11 +157,12 @@ def test_get_atom_density_from_polrot_images():
 
 def test_generate_polrot_lookup_table():
     try:
-        image_processing_functions.generate_polrot_lookup_table(POLROT_DETUNING_1A, POLROT_DETUNING_1B, POLROT_DETUNING_2A, POLROT_DETUNING_2B, 
+        image_processing_functions.generate_polrot_lookup_table(POLROT_DETUNING_1A, POLROT_DETUNING_1B, POLROT_DETUNING_2A, POLROT_DETUNING_2B, phase_sign = -1.0,
                                                             num_samps = 100)
         generated_array = np.load("Polrot_Lookup_Table.npy") 
         stored_array = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Polrot_Lookup_Table_Small.npy")) 
-        assert np.all(np.abs(generated_array - stored_array) < 1e-4) 
+        print(generated_array - stored_array)
+        assert np.all(np.abs(generated_array - stored_array) < 1e-3) 
     finally:
         os.remove("Polrot_Lookup_Table.npy") 
         os.remove("Polrot_Lookup_Table_Params.txt") 
