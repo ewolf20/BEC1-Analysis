@@ -171,36 +171,37 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
 Warning: Due to the underlying C implementation, this does not support vectorized arguments! OD naught vector must be a 1D vector of length 2, 
 containing the optical densities of both species, and all others must be scalars!"""
 def wrapped_c_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    intensity_A, intensity_B, intensity_sat):
+                                    intensity_A, intensity_B, intensity_sat, phase_sign):
     wrapped_od_naught = polrot_image_ffi.new("float[]", list(od_naught_vector))
     output_buffer = polrot_image_ffi.new("double[]", 2)
     status_code = polrot_image_lib.give_polrot_image(wrapped_od_naught, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
-                                                intensity_A, intensity_B, intensity_sat, output_buffer)
+                                                intensity_A, intensity_B, intensity_sat, phase_sign, output_buffer)
     return np.array([output_buffer[0], output_buffer[1]])
 
 
 """
 Polrot image function, implemented in python. More readable & accessible, but slower."""
-def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensity_A, intensity_B, intensity_sat):
+def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensity_A, intensity_B, intensity_sat, 
+                                phase_sign):
     od_naught_1, od_naught_2 = od_naughts 
     od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
     od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
     od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_B, intensity_sat) 
     od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
-    phi_A = -od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth 
-    phi_B = -od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth 
+    phi_A = (-od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth ) * phase_sign
+    phi_B = (-od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth ) * phase_sign
     abs_A = np.exp(-od_1A / 2.0) * np.exp(-od_2A / 2.0) 
     abs_B = np.exp(-od_1B / 2.0) * np.exp(-od_2B / 2.0) 
-    result_A = 0.5 + np.square(abs_A) / 2.0 + abs_A * np.sin(phi_A) 
-    result_B = 0.5 + np.square(abs_B) / 2.0 + abs_B * np.sin(phi_B) 
+    result_A = 0.5 + np.square(abs_A) / 2.0 - abs_A * np.sin(phi_A) 
+    result_B = 0.5 + np.square(abs_B) / 2.0 - abs_B * np.sin(phi_B) 
     return np.array([result_A, result_B])
 
 
 def od_lorentzian(detuning, linewidth, intensity, intensity_sat):
     return 1.0 / (1 + np.square(2 * detuning / linewidth) + np.square(intensity / intensity_sat))
 
-def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None, res_cross_section = None, species = '6Li',
-                                num_samps = 1000, abs_min = 0.0, abs_max = 2.0):
+def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None, res_cross_section = None, phase_sign = 1.0, 
+                                species = '6Li', num_samps = 1000, abs_min = 0.0, abs_max = 2.0):
     abs_values = np.linspace(abs_min, abs_max, num = num_samps, endpoint = True)
     my_abs_A_grid = np.zeros((num_samps, num_samps)) 
     my_abs_B_grid = np.zeros((num_samps, num_samps)) 
@@ -208,7 +209,8 @@ def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning
         my_abs_A_grid[i] = abs * np.ones(num_samps) 
         my_abs_B_grid[:, i] = abs * np.ones(num_samps) 
     my_densities_1_grid, my_densities_2_grid = get_atom_density_from_polrot_images(my_abs_A_grid, my_abs_B_grid, detuning_1A, detuning_1B, detuning_2A, 
-                                                detuning_2B, linewidth = linewidth, res_cross_section = res_cross_section, species = species)
+                                                detuning_2B, linewidth = linewidth, res_cross_section = res_cross_section, phase_sign = phase_sign,
+                                                 species = species)
     np.save("Polrot_Lookup_Table.npy", np.stack((my_densities_1_grid, my_densities_2_grid)))
     with open("Polrot_Lookup_Table_Params.txt", 'w') as f:
         f.write("Detuning 1A: " + str(detuning_1A)) 
@@ -271,14 +273,16 @@ def _lookup_pixel_polrot_densities(densities_1_lookup, densities_2_lookup, abs_A
 
 
 def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
-                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, species = '6Li', 
-                                        ):
+                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, phase_sign = 1.0, 
+                                        species = '6Li'):
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
     if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
         raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
+    if(np.abs(phase_sign) != 1.0):
+        raise ValueError("The phase sign must be +-1.")
     atom_densities_list_1 = []
     atom_densities_list_2 = []
     if not intensities_A:
@@ -290,7 +294,7 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
     map_iterator = zip(abs_image_A.flatten(), abs_image_B.flatten(), generator_factory(detuning_1A), 
                         generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
                         generator_factory(linewidth), generator_factory(res_cross_section), intensities_A.flatten(), 
-                        intensities_B.flatten(), intensities_sat.flatten())
+                        intensities_B.flatten(), intensities_sat.flatten(), generator_factory(phase_sign))
     with Pool(cpus_to_use) as p:
         for atom_density_1, atom_density_2 in p.starmap(parallelizable_polrot_density_function, map_iterator):
             atom_densities_list_1.append(atom_density_1)
@@ -304,9 +308,9 @@ def generator_factory(value):
         yield value
 
 def parallelizable_polrot_density_function(absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    res_cross_section, intensity_A, intensity_B, intensity_sat):
+                                    res_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
         solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                intensity_A, intensity_B, intensity_sat)
+                                intensity_A, intensity_B, intensity_sat, phase_sign)
         def current_function(od_naught_vector, *args):
             return wrapped_c_polrot_image_function(od_naught_vector, *args) - np.array([absorption_A, absorption_B])
         root = fsolve(current_function, [0, 0], args = solver_extra_args)
@@ -318,8 +322,8 @@ def parallelizable_polrot_density_function(absorption_A, absorption_B, detuning_
 
 #Inverse function for simulating polrot images from atom density. Mostly for testing/debugging purposes.
 def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
-                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, species = '6Li', 
-                                        ):
+                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None,
+                                        phase_sign = 1.0, species = '6Li'):
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
@@ -337,7 +341,7 @@ def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, d
     map_iterator = zip(densities_1.flatten(), densities_2.flatten(), generator_factory(detuning_1A), 
                         generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
                         generator_factory(linewidth), generator_factory(res_cross_section), intensities_A.flatten(), 
-                        intensities_B.flatten(), intensities_sat.flatten())
+                        intensities_B.flatten(), intensities_sat.flatten(), generator_factory(phase_sign))
     with Pool(cpus_to_use) as p:
         for absorption_A, absorption_B in p.starmap(parallelizable_density_polrot_function, map_iterator):
             image_A_list.append(absorption_A)
@@ -347,9 +351,9 @@ def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, d
     return (image_A_array, image_B_array)
 
 def parallelizable_density_polrot_function(atom_density_1, atom_density_2, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    res_cross_section, intensity_A, intensity_B, intensity_sat):
+                                    res_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
         extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                intensity_A, intensity_B, intensity_sat)
+                                intensity_A, intensity_B, intensity_sat, phase_sign)
         od_naught_1 = atom_density_1 * res_cross_section
         od_naught_2 = atom_density_2 * res_cross_section
         od_naught_vector = [od_naught_1, od_naught_2] 

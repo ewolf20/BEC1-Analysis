@@ -574,7 +574,7 @@ static void (*_cffi_call_python_org)(struct _cffi_externpy_s *, char *);
     }
 
     static int give_polrot_image(float *od_vector, double detuning_1A, double detuning_1B, double detuning_2A, double detuning_2B, 
-                                double linewidth, double intensity_A, double intensity_B, double intensity_sat,
+                                double linewidth, double intensity_A, double intensity_B, double intensity_sat, double phase_sign,
                                 double *buff_out) {
         double od_naught_1 = od_vector[0];
         double od_naught_2 = od_vector[1];
@@ -582,12 +582,12 @@ static void (*_cffi_call_python_org)(struct _cffi_externpy_s *, char *);
         double od_1B = od_naught_1 * imaging_od_lorentzian(detuning_1B, linewidth, intensity_A, intensity_sat);
         double od_2A = od_naught_2 * imaging_od_lorentzian(detuning_2A, linewidth, intensity_B, intensity_sat);
         double od_2B = od_naught_2 * imaging_od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat);
-        double phi_A = - detuning_1A / linewidth * od_1A - detuning_2A / linewidth * od_2A;
-        double phi_B = - detuning_1B / linewidth * od_1B - detuning_2B / linewidth * od_2B;
+        double phi_A = (- detuning_1A / linewidth * od_1A - detuning_2A / linewidth * od_2A) * phase_sign;
+        double phi_B = (- detuning_1B / linewidth * od_1B - detuning_2B / linewidth * od_2B) * phase_sign;
         double abs_A = exp(-od_1A / 2.0) * exp(-od_2A / 2.0);
         double abs_B = exp(-od_1B / 2.0) * exp(-od_2B / 2.0);
-        double result_A = 0.5 + pow(abs_A, 2.0) / 2 + abs_A * sin(phi_A);
-        double result_B = 0.5 + pow(abs_B, 2.0) / 2 + abs_B * sin(phi_B);
+        double result_A = 0.5 + pow(abs_A, 2.0) / 2 - abs_A * sin(phi_A);
+        double result_B = 0.5 + pow(abs_B, 2.0) / 2 - abs_B * sin(phi_B);
         buff_out[0] = result_A;
         buff_out[1] = result_B;
         return 0;
@@ -597,8 +597,8 @@ static void (*_cffi_call_python_org)(struct _cffi_externpy_s *, char *);
 /************************************************************/
 
 static void *_cffi_types[] = {
-/*  0 */ _CFFI_OP(_CFFI_OP_FUNCTION, 13), // int()(float *, double, double, double, double, double, double, double, double, double *)
-/*  1 */ _CFFI_OP(_CFFI_OP_POINTER, 12), // float *
+/*  0 */ _CFFI_OP(_CFFI_OP_FUNCTION, 14), // int()(float *, double, double, double, double, double, double, double, double, double, double *)
+/*  1 */ _CFFI_OP(_CFFI_OP_POINTER, 13), // float *
 /*  2 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14), // double
 /*  3 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14),
 /*  4 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14),
@@ -607,15 +607,16 @@ static void *_cffi_types[] = {
 /*  7 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14),
 /*  8 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14),
 /*  9 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14),
-/* 10 */ _CFFI_OP(_CFFI_OP_POINTER, 2), // double *
-/* 11 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
-/* 12 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 13), // float
-/* 13 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 7), // int
+/* 10 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 14),
+/* 11 */ _CFFI_OP(_CFFI_OP_POINTER, 2), // double *
+/* 12 */ _CFFI_OP(_CFFI_OP_FUNCTION_END, 0),
+/* 13 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 13), // float
+/* 14 */ _CFFI_OP(_CFFI_OP_PRIMITIVE, 7), // int
 };
 
-static int _cffi_d_give_polrot_image(float * x0, double x1, double x2, double x3, double x4, double x5, double x6, double x7, double x8, double * x9)
+static int _cffi_d_give_polrot_image(float * x0, double x1, double x2, double x3, double x4, double x5, double x6, double x7, double x8, double x9, double * x10)
 {
-  return give_polrot_image(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9);
+  return give_polrot_image(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10);
 }
 #ifndef PYPY_VERSION
 static PyObject *
@@ -630,7 +631,8 @@ _cffi_f_give_polrot_image(PyObject *self, PyObject *args)
   double x6;
   double x7;
   double x8;
-  double * x9;
+  double x9;
+  double * x10;
   Py_ssize_t datasize;
   struct _cffi_freeme_s *large_args_free = NULL;
   int result;
@@ -645,8 +647,9 @@ _cffi_f_give_polrot_image(PyObject *self, PyObject *args)
   PyObject *arg7;
   PyObject *arg8;
   PyObject *arg9;
+  PyObject *arg10;
 
-  if (!PyArg_UnpackTuple(args, "give_polrot_image", 10, 10, &arg0, &arg1, &arg2, &arg3, &arg4, &arg5, &arg6, &arg7, &arg8, &arg9))
+  if (!PyArg_UnpackTuple(args, "give_polrot_image", 11, 11, &arg0, &arg1, &arg2, &arg3, &arg4, &arg5, &arg6, &arg7, &arg8, &arg9, &arg10))
     return NULL;
 
   datasize = _cffi_prepare_pointer_call_argument(
@@ -690,18 +693,22 @@ _cffi_f_give_polrot_image(PyObject *self, PyObject *args)
   if (x8 == (double)-1 && PyErr_Occurred())
     return NULL;
 
+  x9 = (double)_cffi_to_c_double(arg9);
+  if (x9 == (double)-1 && PyErr_Occurred())
+    return NULL;
+
   datasize = _cffi_prepare_pointer_call_argument(
-      _cffi_type(10), arg9, (char **)&x9);
+      _cffi_type(11), arg10, (char **)&x10);
   if (datasize != 0) {
-    x9 = ((size_t)datasize) <= 640 ? (double *)alloca((size_t)datasize) : NULL;
-    if (_cffi_convert_array_argument(_cffi_type(10), arg9, (char **)&x9,
+    x10 = ((size_t)datasize) <= 640 ? (double *)alloca((size_t)datasize) : NULL;
+    if (_cffi_convert_array_argument(_cffi_type(11), arg10, (char **)&x10,
             datasize, &large_args_free) < 0)
       return NULL;
   }
 
   Py_BEGIN_ALLOW_THREADS
   _cffi_restore_errno();
-  { result = give_polrot_image(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9); }
+  { result = give_polrot_image(x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10); }
   _cffi_save_errno();
   Py_END_ALLOW_THREADS
 
@@ -730,7 +737,7 @@ static const struct _cffi_type_context_s _cffi_type_context = {
   0,  /* num_enums */
   0,  /* num_typenames */
   NULL,  /* no includes */
-  14,  /* num_types */
+  15,  /* num_types */
   0,  /* flags */
 };
 
