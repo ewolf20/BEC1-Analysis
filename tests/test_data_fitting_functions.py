@@ -64,3 +64,48 @@ def simulate_2D_gaussian_image():
     NOISE_MAGNITUDE = 0.5
     noisy_image = simulated_noiseless_image + np.random.normal(loc = 0.0, scale = NOISE_MAGNITUDE, size = simulated_noiseless_image.shape)
     return noisy_image
+
+
+def test_fit_one_dimensional_cosine():
+    SAMPLE_FREQ = 1.3
+    SAMPLE_AMP = 1.0 
+    SAMPLE_PHASE = 2.1 
+    SAMPLE_OFFSET = 12.4
+    X_ENDPOINT = 10 
+    NUM_SAMPS = 100
+    NOISE_AMP = 0.1
+    sequential_x = np.linspace(0, X_ENDPOINT, NUM_SAMPS) 
+    noiseless_sequential_y = data_fitting_functions.one_dimensional_cosine(sequential_x, SAMPLE_FREQ, SAMPLE_AMP, SAMPLE_PHASE, SAMPLE_OFFSET)
+    noisy_sequential_y = noiseless_sequential_y + np.random.normal(loc = 0.0, scale = NOISE_AMP, size = len(noiseless_sequential_y))
+    fit_results_sequential = data_fitting_functions.fit_one_dimensional_cosine(sequential_x, noisy_sequential_y)
+    popt_s, pcov_s = fit_results_sequential 
+    freq_s, amp_s, phase_s, offset_s = popt_s
+    assert((freq_s - SAMPLE_FREQ) / (SAMPLE_FREQ) < 1e-2)
+    assert((amp_s - SAMPLE_AMP) / (SAMPLE_AMP) < 3e-2)
+    assert((phase_s - SAMPLE_PHASE) / (SAMPLE_PHASE) < 3e-2)
+    assert((offset_s - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 1e-2)
+    POLLUTION_AMP = 0.2
+    POLLUTION_FREQUENCY = 2.4
+    polluted_sequential_y = noisy_sequential_y + data_fitting_functions.one_dimensional_cosine(sequential_x, POLLUTION_FREQUENCY, POLLUTION_AMP, 0, 0)
+    fit_results_polluted = data_fitting_functions.fit_one_dimensional_cosine(sequential_x, polluted_sequential_y) 
+    popt_p, pcov_p = fit_results_polluted
+    freq_p, amp_p, phase_p, offset_p = popt_p
+    assert((freq_p - SAMPLE_FREQ) / (SAMPLE_FREQ) < 1e-2)
+    assert((amp_p - SAMPLE_AMP) / (SAMPLE_AMP) < 3e-2)
+    assert((phase_p - SAMPLE_PHASE) / (SAMPLE_PHASE) < 3e-2)
+    assert((offset_p - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 1e-2)
+    NON_SEQUENTIAL_INDICES = [71, 37, 15, 46, 28, 95, 60, 39, 53, 17, 96, 87, 75, 52, 24, 97, 76,
+     1, 31, 42, 14, 61, 89, 58, 41, 74, 64, 27, 40, 84, 43, 98, 20, 22, 66,
+      6, 30, 57, 8, 91, 78, 38, 10, 90, 82, 63, 94, 35, 4, 2]
+    non_sequential_x = sequential_x[NON_SEQUENTIAL_INDICES] 
+    non_sequential_noisy_y = noisy_sequential_y[NON_SEQUENTIAL_INDICES] 
+    fit_results_non_sequential = data_fitting_functions.fit_one_dimensional_cosine(non_sequential_x, non_sequential_noisy_y) 
+    popt_n, pcov_n = fit_results_non_sequential
+    freq_n, amp_n, phase_n, offset_n = popt_n 
+    assert((freq_n - SAMPLE_FREQ) / (SAMPLE_FREQ) < 1e-2)
+    assert((amp_n - SAMPLE_AMP) / (SAMPLE_AMP) < 3e-2)
+    assert((phase_n - SAMPLE_PHASE) / (SAMPLE_PHASE) < 3e-2)
+    assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 1e-2)
+    plt.plot(non_sequential_x, non_sequential_noisy_y, 'x') 
+    plt.plot(non_sequential_x, data_fitting_functions.one_dimensional_cosine(non_sequential_x, *popt_n), 'o')
+    plt.show()

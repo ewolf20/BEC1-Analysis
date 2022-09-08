@@ -1,5 +1,6 @@
 import numpy as np 
 from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
 
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None):
@@ -32,8 +33,8 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
     results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = params, sigma = errors)
     return results
 
-def imaging_resonance_lorentzian(freq, amp, center, gamma, offset):
-    return amp * 1.0 / (np.square(2.0 * (freq - center) / gamma) + 1) + offset
+def imaging_resonance_lorentzian(imaging_freq, amp, center, gamma, offset):
+    return amp * 1.0 / (np.square(2.0 * (imaging_freq - center) / gamma) + 1) + offset
 
 
 
@@ -83,6 +84,81 @@ def two_dimensional_gaussian(x, y, amp, x_center, y_center, sigma_x, sigma_y, of
     return amp * np.exp(-np.square(x - x_center) / (2 * np.square(sigma_x)) - np.square(y - y_center) / (2.0 * np.square(sigma_y))) + offset
     
 
+
+def fit_one_dimensional_cosine(x_values, data, freq = None, amp = None, phase = None, offset = None, errors = None):
+    if(not np.all([freq, amp, phase, offset])):
+        freq_helper_guess, amp_helper_guess, phase_helper_guess, offset_helper_guess = _cosine_guess_helper(x_values, data)
+    if(not freq):
+        freq_guess = freq_helper_guess 
+    else:
+        freq_gues = freq 
+    if(not amp):
+        amp_guess = amp_helper_guess 
+    else:
+        amp_guess = amp 
+    if(not phase):
+        phase_guess = phase_helper_guess 
+    else:
+        phase_guess = phase 
+    if(not offset):
+        offset_guess = offset_helper_guess 
+    else:
+        offset_guess = offset
+    params = np.array([freq_guess, amp_guess, phase_guess, offset_guess])
+    results = curve_fit(one_dimensional_cosine, x_values, data, p0 = params, sigma = errors)
+    return results
+
+def _cosine_guess_helper(x_values, data):
+    SPACING_REL_TOLERANCE = 1e-3
+    sorted_x_values, sorted_data = _sort_xy_data(x_values, data)
+    x_values_delta = sorted_x_values[1] - sorted_x_values[0]
+    values_evenly_spaced = True
+    for diff in np.diff(sorted_x_values):
+        if(np.abs(diff - x_values_delta) / x_values_delta > SPACING_REL_TOLERANCE):
+            values_evenly_spaced = False 
+            break
+    if(not values_evenly_spaced):
+        minimum_spacing = min(sorted_x_values[1:] - sorted_x_values[:-1])
+        x_width = sorted_x_values[-1] - sorted_x_values[0] 
+        num_samps = int(np.floor(x_width / minimum_spacing)) + 1
+        interpolated_x_values = np.linspace(sorted_x_values[0], sorted_x_values[-1], num_samps) 
+        interpolation_function = interp1d(sorted_x_values, sorted_data, kind = "cubic")
+        interpolated_data = interpolation_function(interpolated_x_values)
+        x_values_delta = minimum_spacing 
+        x_values = interpolated_x_values 
+        data = interpolated_data
+    else:
+        x_values = sorted_x_values 
+        data = sorted_data  
+    data_length = len(data)
+    guessed_offset = sum(data) / len(data)
+    centered_data = data - guessed_offset
+    centered_data_fft = np.fft.fft(centered_data) 
+    fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_values_delta
+    positive_fft_cutoff = int(np.floor(data_length / 2)) 
+    positive_fft_values = centered_data_fft[1:positive_fft_cutoff]
+    positive_fft_frequencies = fft_real_frequencies[1:positive_fft_cutoff] 
+    fft_peak_position = np.argmax(np.abs(positive_fft_values)) 
+    guessed_frequency = positive_fft_frequencies[fft_peak_position] 
+    guessed_phase = np.angle(positive_fft_values[fft_peak_position])
+    guessed_amp = np.abs(positive_fft_values[fft_peak_position]) * 2.0 / data_length
+    return (guessed_frequency, guessed_amp, guessed_phase, guessed_offset)
+
+
+def one_dimensional_cosine(x_values, freq, amp, phase, offset):
+    return amp * np.cos(2 * np.pi * x_values * freq + phase) + offset
+
+
+    
+
+
+
+
+def _sort_xy_data(x_values, y_values):
+    sorted_x_values, sorted_y_values = zip(*sorted(zip(x_values, y_values), key = lambda f: f[0]))
+    sorted_x_values = np.array(sorted_x_values) 
+    sorted_y_values = np.array(sorted_y_values)
+    return (sorted_x_values, sorted_y_values)
 """
 Convenience function for getting a pretty_printable fit report from scipy.optimize.curve_fit"""
 def fit_report(model_function, fit_results):
@@ -105,6 +181,6 @@ def fit_report(model_function, fit_results):
 
 def get_varnames_from_function(my_func):
     arg_names = my_func.__code__.co_varnames[:my_func.__code__.co_argcount]
-    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'freq']
+    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'imaging_freq', 'x_values']
     arg_names = [f for f in arg_names if (not f in DEFAULT_INDEPENDENT_VARNAMES)]
     return arg_names
