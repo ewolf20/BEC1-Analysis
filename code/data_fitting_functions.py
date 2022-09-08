@@ -120,7 +120,7 @@ def _cosine_guess_helper(x_values, data):
     if(not values_evenly_spaced):
         minimum_spacing = min(sorted_x_values[1:] - sorted_x_values[:-1])
         x_width = sorted_x_values[-1] - sorted_x_values[0] 
-        num_samps = (x_width / minimum_spacing) + 1
+        num_samps = int(np.floor(x_width / minimum_spacing)) + 1
         interpolated_x_values = np.linspace(sorted_x_values[0], sorted_x_values[-1], num_samps) 
         interpolation_function = interp1d(sorted_x_values, sorted_data, kind = "cubic")
         interpolated_data = interpolation_function(interpolated_x_values)
