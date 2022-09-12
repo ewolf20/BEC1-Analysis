@@ -2,6 +2,8 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.interpolate import interp1d
 
+from .science_functions import two_level_system_population_rabi
+
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None):
     #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
@@ -149,7 +151,27 @@ def one_dimensional_cosine(x_values, freq, amp, phase, offset):
     return amp * np.cos(2 * np.pi * x_values * freq + phase) + offset
 
 
-    
+#By convention, frequencies are in kHz, and times are in ms. 
+def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_freq = None, errors = None):
+    if(center is None):
+        center_guess = sum(rf_freqs) / len(rf_freqs) 
+    else:
+        center_guess = center 
+    if(rabi_freq is None):
+        rabi_freq_guess = 1.0 
+    def wrapped_rf_spect_function_factory(tau):
+        def rf_spect_function(rf_freqs, center, rabi_freq):
+            return rf_spect_detuning_scan(rf_freqs, center, tau, rabi_freq)
+    tau_wrapped_function = wrapped_rf_spect_function_factory(tau)
+    params = np.array([center_guess, rabi_freq_guess])
+    results = curve_fit(tau_wrapped_function, p0 = params, sigma = errors)
+    return results
+
+
+def rf_spect_detuning_scan(rf_freqs, center, tau, rabi_freq):
+    detunings = rf_freqs - center 
+    populations_excited = two_level_system_population_rabi(tau, rabi_freq, detunings)
+    return populations_excited
 
 
 
