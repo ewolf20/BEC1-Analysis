@@ -137,3 +137,6 @@ dmypy.json
 
 *secret.*
 *local.*
+
+#Windows-specific c compilation trash
+Release/
