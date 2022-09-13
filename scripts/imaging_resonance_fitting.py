@@ -4,10 +4,11 @@ import sys
 import numpy as np 
 import matplotlib.pyplot as plt
 
-PATH_TO_GRADSCHOOL_FOLDER = "/Users/eric/Codevault/GradSchool"
+path_to_file = os.path.dirname(os.path.abspath(__file__))
+path_to_repo_folder = os.path.abspath(path_to_file + "/../../")
 
 
-sys.path.insert(0, PATH_TO_GRADSCHOOL_FOLDER) 
+sys.path.insert(0, path_to_repo_folder)
 
 from BEC1_Analysis.code import image_processing_functions, data_fitting_functions
 from imaging_resonance_processing import get_workfolder_path
