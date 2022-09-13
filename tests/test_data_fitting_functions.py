@@ -106,6 +106,3 @@ def test_fit_one_dimensional_cosine():
     assert((amp_n - SAMPLE_AMP) / (SAMPLE_AMP) < 3e-2)
     assert((phase_n - SAMPLE_PHASE) / (SAMPLE_PHASE) < 3e-2)
     assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 1e-2)
-    plt.plot(non_sequential_x, non_sequential_noisy_y, 'x') 
-    plt.plot(non_sequential_x, data_fitting_functions.one_dimensional_cosine(non_sequential_x, *popt_n), 'o')
-    plt.show()
