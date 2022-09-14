@@ -1,4 +1,5 @@
-import os 
+import os
+from random import sample 
 import sys 
 
 import matplotlib.pyplot as plt
@@ -106,6 +107,21 @@ def test_fit_one_dimensional_cosine():
     assert((amp_n - SAMPLE_AMP) / (SAMPLE_AMP) < 3e-2)
     assert((phase_n - SAMPLE_PHASE) / (SAMPLE_PHASE) < 3e-2)
     assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 1e-2)
-    plt.plot(non_sequential_x, non_sequential_noisy_y, 'x') 
-    plt.plot(non_sequential_x, data_fitting_functions.one_dimensional_cosine(non_sequential_x, *popt_n), 'o')
+
+
+def test_fit_rf_spect_detuning_scan():
+    SAMPLE_CENTER = 15.2
+    SAMPLE_OMEGA = 4.7
+    SAMPLE_TAU = 1.0
+    sample_frequencies = np.linspace(0, 50, 100)
+    sample_transfers = data_fitting_functions.rf_spect_detuning_scan(sample_frequencies, SAMPLE_CENTER, SAMPLE_TAU, SAMPLE_OMEGA)
+    sample_noisy_transfers = sample_transfers + np.random.normal(loc = 0.0, scale = 0.02, size = len(sample_transfers))
+    fit_results = data_fitting_functions.fit_rf_spect_detuning_scan(sample_frequencies, sample_noisy_transfers, SAMPLE_TAU, rabi_freq = 2.0)
+    popt, pcov = fit_results
+    fitted_center, fitted_rabi = popt
+    plt.plot(sample_frequencies, sample_transfers, 'x') 
+    plt.plot(sample_frequencies, data_fitting_functions.rf_spect_detuning_scan(sample_frequencies, fitted_center, SAMPLE_TAU, fitted_rabi), 'o')
     plt.show()
+
+
+

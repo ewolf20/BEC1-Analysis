@@ -159,19 +159,65 @@ def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_fre
         center_guess = center 
     if(rabi_freq is None):
         rabi_freq_guess = 1.0 
+    else:
+        rabi_freq_guess = rabi_freq
     def wrapped_rf_spect_function_factory(tau):
         def rf_spect_function(rf_freqs, center, rabi_freq):
             return rf_spect_detuning_scan(rf_freqs, center, tau, rabi_freq)
+        return rf_spect_function
     tau_wrapped_function = wrapped_rf_spect_function_factory(tau)
     params = np.array([center_guess, rabi_freq_guess])
-    results = curve_fit(tau_wrapped_function, p0 = params, sigma = errors)
+    results = curve_fit(tau_wrapped_function, rf_freqs, transfers, p0 = params, sigma = errors)
     return results
 
 
 def rf_spect_detuning_scan(rf_freqs, center, tau, rabi_freq):
     detunings = rf_freqs - center 
-    populations_excited = two_level_system_population_rabi(tau, rabi_freq, detunings)
+    populations_excited = two_level_system_population_rabi(tau, rabi_freq, detunings)[1]
     return populations_excited
+
+
+"""Helper function for finding the center of data with an even symmetry point.
+
+Given a dataset x, y, uses least-squares optimization to try to find the maximally evenly symmetric 
+point in the data, i.e. the point for which |f(x_0 + a) - f(x_0 - a)| is minimized in a least squares sense 
+for all the available data."""
+
+def _find_center_helper(x_data, y_data, tau):
+    INTERPOLATION_PRECISION = 1000
+    transfer_interpolation = interp1d(x_data, y_data, kind = "cubic")
+    minimum_x = min(x_data) 
+    maximum_x = max(x_data)
+    interpolation_step = (maximum_x - minimum_x) / INTERPOLATION_PRECISION
+    def symmetry_test_function(center_guess):
+        if(center_guess - minimum_x < maximum_x - center_guess):
+            range = center_guess - minimum_x 
+            test_window_half_width = int(np.floor(range / interpolation_step))
+            test_window_center_index = test_window_half_width
+            test_window_number_points = 2 * test_window_half_width + 1
+            test_window_frequencies = np.linspace(minimum_x, center_guess + range, test_window_number_points)
+        else:
+            range = maximum_x - center_guess 
+            test_window_half_width = int(np.floor(range / interpolation_step))
+            test_window_center_index = test_window_half_width
+            test_window_number_points = 2 * test_window_half_width + 1
+            test_window_frequencies = np.linspace(center_guess - range, maximum_x, test_window_number_points) 
+        squared_difference = 0.0
+        for i in (np.arange(test_window_half_width) + 1):
+            left_point = test_window_center_index - i 
+            right_point = test_window_center_index + i 
+            left_value = transfer_interpolation(test_window_frequencies[left_point])
+            right_value = transfer_interpolation(test_window_frequencies[right_point])
+            squared_difference += np.square(left_value - right_value)
+        mean_squared_difference = squared_difference / test_window_number_points
+        #Ad hoc penalty for a center close to the edge
+        data_mean_abs = sum(np.abs(y_data))
+        return mean_squared_difference
+    
+    
+
+
+
 
 
 
@@ -203,6 +249,6 @@ def fit_report(model_function, fit_results):
 
 def get_varnames_from_function(my_func):
     arg_names = my_func.__code__.co_varnames[:my_func.__code__.co_argcount]
-    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'imaging_freq', 'x_values']
+    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'imaging_freq', 'x_values', 'rf_freqs']
     arg_names = [f for f in arg_names if (not f in DEFAULT_INDEPENDENT_VARNAMES)]
     return arg_names
