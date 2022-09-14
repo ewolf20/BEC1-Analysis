@@ -84,6 +84,9 @@ class Measurement():
                 run_parameters_dict = json.load(run_params_json)
             unsorted_run_parameters_list = [(int(key), run_parameters_dict[key]) for key in run_parameters_dict]
             run_parameters_list = [f[1] for f in sorted(unsorted_run_parameters_list, key = lambda x: x[0])]
+            for run_id in sorted_run_ids_list:
+                if not str(run_id) in run_parameters_dict:
+                    raise RuntimeError("Saved breadboard parameters do not match run_ids in measurement folder.")
         runs_dict = {}
         for run_id, run_parameters in zip(sorted_run_ids_list, run_parameters_list):
             run_image_pathname_dict = {}
