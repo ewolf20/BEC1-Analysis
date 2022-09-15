@@ -40,8 +40,8 @@ def main():
     box_set = False
     while (not box_set) and run_to_use < len(my_measurement.runs_dict):
         try:
-            my_measurement.set_box("ROI", box_coordinates = ROI_COORDINATES, run_to_use = run_to_use)
-            my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES, run_to_use = run_to_use)
+            my_measurement.set_ROI(box_coordinates = ROI_COORDINATES, run_to_use = run_to_use, image_to_use = run_image_name)
+            my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES, run_to_use = run_to_use, image_to_use = run_image_name)
         except TypeError:
             pass 
         else:
