@@ -1,6 +1,9 @@
+import warnings
+
 import numpy as np 
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
+from scipy.signal import argrelextrema
 
 from .science_functions import two_level_system_population_rabi
 
@@ -163,7 +166,7 @@ def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_fre
         rabi_freq_guess = rabi_freq
     def wrapped_rf_spect_function_factory(tau):
         def rf_spect_function(rf_freqs, center, rabi_freq):
-            return rf_spect_detuning_scan(rf_freqs, center, tau, rabi_freq)
+            return rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq)
         return rf_spect_function
     tau_wrapped_function = wrapped_rf_spect_function_factory(tau)
     params = np.array([center_guess, rabi_freq_guess])
@@ -171,9 +174,10 @@ def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_fre
     return results
 
 
-def rf_spect_detuning_scan(rf_freqs, center, tau, rabi_freq):
-    detunings = rf_freqs - center 
-    populations_excited = two_level_system_population_rabi(tau, rabi_freq, detunings)[1]
+def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
+    omega_rabi = 2 * np.pi * rabi_freq
+    detunings = 2 * np.pi * (rf_freqs - center)
+    populations_excited = two_level_system_population_rabi(tau, omega_rabi, detunings)[1]
     return populations_excited
 
 
@@ -183,38 +187,82 @@ Given a dataset x, y, uses least-squares optimization to try to find the maximal
 point in the data, i.e. the point for which |f(x_0 + a) - f(x_0 - a)| is minimized in a least squares sense 
 for all the available data."""
 
-def _find_center_helper(x_data, y_data, tau):
+def _find_center_helper(x_data, y_data):
     INTERPOLATION_PRECISION = 1000
-    transfer_interpolation = interp1d(x_data, y_data, kind = "cubic")
-    minimum_x = min(x_data) 
+    #Deduplicate to allow interpolation
+    deduplicated_x_values_list = [] 
+    deduplicated_y_values_list = []
+    for x_value in x_data:
+        if not x_value in deduplicated_x_values_list:
+            deduplicated_x_values_list.append(x_value) 
+            counter = 0
+            y_sum = 0
+            for rechecked_x_value, y_value in zip(x_data, y_data):
+                if(rechecked_x_value == x_value):
+                    y_sum += y_value 
+                    counter += 1 
+            deduplicated_y_values_list.append(y_sum / counter)
+    deduplicated_x_values = np.array(deduplicated_x_values_list)
+    deduplicated_y_values = np.array(deduplicated_y_values_list)
+    y_interpolation = interp1d(deduplicated_x_values, deduplicated_y_values, kind = "cubic")
+    minimum_x = min(x_data)
     maximum_x = max(x_data)
+    x_data_center = 0.5 * (maximum_x + minimum_x)
+    x_data_width = maximum_x - minimum_x
     interpolation_step = (maximum_x - minimum_x) / INTERPOLATION_PRECISION
     def symmetry_test_function(center_guess):
-        if(center_guess - minimum_x < maximum_x - center_guess):
-            range = center_guess - minimum_x 
-            test_window_half_width = int(np.floor(range / interpolation_step))
-            test_window_center_index = test_window_half_width
-            test_window_number_points = 2 * test_window_half_width + 1
-            test_window_frequencies = np.linspace(minimum_x, center_guess + range, test_window_number_points)
+        difference_metric = 0.0
+        if(center_guess > maximum_x or center_guess < minimum_x):
+            pass
         else:
-            range = maximum_x - center_guess 
-            test_window_half_width = int(np.floor(range / interpolation_step))
-            test_window_center_index = test_window_half_width
-            test_window_number_points = 2 * test_window_half_width + 1
-            test_window_frequencies = np.linspace(center_guess - range, maximum_x, test_window_number_points) 
-        squared_difference = 0.0
-        for i in (np.arange(test_window_half_width) + 1):
-            left_point = test_window_center_index - i 
-            right_point = test_window_center_index + i 
-            left_value = transfer_interpolation(test_window_frequencies[left_point])
-            right_value = transfer_interpolation(test_window_frequencies[right_point])
-            squared_difference += np.square(left_value - right_value)
-        mean_squared_difference = squared_difference / test_window_number_points
+            if (center_guess - minimum_x < maximum_x - center_guess):
+                range = center_guess - minimum_x 
+                test_window_half_width = int(np.floor(range / interpolation_step))
+                test_window_center_index = test_window_half_width
+                test_window_number_points = 2 * test_window_half_width + 1
+                test_window_frequencies = np.linspace(minimum_x, center_guess + range, test_window_number_points)
+            else:
+                range = maximum_x - center_guess 
+                test_window_half_width = int(np.floor(range / interpolation_step))
+                test_window_center_index = test_window_half_width
+                test_window_number_points = 2 * test_window_half_width + 1
+                test_window_frequencies = np.linspace(center_guess - range, maximum_x, test_window_number_points) 
+            normed_squared_difference_sum = 0.0
+            for i in (np.arange(test_window_half_width) + 1):
+                left_point = test_window_center_index - i 
+                right_point = test_window_center_index + i 
+                left_value = y_interpolation(test_window_frequencies[left_point])
+                right_value = y_interpolation(test_window_frequencies[right_point])
+                squared_difference = np.square(left_value - right_value)
+                normed_squared_difference = squared_difference / np.sqrt(np.square(left_value) + np.square(right_value))
+                normed_squared_difference_sum += normed_squared_difference
+            difference_metric = normed_squared_difference_sum / test_window_number_points
         #Ad hoc penalty for a center close to the edge
-        data_mean_abs = sum(np.abs(y_data))
-        return mean_squared_difference
-    
-    
+        #Added to keep the code from railing to the edges...
+        data_abs_sum = sum(np.abs(y_data))
+        normalized_distance_from_center = (center_guess - x_data_center) / (x_data_width / 2)
+        AD_HOC_X_POWER = 26
+        ad_hoc_penalty = data_abs_sum * np.power(normalized_distance_from_center, AD_HOC_X_POWER)
+        return difference_metric + ad_hoc_penalty
+    #Sort the deduplicated data 
+    sorted_deduplicated_x_values, sorted_deduplicated_y_values = zip(*sorted(zip(deduplicated_x_values, deduplicated_y_values), 
+                                                                key = lambda f: f[0]))
+    sorted_deduplicated_x_values = np.array(sorted_deduplicated_x_values)
+    sorted_deduplicated_y_values = np.array(sorted_deduplicated_y_values)
+    relative_maxima = argrelextrema(sorted_deduplicated_y_values, np.greater, order = 2)
+    relative_minima = argrelextrema(sorted_deduplicated_y_values, np.less, order = 2)
+    relative_extrema = np.append(relative_maxima, relative_minima) 
+    extrema_x_values = sorted_deduplicated_x_values[relative_extrema]
+    minimal_function_value = np.inf
+    best_center_guess = None
+    for initial_center_guess in extrema_x_values:
+        optimization_results = minimize(symmetry_test_function, [initial_center_guess])
+        optimized_center_guess = optimization_results.x[0] 
+        optimized_function_value = optimization_results.fun
+        if optimized_function_value < minimal_function_value:
+            best_center_guess = optimized_center_guess
+            minimal_function_value = optimized_function_value
+    return best_center_guess
 
 
 
