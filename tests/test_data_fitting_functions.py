@@ -121,6 +121,3 @@ def test_fit_rf_spect_detuning_scan():
     center, rabi_freq = popt
     assert (np.abs((center - SAMPLE_CENTER) / SAMPLE_CENTER) < 3e-2) 
     assert (np.abs((rabi_freq - SAMPLE_RABI) / SAMPLE_RABI) < 3e-2)
-
-
-
