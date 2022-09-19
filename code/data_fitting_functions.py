@@ -157,7 +157,7 @@ def one_dimensional_cosine(x_values, freq, amp, phase, offset):
 #By convention, frequencies are in kHz, and times are in ms. 
 def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_freq = None, errors = None):
     if(center is None):
-        center_guess = sum(rf_freqs) / len(rf_freqs) 
+        center_guess = _find_center_helper(rf_freqs, transfers)
     else:
         center_guess = center 
     if(rabi_freq is None):
@@ -282,8 +282,15 @@ def fit_report(model_function, fit_results):
     report_string = ''
     report_string = report_string + "Model function: " + model_function.__name__ + "\n \n"
     varnames_tuple = get_varnames_from_function(model_function) 
+    varnames_list = list(varnames_tuple) 
+    #Some base functions have parameters that shouldn't be fitted, e.g. for rf spect
+    #By convention, these names will come first in the parameters, after the independent variables
+    #Thus, take only the last n names from varnames list, with n the length of popt
+    number_fitted_varnames = len(popt) 
+    varnames_to_skip = len(varnames_list) - len(popt)
+    fitted_varnames = varnames_list[varnames_to_skip:]
     my_sigmas = np.sqrt(np.diag(pcov))
-    for varname, value, sigma in zip(varnames_tuple, popt, my_sigmas):
+    for varname, value, sigma in zip(fitted_varnames, popt, my_sigmas):
         report_string = report_string + "Parameter: {0}\tValue: {1:.3e} ± {2:.2e} \t({3:.2%}) \n".format(varname, value, sigma, np.abs(sigma / value))
     report_string = report_string + "\n"
     report_string = report_string + "Correlations (unreported are <0.1): \n" 
