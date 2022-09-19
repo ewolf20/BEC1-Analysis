@@ -12,3 +12,8 @@ def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
     return fermi_energy_hz
 
 
+#By convention, uses kHz as the base unit.
+def two_level_system_population_rabi(t, omega_r, detuning):
+    generalized_rabi = np.sqrt(np.square(omega_r) + np.square(detuning))
+    population_excited = np.square(omega_r) / np.square(generalized_rabi) * np.square(np.sin(generalized_rabi / 2 * t))
+    return np.array([1.0 - population_excited, population_excited])
