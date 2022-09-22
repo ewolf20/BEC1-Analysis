@@ -1,6 +1,7 @@
 import numpy as np 
 from scipy.optimize import curve_fit
 from scipy.interpolate import interp1d
+from scipy.special import betainc
 
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None):
@@ -149,16 +150,47 @@ def one_dimensional_cosine(x_values, freq, amp, phase, offset):
     return amp * np.cos(2 * np.pi * x_values * freq + phase) + offset
 
 
-    
-
-
-
-
 def _sort_xy_data(x_values, y_values):
     sorted_x_values, sorted_y_values = zip(*sorted(zip(x_values, y_values), key = lambda f: f[0]))
     sorted_x_values = np.array(sorted_x_values) 
     sorted_y_values = np.array(sorted_y_values)
     return (sorted_x_values, sorted_y_values)
+
+"""
+Given a fitting function & parameter values and a set of x-y data (as np arrays)
+they purport to fit, filter outliers using Student's t-test at the specified confidence level."""
+def _filter_1d_outliers(x_values, y_values, fitting_func, popt, confidence = 1e-3):
+    num_params = len(popt)
+    num_samples = len(y_values)
+    fit_values = fitting_func(x_values, *popt)
+    residuals = y_values - fitting_func
+    sigma_sum = np.sum(np.square(residuals))
+    studentized_residuals = np.zeros(residuals.shape)
+    for i, residual in enumerate(residuals):
+        sigma_sum_sans_current = sigma_sum - np.square(residual)
+        sigma_squared_sans_current = (1.0 / (num_samples - num_params - 1)) * sigma_sum_sans_current 
+        sigma_sans_current = np.sqrt(sigma_squared_sans_current)
+        studentized_residual = residual / sigma_sans_current 
+        studentized_residuals[i] = studentized_residual
+    is_outlier_array = _studentized_residual_test(studentized_residuals, num_samples - num_params - 1, confidence)
+    trimmed_x_list = [] 
+    trimmed_y_list = []
+    for x_val, y_val, is_outlier in zip(x_values, y_values, is_outlier_array):
+        if not is_outlier:
+            trimmed_x_list.append(x_val) 
+            trimmed_y_list.append(y_val)
+    return (np.array(trimmed_x_list), np.array(trimmed_y_list))
+
+def _studentized_residual_test(t, degrees_of_freedom, confidence):
+    nu = degrees_of_freedom
+    abs_t = np.abs(t) 
+    x = nu / (np.square(t) + nu)
+    #Formula source: https://en.wikipedia.org/wiki/Student%27s_t-distribution
+    #Scipy betainc is the _regularized_ incomplete beta function
+    probability_of_occurrence = 0.5 * betainc(x, nu / 2, 0.5)
+    return probability_of_occurrence < confidence
+    
+
 """
 Convenience function for getting a pretty_printable fit report from scipy.optimize.curve_fit"""
 def fit_report(model_function, fit_results):

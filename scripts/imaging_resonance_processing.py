@@ -33,7 +33,7 @@ def main():
     saved_params_filename = os.path.join(workfolder_pathname, imaging_type_key + "_runs_dump.json")
     if(os.path.isfile(saved_params_filename)):
         try:
-            my_measurement._initialize_runs_dict(use_saved_params = True)
+            my_measurement._initialize_runs_dict(use_saved_params = True, saved_params_filename = saved_params_filename)
         except RuntimeError:
             my_measurement._initialize_runs_dict(use_saved_params = False)
             my_measurement.dump_runs_dict(dump_filename = saved_params_filename)
@@ -70,11 +70,26 @@ def main():
         frequencies_array = np.array(frequencies_list)
         counts_array = np.array(counts_list)
         if(not imaging_mode_string == "TopAB"):
-            data_saving_path = os.path.join(workfolder_pathname, "Data_" + imaging_mode_string + ".npy")
+            title = "Data_" + imaging_mode_string
         else:
-            data_saving_path = os.path.join(workfolder_pathname, "Data_" + run_image_name + ".npy")
+            title = "Data_" + run_image_name
+        data_saving_path = os.path.join(workfolder_pathname, title + ".npy")
         np.save(data_saving_path, np.stack((frequencies_array, counts_array)))
-        plt.plot(frequencies_array, counts_array, 'o')
+        fit_results = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies_array, counts_array)
+        popt, pcov = fit_results 
+        fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, fit_results)
+        with open(os.path.join(get_workfolder_path(), title + "_Fit_Report.txt"), 'w') as f:
+            f.write(fit_report) 
+        print(title + ":")
+        print(fit_report)
+        plt.plot(frequencies_array, counts_array, 'x', label = "Data")
+        frequencies_plotting_range = np.linspace(min(frequencies_array), max(frequencies_array), 100)
+        plt.plot(frequencies_plotting_range, data_fitting_functions.imaging_resonance_lorentzian(frequencies_plotting_range, *popt), label = "Fit")
+        plt.xlabel("Frequency (MHz)") 
+        plt.ylabel("Counts") 
+        plt.suptitle("Imaging Resonance: " + str(run_image_name))
+        plt.legend()
+        plt.savefig(os.path.join(get_workfolder_path(), title + "_Graph.png"))
         plt.show()
 
 
