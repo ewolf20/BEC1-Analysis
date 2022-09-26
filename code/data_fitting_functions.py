@@ -1,7 +1,12 @@
+import warnings
+
 import numpy as np 
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
 from scipy.special import betainc
+from scipy.signal import argrelextrema
+
+from .science_functions import two_level_system_population_rabi
 
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
@@ -170,6 +175,116 @@ def one_dimensional_cosine(x_values, freq, amp, phase, offset):
     return amp * np.cos(2 * np.pi * x_values * freq + phase) + offset
 
 
+#By convention, frequencies are in kHz, and times are in ms. 
+def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_freq = None, errors = None):
+    if(center is None):
+        center_guess = _find_center_helper(rf_freqs, transfers)
+    else:
+        center_guess = center 
+    if(rabi_freq is None):
+        rabi_freq_guess = 1.0 
+    else:
+        rabi_freq_guess = rabi_freq
+    def wrapped_rf_spect_function_factory(tau):
+        def rf_spect_function(rf_freqs, center, rabi_freq):
+            return rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq)
+        return rf_spect_function
+    tau_wrapped_function = wrapped_rf_spect_function_factory(tau)
+    params = np.array([center_guess, rabi_freq_guess])
+    results = curve_fit(tau_wrapped_function, rf_freqs, transfers, p0 = params, sigma = errors)
+    return results
+
+
+def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
+    omega_rabi = 2 * np.pi * rabi_freq
+    detunings = 2 * np.pi * (rf_freqs - center)
+    populations_excited = two_level_system_population_rabi(tau, omega_rabi, detunings)[1]
+    return populations_excited
+
+
+"""Helper function for finding the center of data with an even symmetry point.
+
+Given a dataset x, y, uses least-squares optimization to try to find the maximally evenly symmetric 
+point in the data, i.e. the point for which |f(x_0 + a) - f(x_0 - a)| is minimized in a least squares sense 
+for all the available data."""
+
+def _find_center_helper(x_data, y_data):
+    INTERPOLATION_PRECISION = 1000
+    #Deduplicate to allow interpolation
+    deduplicated_x_values_list = [] 
+    deduplicated_y_values_list = []
+    for x_value in x_data:
+        if not x_value in deduplicated_x_values_list:
+            deduplicated_x_values_list.append(x_value) 
+            counter = 0
+            y_sum = 0
+            for rechecked_x_value, y_value in zip(x_data, y_data):
+                if(rechecked_x_value == x_value):
+                    y_sum += y_value 
+                    counter += 1 
+            deduplicated_y_values_list.append(y_sum / counter)
+    deduplicated_x_values = np.array(deduplicated_x_values_list)
+    deduplicated_y_values = np.array(deduplicated_y_values_list)
+    y_interpolation = interp1d(deduplicated_x_values, deduplicated_y_values, kind = "cubic")
+    minimum_x = min(x_data)
+    maximum_x = max(x_data)
+    x_data_center = 0.5 * (maximum_x + minimum_x)
+    x_data_width = maximum_x - minimum_x
+    interpolation_step = (maximum_x - minimum_x) / INTERPOLATION_PRECISION
+    def symmetry_test_function(center_guess):
+        difference_metric = 0.0
+        if(center_guess > maximum_x or center_guess < minimum_x):
+            pass
+        else:
+            if (center_guess - minimum_x < maximum_x - center_guess):
+                range = center_guess - minimum_x 
+                test_window_half_width = int(np.floor(range / interpolation_step))
+                test_window_center_index = test_window_half_width
+                test_window_number_points = 2 * test_window_half_width + 1
+                test_window_frequencies = np.linspace(minimum_x, center_guess + range, test_window_number_points)
+            else:
+                range = maximum_x - center_guess 
+                test_window_half_width = int(np.floor(range / interpolation_step))
+                test_window_center_index = test_window_half_width
+                test_window_number_points = 2 * test_window_half_width + 1
+                test_window_frequencies = np.linspace(center_guess - range, maximum_x, test_window_number_points) 
+            normed_squared_difference_sum = 0.0
+            for i in (np.arange(test_window_half_width) + 1):
+                left_point = test_window_center_index - i 
+                right_point = test_window_center_index + i 
+                left_value = y_interpolation(test_window_frequencies[left_point])
+                right_value = y_interpolation(test_window_frequencies[right_point])
+                squared_difference = np.square(left_value - right_value)
+                normed_squared_difference = squared_difference / np.sqrt(np.square(left_value) + np.square(right_value))
+                normed_squared_difference_sum += normed_squared_difference
+            difference_metric = normed_squared_difference_sum / test_window_number_points
+        #Ad hoc penalty for a center close to the edge
+        #Added to keep the code from railing to the edges...
+        data_abs_sum = sum(np.abs(y_data))
+        normalized_distance_from_center = (center_guess - x_data_center) / (x_data_width / 2)
+        AD_HOC_X_POWER = 26
+        ad_hoc_penalty = data_abs_sum * np.power(normalized_distance_from_center, AD_HOC_X_POWER)
+        return difference_metric + ad_hoc_penalty
+    #Sort the deduplicated data 
+    sorted_deduplicated_x_values, sorted_deduplicated_y_values = zip(*sorted(zip(deduplicated_x_values, deduplicated_y_values), 
+                                                                key = lambda f: f[0]))
+    sorted_deduplicated_x_values = np.array(sorted_deduplicated_x_values)
+    sorted_deduplicated_y_values = np.array(sorted_deduplicated_y_values)
+    relative_maxima = argrelextrema(sorted_deduplicated_y_values, np.greater, order = 2)
+    relative_minima = argrelextrema(sorted_deduplicated_y_values, np.less, order = 2)
+    relative_extrema = np.append(relative_maxima, relative_minima) 
+    extrema_x_values = sorted_deduplicated_x_values[relative_extrema]
+    minimal_function_value = np.inf
+    best_center_guess = None
+    for initial_center_guess in extrema_x_values:
+        optimization_results = minimize(symmetry_test_function, [initial_center_guess])
+        optimized_center_guess = optimization_results.x[0] 
+        optimized_function_value = optimization_results.fun
+        if optimized_function_value < minimal_function_value:
+            best_center_guess = optimized_center_guess
+            minimal_function_value = optimized_function_value
+    return best_center_guess
+
 def _sort_xy_data(x_values, y_values):
     sorted_x_values, sorted_y_values = zip(*sorted(zip(x_values, y_values), key = lambda f: f[0]))
     sorted_x_values = np.array(sorted_x_values) 
@@ -216,8 +331,15 @@ def fit_report(model_function, fit_results):
     report_string = ''
     report_string = report_string + "Model function: " + model_function.__name__ + "\n \n"
     varnames_tuple = get_varnames_from_function(model_function) 
+    varnames_list = list(varnames_tuple) 
+    #Some base functions have parameters that shouldn't be fitted, e.g. for rf spect
+    #By convention, these names will come first in the parameters, after the independent variables
+    #Thus, take only the last n names from varnames list, with n the length of popt
+    number_fitted_varnames = len(popt) 
+    varnames_to_skip = len(varnames_list) - len(popt)
+    fitted_varnames = varnames_list[varnames_to_skip:]
     my_sigmas = np.sqrt(np.diag(pcov))
-    for varname, value, sigma in zip(varnames_tuple, popt, my_sigmas):
+    for varname, value, sigma in zip(fitted_varnames, popt, my_sigmas):
         report_string = report_string + "Parameter: {0}\tValue: {1:.3e} ± {2:.2e} \t({3:.2%}) \n".format(varname, value, sigma, np.abs(sigma / value))
     report_string = report_string + "\n"
     report_string = report_string + "Correlations (unreported are <0.1): \n" 
@@ -231,6 +353,6 @@ def fit_report(model_function, fit_results):
 
 def get_varnames_from_function(my_func):
     arg_names = my_func.__code__.co_varnames[:my_func.__code__.co_argcount]
-    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'imaging_freq', 'x_values']
+    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'imaging_freq', 'x_values', 'rf_freqs']
     arg_names = [f for f in arg_names if (not f in DEFAULT_INDEPENDENT_VARNAMES)]
     return arg_names

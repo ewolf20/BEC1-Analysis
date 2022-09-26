@@ -1,4 +1,5 @@
-import os 
+import os
+from random import sample 
 import sys 
 
 import matplotlib.pyplot as plt
@@ -99,20 +100,20 @@ def test_fit_one_dimensional_cosine():
     fit_results_sequential = data_fitting_functions.fit_one_dimensional_cosine(sequential_x, noisy_sequential_y)
     popt_s, pcov_s = fit_results_sequential 
     freq_s, amp_s, phase_s, offset_s = popt_s
-    assert((freq_s - SAMPLE_FREQ) / (SAMPLE_FREQ) < 1e-2)
-    assert((amp_s - SAMPLE_AMP) / (SAMPLE_AMP) < 3e-2)
-    assert((phase_s - SAMPLE_PHASE) / (SAMPLE_PHASE) < 3e-2)
-    assert((offset_s - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 1e-2)
+    assert((freq_s - SAMPLE_FREQ) / (SAMPLE_FREQ) < 5e-2)
+    assert((amp_s - SAMPLE_AMP) / (SAMPLE_AMP) < 5e-2)
+    assert((phase_s - SAMPLE_PHASE) / (SAMPLE_PHASE) < 5e-2)
+    assert((offset_s - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 5e-2)
     POLLUTION_AMP = 0.2
     POLLUTION_FREQUENCY = 2.4
     polluted_sequential_y = noisy_sequential_y + data_fitting_functions.one_dimensional_cosine(sequential_x, POLLUTION_FREQUENCY, POLLUTION_AMP, 0, 0)
     fit_results_polluted = data_fitting_functions.fit_one_dimensional_cosine(sequential_x, polluted_sequential_y) 
     popt_p, pcov_p = fit_results_polluted
     freq_p, amp_p, phase_p, offset_p = popt_p
-    assert((freq_p - SAMPLE_FREQ) / (SAMPLE_FREQ) < 1e-2)
-    assert((amp_p - SAMPLE_AMP) / (SAMPLE_AMP) < 3e-2)
-    assert((phase_p - SAMPLE_PHASE) / (SAMPLE_PHASE) < 3e-2)
-    assert((offset_p - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 1e-2)
+    assert((freq_p - SAMPLE_FREQ) / (SAMPLE_FREQ) < 5e-2)
+    assert((amp_p - SAMPLE_AMP) / (SAMPLE_AMP) < 5e-2)
+    assert((phase_p - SAMPLE_PHASE) / (SAMPLE_PHASE) < 5e-2)
+    assert((offset_p - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 5e-2)
     NON_SEQUENTIAL_INDICES = [71, 37, 15, 46, 28, 95, 60, 39, 53, 17, 96, 87, 75, 52, 24, 97, 76,
      1, 31, 42, 14, 61, 89, 58, 41, 74, 64, 27, 40, 84, 43, 98, 20, 22, 66,
       6, 30, 57, 8, 91, 78, 38, 10, 90, 82, 63, 94, 35, 4, 2]
@@ -121,11 +122,10 @@ def test_fit_one_dimensional_cosine():
     fit_results_non_sequential = data_fitting_functions.fit_one_dimensional_cosine(non_sequential_x, non_sequential_noisy_y) 
     popt_n, pcov_n = fit_results_non_sequential
     freq_n, amp_n, phase_n, offset_n = popt_n 
-    assert((freq_n - SAMPLE_FREQ) / (SAMPLE_FREQ) < 1e-2)
-    assert((amp_n - SAMPLE_AMP) / (SAMPLE_AMP) < 3e-2)
-    assert((phase_n - SAMPLE_PHASE) / (SAMPLE_PHASE) < 3e-2)
-    assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 1e-2)
-
+    assert((freq_n - SAMPLE_FREQ) / (SAMPLE_FREQ) < 5e-2)
+    assert((amp_n - SAMPLE_AMP) / (SAMPLE_AMP) < 5e-2)
+    assert((phase_n - SAMPLE_PHASE) / (SAMPLE_PHASE) < 5e-2)
+    assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 5e-2)
 
 def test_filter_1d_outliers():
     SAMPLE_CENTER = 23
@@ -147,3 +147,18 @@ def test_filter_1d_outliers():
     print(inlier_indices)
     assert not np.any(np.isin(OUTLIER_INDEX, inlier_indices))
     assert len(inlier_indices) == (len(sample_frequencies) - 1)
+
+
+
+def test_fit_rf_spect_detuning_scan():
+    SAMPLE_CENTER = 22
+    SAMPLE_RABI = 1.47
+    SAMPLE_TAU = 1.0
+    sample_frequencies = np.linspace(0, 50, 100)
+    sample_transfers = data_fitting_functions.rf_spect_detuning_scan(sample_frequencies, SAMPLE_TAU, SAMPLE_CENTER, SAMPLE_RABI)
+    sample_noisy_transfers = sample_transfers + np.random.normal(loc = 0.0, scale = 0.005, size = len(sample_transfers))
+    fit_results = data_fitting_functions.fit_rf_spect_detuning_scan(sample_frequencies, sample_transfers, SAMPLE_TAU)
+    popt, pcov = fit_results 
+    center, rabi_freq = popt
+    assert (np.abs((center - SAMPLE_CENTER) / SAMPLE_CENTER) < 3e-2) 
+    assert (np.abs((rabi_freq - SAMPLE_RABI) / SAMPLE_RABI) < 3e-2)
