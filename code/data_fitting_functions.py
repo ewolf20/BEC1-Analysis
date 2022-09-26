@@ -4,7 +4,13 @@ from scipy.interpolate import interp1d
 from scipy.special import betainc
 
 
-def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None):
+def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
+                                    filter_outliers = False, report_inliers = False):
+    #Cast to guarantee we can use array syntax
+    frequencies = np.array(frequencies) 
+    counts = np.array(counts)
+    if(errors):
+        errors = np.array(errors)
     #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
     INITIAL_GAMMA_GUESS = 5.0
     data_average = sum(counts) / len(counts)
@@ -32,7 +38,21 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
     else:
         params[3] = offset_guess
     results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = params, sigma = errors)
-    return results
+    if(filter_outliers):
+        popt, pcov = results 
+        inlier_indices = _filter_1d_outliers(frequencies, counts, imaging_resonance_lorentzian, 
+                                                            popt)
+        outlier_filtered_frequencies = frequencies[inlier_indices] 
+        outlier_filtered_counts = counts[inlier_indices] 
+        if(errors):
+            errors = errors[inlier_indices]
+        refitted_results = curve_fit(imaging_resonance_lorentzian, outlier_filtered_frequencies, outlier_filtered_counts, p0 = popt, sigma = errors)
+        if(report_inliers):
+            return (refitted_results, inlier_indices)
+        else:
+            return refitted_results
+    else:
+        return results
 
 def imaging_resonance_lorentzian(imaging_freq, amp, center, gamma, offset):
     return amp * 1.0 / (np.square(2.0 * (imaging_freq - center) / gamma) + 1) + offset
@@ -158,12 +178,14 @@ def _sort_xy_data(x_values, y_values):
 
 """
 Given a fitting function & parameter values and a set of x-y data (as np arrays)
-they purport to fit, filter outliers using Student's t-test at the specified confidence level."""
+they purport to fit, filter outliers using Student's t-test at the specified confidence level.
+
+Returns the indices of the x-y data which are _INLIERS_"""
 def _filter_1d_outliers(x_values, y_values, fitting_func, popt, confidence = 1e-3):
     num_params = len(popt)
     num_samples = len(y_values)
     fit_values = fitting_func(x_values, *popt)
-    residuals = y_values - fitting_func
+    residuals = y_values - fit_values
     sigma_sum = np.sum(np.square(residuals))
     studentized_residuals = np.zeros(residuals.shape)
     for i, residual in enumerate(residuals):
@@ -172,23 +194,19 @@ def _filter_1d_outliers(x_values, y_values, fitting_func, popt, confidence = 1e-
         sigma_sans_current = np.sqrt(sigma_squared_sans_current)
         studentized_residual = residual / sigma_sans_current 
         studentized_residuals[i] = studentized_residual
-    is_outlier_array = _studentized_residual_test(studentized_residuals, num_samples - num_params - 1, confidence)
-    trimmed_x_list = [] 
-    trimmed_y_list = []
-    for x_val, y_val, is_outlier in zip(x_values, y_values, is_outlier_array):
-        if not is_outlier:
-            trimmed_x_list.append(x_val) 
-            trimmed_y_list.append(y_val)
-    return (np.array(trimmed_x_list), np.array(trimmed_y_list))
+    is_inlier_array = _studentized_residual_test(studentized_residuals, num_samples - num_params - 1, confidence)
+    inlier_indices = np.nonzero(is_inlier_array)[0]
+    return inlier_indices
 
+#Source for approach: https://en.wikipedia.org/wiki/Studentized_residual
 def _studentized_residual_test(t, degrees_of_freedom, confidence):
     nu = degrees_of_freedom
-    abs_t = np.abs(t) 
+    abs_t = np.abs(t)
     x = nu / (np.square(t) + nu)
     #Formula source: https://en.wikipedia.org/wiki/Student%27s_t-distribution
     #Scipy betainc is the _regularized_ incomplete beta function
-    probability_of_occurrence = 0.5 * betainc(x, nu / 2, 0.5)
-    return probability_of_occurrence < confidence
+    probability_of_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
+    return probability_of_occurrence > confidence
     
 
 """
