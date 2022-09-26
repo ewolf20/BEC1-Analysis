@@ -75,18 +75,26 @@ def main():
             title = "Data_" + run_image_name
         data_saving_path = os.path.join(workfolder_pathname, title + ".npy")
         np.save(data_saving_path, np.stack((frequencies_array, counts_array)))
-        fit_results = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies_array, counts_array)
-        popt, pcov = fit_results 
+        fit_results, inlier_indices = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies_array, counts_array, filter_outliers = True, 
+                                                                            report_inliers = True)
+        overall_indices = np.arange(len(frequencies_array))
+        outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)] 
+        outlier_frequencies = frequencies_array[outlier_indices]
+        outlier_counts = counts_array[outlier_indices]
+        inlier_frequencies = frequencies_array[inlier_indices] 
+        inlier_counts = frequencies_array[inlier_indices]
+        popt, pcov = fit_results
         fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, fit_results)
         with open(os.path.join(get_workfolder_path(), title + "_Fit_Report.txt"), 'w') as f:
             f.write(fit_report) 
         print(title + ":")
         print(fit_report)
-        plt.plot(frequencies_array, counts_array, 'x', label = "Data")
+        plt.plot(inlier_frequencies, inlier_counts, 'x', label = "Data")
+        plt.plot(outlier_frequencies, outlier_counts, 'rd', label = "Outliers")
         frequencies_plotting_range = np.linspace(min(frequencies_array), max(frequencies_array), 100)
         plt.plot(frequencies_plotting_range, data_fitting_functions.imaging_resonance_lorentzian(frequencies_plotting_range, *popt), label = "Fit")
-        plt.xlabel("Frequency (MHz)") 
-        plt.ylabel("Counts") 
+        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("Counts")
         plt.suptitle("Imaging Resonance: " + str(run_image_name))
         plt.legend()
         plt.savefig(os.path.join(get_workfolder_path(), title + "_Graph.png"))

@@ -181,7 +181,7 @@ Given a fitting function & parameter values and a set of x-y data (as np arrays)
 they purport to fit, filter outliers using Student's t-test at the specified confidence level.
 
 Returns the indices of the x-y data which are _INLIERS_"""
-def _filter_1d_outliers(x_values, y_values, fitting_func, popt, confidence = 1e-3):
+def _filter_1d_outliers(x_values, y_values, fitting_func, popt, confidence = 1e-4):
     num_params = len(popt)
     num_samples = len(y_values)
     fit_values = fitting_func(x_values, *popt)
