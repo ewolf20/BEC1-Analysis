@@ -14,26 +14,28 @@ from BEC1_Analysis.code import image_processing_functions, data_fitting_function
 from imaging_resonance_processing import get_workfolder_path
 
 
-UPPER_COUNTS_CUTOFF = np.inf
-LOWER_COUNTS_CUTOFF = -np.inf
-
 def main():
     file_path = get_data_file_input() 
     frequencies, counts = np.load(file_path) 
-    frequencies_trimmed, counts_trimmed = zip(*[f for f in zip(frequencies, counts) if f[1] < UPPER_COUNTS_CUTOFF and f[1] > LOWER_COUNTS_CUTOFF])
-    frequencies_trimmed = list(frequencies_trimmed)
-    counts_trimmed = list(counts_trimmed) 
-    fit_results = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies_trimmed, counts_trimmed) 
+    fit_results, inlier_indices = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies, counts, filter_outliers = True, 
+                                                                                        report_inliers = True) 
     popt, pcov = fit_results
+    inlier_frequencies = frequencies[inlier_indices]
+    inlier_counts = counts[inlier_indices]
+    overall_indices = np.arange(len(frequencies))
+    outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)] 
+    outlier_frequencies = frequencies[outlier_indices] 
+    outlier_counts = counts[outlier_indices]
     fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, fit_results)
-    fit_values = data_fitting_functions.imaging_resonance_lorentzian(frequencies_trimmed, *popt)
-    frequencies_sorted, fit_values_sorted = zip(*sorted(zip(frequencies_trimmed, fit_values), key = lambda f: f[0]))
+    frequency_plot_range = np.linspace(min(frequencies), max(frequencies), 100)
+    fit_plot_values = data_fitting_functions.imaging_resonance_lorentzian(frequency_plot_range, *popt)
     title = os.path.basename(file_path).split('.')[0]
     with open(os.path.join(get_workfolder_path(), title + "_Fit_Report.txt"), 'w') as f:
         f.write(fit_report) 
     print(fit_report)
-    plt.plot(frequencies_trimmed, counts_trimmed, 'o', label = "Data") 
-    plt.plot(frequencies_sorted, fit_values_sorted, label = "Fit to data") 
+    plt.plot(inlier_frequencies, inlier_counts, 'o', label = "Data") 
+    plt.plot(frequency_plot_range, fit_plot_values, label = "Fit to data") 
+    plt.plot(outlier_frequencies, outlier_counts, 'rd', label = "Outliers")
     plt.xlabel("Actual Freq (MHz, arb offset)") 
     plt.ylabel("Counts (arb)")
     plt.legend() 

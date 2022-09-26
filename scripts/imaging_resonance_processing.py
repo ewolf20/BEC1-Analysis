@@ -82,7 +82,7 @@ def main():
         outlier_frequencies = frequencies_array[outlier_indices]
         outlier_counts = counts_array[outlier_indices]
         inlier_frequencies = frequencies_array[inlier_indices] 
-        inlier_counts = frequencies_array[inlier_indices]
+        inlier_counts = counts_array[inlier_indices]
         popt, pcov = fit_results
         fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, fit_results)
         with open(os.path.join(get_workfolder_path(), title + "_Fit_Report.txt"), 'w') as f:
