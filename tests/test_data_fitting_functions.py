@@ -153,12 +153,26 @@ def test_filter_1d_outliers():
 def test_fit_rf_spect_detuning_scan():
     SAMPLE_CENTER = 22
     SAMPLE_RABI = 1.47
-    SAMPLE_TAU = 1.0
+    SAMPLE_TAU = 0.2
     sample_frequencies = np.linspace(0, 50, 100)
     sample_transfers = data_fitting_functions.rf_spect_detuning_scan(sample_frequencies, SAMPLE_TAU, SAMPLE_CENTER, SAMPLE_RABI)
     sample_noisy_transfers = sample_transfers + np.random.normal(loc = 0.0, scale = 0.005, size = len(sample_transfers))
-    fit_results = data_fitting_functions.fit_rf_spect_detuning_scan(sample_frequencies, sample_transfers, SAMPLE_TAU)
+    fit_results = data_fitting_functions.fit_rf_spect_detuning_scan(sample_frequencies, sample_noisy_transfers, SAMPLE_TAU)
     popt, pcov = fit_results 
     center, rabi_freq = popt
     assert (np.abs((center - SAMPLE_CENTER) / SAMPLE_CENTER) < 3e-2) 
     assert (np.abs((rabi_freq - SAMPLE_RABI) / SAMPLE_RABI) < 3e-2)
+    OUTLIER_FREQUENCY = 12
+    OUTLIER_VALUE = 0.7
+    sample_frequencies_with_outlier = np.append(sample_frequencies, OUTLIER_FREQUENCY)
+    sample_noisy_transfers_with_outlier = np.append(sample_noisy_transfers, OUTLIER_VALUE)
+    outlier_fit_results, inlier_indices = data_fitting_functions.fit_rf_spect_detuning_scan(sample_frequencies_with_outlier, sample_noisy_transfers_with_outlier,
+                                                                 SAMPLE_TAU, filter_outliers = True, report_inliers = True)
+    popt_o, pcov_o = outlier_fit_results
+    overall_indices = np.arange(len(sample_frequencies_with_outlier))
+    outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)]
+    assert len(outlier_indices) == 1 
+    assert outlier_indices[0] == len(sample_frequencies)
+    center_o, rabi_freq_o = popt_o
+    assert (np.abs((center_o - SAMPLE_CENTER) / SAMPLE_CENTER) < 3e-2) 
+    assert (np.abs((rabi_freq_o - SAMPLE_RABI) / SAMPLE_RABI) < 3e-2)
