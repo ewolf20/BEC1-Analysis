@@ -44,7 +44,7 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         params[3] = offset_guess
     results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = params, sigma = errors)
     if(filter_outliers):
-        popt, pcov = results 
+        popt, pcov = results
         inlier_indices = _filter_1d_outliers(frequencies, counts, imaging_resonance_lorentzian, 
                                                             popt)
         outlier_filtered_frequencies = frequencies[inlier_indices] 
@@ -176,7 +176,12 @@ def one_dimensional_cosine(x_values, freq, amp, phase, offset):
 
 
 #By convention, frequencies are in kHz, and times are in ms. 
-def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_freq = None, errors = None):
+def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_freq = None, errors = None,
+                            filter_outliers = False, report_inliers = False):
+    rf_freqs = np.array(rf_freqs)
+    transfers = np.array(transfers) 
+    if(errors):
+        errors = np.array(errors)
     if(center is None):
         center_guess = _find_center_helper(rf_freqs, transfers)
     else:
@@ -192,7 +197,20 @@ def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_fre
     tau_wrapped_function = wrapped_rf_spect_function_factory(tau)
     params = np.array([center_guess, rabi_freq_guess])
     results = curve_fit(tau_wrapped_function, rf_freqs, transfers, p0 = params, sigma = errors)
-    return results
+    popt, pcov = results
+    if(filter_outliers):
+        inlier_indices = _filter_1d_outliers(rf_freqs, transfers, tau_wrapped_function, popt)
+        filtered_rf_freqs = rf_freqs[inlier_indices] 
+        filtered_transfers = transfers[inlier_indices] 
+        if(errors):
+            errors = errors[inlier_indices]
+        refitted_results = curve_fit(tau_wrapped_function, filtered_rf_freqs, filtered_transfers, p0 = popt, sigma = errors)
+        if(report_inliers):
+            return (refitted_results, inlier_indices)
+        else:
+            return refitted_results
+    else:
+        return results
 
 
 def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
@@ -326,7 +344,7 @@ def _studentized_residual_test(t, degrees_of_freedom, confidence):
 
 """
 Convenience function for getting a pretty_printable fit report from scipy.optimize.curve_fit"""
-def fit_report(model_function, fit_results):
+def fit_report(model_function, fit_results, precision = 3):
     popt, pcov = fit_results
     report_string = ''
     report_string = report_string + "Model function: " + model_function.__name__ + "\n \n"
@@ -335,20 +353,19 @@ def fit_report(model_function, fit_results):
     #Some base functions have parameters that shouldn't be fitted, e.g. for rf spect
     #By convention, these names will come first in the parameters, after the independent variables
     #Thus, take only the last n names from varnames list, with n the length of popt
-    number_fitted_varnames = len(popt) 
     varnames_to_skip = len(varnames_list) - len(popt)
     fitted_varnames = varnames_list[varnames_to_skip:]
     my_sigmas = np.sqrt(np.diag(pcov))
     for varname, value, sigma in zip(fitted_varnames, popt, my_sigmas):
-        report_string = report_string + "Parameter: {0}\tValue: {1:.3e} ± {2:.2e} \t({3:.2%}) \n".format(varname, value, sigma, np.abs(sigma / value))
+        report_string = report_string + "Parameter: {0}\tValue: {1:.{4}e} ± {2:.2e} \t({3:.2%}) \n".format(varname, value, sigma, np.abs(sigma / value), precision)
     report_string = report_string + "\n"
-    report_string = report_string + "Correlations (unreported are <0.1): \n" 
+    report_string = report_string + "Correlations (unreported are <0.1): \n"
     for i in range(len(popt)):
         for j in range(i + 1, len(popt)):
-            covariance = pcov[i][j] 
+            covariance = pcov[i][j]
             correlation = covariance / (my_sigmas[i] * my_sigmas[j]) 
             if(np.abs(correlation) > 0.1):
-                report_string = report_string + "{0} and {1}: \t {2:.2f}\n".format(varnames_tuple[i], varnames_tuple[j], correlation)
+                report_string = report_string + "{0} and {1}: \t {2:.2f}\n".format(fitted_varnames[i], fitted_varnames[j], correlation)
     return report_string
 
 def get_varnames_from_function(my_func):
