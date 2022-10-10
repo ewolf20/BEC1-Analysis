@@ -1,8 +1,6 @@
 import datetime
-import importlib.resources as pkg_resources
 import json
 import os
-import sys
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -11,11 +9,9 @@ import numpy as np
 from astropy.io import fits
 
 from .image_processing_functions import get_absorption_image
+from .loading_functions import load_satyendra, load_experiment_parameters
 
-
-path_to_file = os.path.dirname(os.path.abspath(__file__))
-path_to_satyendra = path_to_file + "/../../"
-sys.path.insert(0, path_to_satyendra)
+load_satyendra()
 
 from satyendra.code import breadboard_functions
 
@@ -55,7 +51,7 @@ class Measurement():
         self.image_format = image_format
         self.hold_images_in_memory = hold_images_in_memory
         if(not experiment_parameters):
-            self.experiment_parameters = Measurement.load_experiment_parameters()
+            self.experiment_parameters = load_experiment_parameters()
         else:
             self.experiment_parameters = experiment_parameters
         if(measurement_parameters):   
@@ -238,15 +234,6 @@ class Measurement():
     def _parse_datetime_from_filename(filename):
         datetime_string = filename.split(FILENAME_DELIMITER_CHAR)[1]
         return datetime.datetime.strptime(datetime_string, DATETIME_FORMAT_STRING)
-
-    @staticmethod 
-    def load_experiment_parameters():
-        from .. import secrets as s 
-        with pkg_resources.path(s, "experiment_parameters_secret.json") as parameters_path:
-            with open(parameters_path) as parameters_file:
-                return json.load(parameters_file)
-
-
         
 class Run():
     """Initialization method
