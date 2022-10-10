@@ -1,6 +1,7 @@
 import warnings
 
 import numpy as np 
+import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
 from scipy.special import betainc
@@ -9,6 +10,7 @@ from scipy.signal import argrelextrema
 from .science_functions import two_level_system_population_rabi
 from .loading_functions import load_experiment_parameters
 
+EXPERIMENT_PARAMETERS = load_experiment_parameters()
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
                                     filter_outliers = False, report_inliers = False):
@@ -111,6 +113,12 @@ def two_dimensional_gaussian(x, y, amp, x_center, y_center, sigma_x, sigma_y, of
     return amp * np.exp(-np.square(x - x_center) / (2 * np.square(sigma_x)) - np.square(y - y_center) / (2.0 * np.square(sigma_y))) + offset
     
 
+def two_dimensional_rotated_gaussian(x, y, amp, x_center, y_center, sigma_x_prime, sigma_y_prime, tilt_angle, offset):
+    x_diff = x - x_center 
+    y_diff = y - y_center 
+    x_prime_diff = np.cos(tilt_angle) * x_diff + np.sin(tilt_angle) * y_diff 
+    y_prime_diff = np.cos(tilt_angle) * y_diff - np.sin(tilt_angle) * x_diff 
+    return amp * np.exp(-np.square(x_prime_diff) / (2 * np.square(sigma_x_prime)) - np.square(y_prime_diff) / (2 * np.square(sigma_y_prime))) + offset
 
 def fit_one_dimensional_cosine(x_values, data, freq = None, amp = None, phase = None, offset = None, errors = None):
     if(not np.all([freq, amp, phase, offset])):
@@ -220,6 +228,46 @@ def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
     populations_excited = two_level_system_population_rabi(tau, omega_rabi, detunings)[1]
     return populations_excited
 
+
+HYBRID_TRAP_WIDTH_PIX = EXPERIMENT_PARAMETERS["axicon_diameter_pix"] 
+HYBRID_TRAP_TYPICAL_LENGTH_PIX = EXPERIMENT_PARAMETERS["hybrid_trap_typical_length_pix"]
+HYBRID_TRAP_TILT = EXPERIMENT_PARAMETERS["axicon_tilt_deg"]
+
+
+def hybrid_trap_center_finder(image_to_fit, center_guess = None, tilt = None, hybrid_pixel_width = None, hybrid_pixel_length = None):
+    if(hybrid_pixel_width is None):
+        width_sigma = HYBRID_TRAP_WIDTH_PIX / 4
+    else:
+        width_sigma = hybrid_pixel_width 
+    if(hybrid_pixel_length is None):
+        length_sigma = HYBRID_TRAP_TYPICAL_LENGTH_PIX / 4
+    else:
+        length_sigma = hybrid_pixel_length
+    if(tilt is None):
+        #Positive tilt angles rotate the Gaussian counterclockwise
+        #on a scale with (0,0) at the lower left
+        tilt = HYBRID_TRAP_TILT * np.pi / 180
+    estimated_image_amplitude = np.sum(image_to_fit) / (HYBRID_TRAP_TYPICAL_LENGTH_PIX * HYBRID_TRAP_WIDTH_PIX)
+    def wrapped_hybrid_fitting_gaussian(coordinate, x_center, y_center):
+        y, x = coordinate 
+        return two_dimensional_rotated_gaussian(x, y, estimated_image_amplitude, x_center, y_center, width_sigma, 
+                                            length_sigma, tilt, 0)
+    #Numpy puts vertical (y) index first by default
+    image_indices_grid = np.indices(image_to_fit.shape)
+    flattened_image_indices = image_indices_grid.reshape((2, image_indices_grid[0].size)) 
+    flattened_image = image_to_fit.flatten()
+    if(center_guess is None):
+        image_y_length = image_to_fit.shape[0] 
+        y_center_guess = int(np.floor(image_y_length / 2)) 
+        image_x_length = image_to_fit.shape[1] 
+        x_center_guess = int(np.floor(image_x_length / 2))
+    else:
+        x_center_guess, y_center_guess = center_guess
+    params = np.array([x_center_guess, y_center_guess])
+    results = curve_fit(wrapped_hybrid_fitting_gaussian, flattened_image_indices, flattened_image, p0 = params)
+    popt, pcov = results 
+    return popt
+    
 
 """Helper function for finding the center of data with an even symmetry point.
 
