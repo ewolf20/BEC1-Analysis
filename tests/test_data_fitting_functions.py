@@ -176,3 +176,13 @@ def test_fit_rf_spect_detuning_scan():
     center_o, rabi_freq_o = popt_o
     assert (np.abs((center_o - SAMPLE_CENTER) / SAMPLE_CENTER) < 3e-2) 
     assert (np.abs((rabi_freq_o - SAMPLE_RABI) / SAMPLE_RABI) < 3e-2)
+
+
+def test_hybrid_trap_center_finder():
+    EXPECTED_X_CENTER = 228
+    EXPECTED_Y_CENTER = 398
+    sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
+    center_guess = data_fitting_functions.hybrid_trap_center_finder(sample_hybrid_trap_data) 
+    x_center_guess, y_center_guess = center_guess
+    assert (np.abs(x_center_guess - EXPECTED_X_CENTER) < 5) 
+    assert (np.abs(y_center_guess - EXPECTED_Y_CENTER) < 5)
