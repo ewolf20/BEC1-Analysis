@@ -1,11 +1,12 @@
 import hashlib
-import os 
-import random
+import os
+from random import sample 
 import sys
 
 from astropy.io import fits
 import matplotlib.pyplot as plt
 import numpy as np 
+import scipy
 
 
 path_to_file = os.path.dirname(os.path.abspath(__file__))
@@ -20,7 +21,7 @@ ABSORPTION_NUMPY_ARRAY_FILEPATH = "resources/Test_Image_Absorption.npy"
 OD_NUMPY_ARRAY_FILEPATH = "resources/Test_Image_OD.npy"
 
 
-from BEC1_Analysis.code import image_processing_functions 
+from BEC1_Analysis.code import image_processing_functions, data_fitting_functions, loading_functions
 
 def load_test_image():
     with fits.open(TEST_IMAGE_FILE_PATH) as hdul:
@@ -177,5 +178,53 @@ def test_get_polrot_densities_from_lookup_table():
     saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
     assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-3)
     assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-3)
+
+
+def test_rotate_and_crop_hybrid_image():
+    X_SIZE = 300 
+    Y_SIZE = 300 
+    X_CENTER = 110 
+    Y_CENTER = 203 
+    GAUSSIAN_X_WIDTH = 50
+    GAUSSIAN_Y_WIDTH = 20
+    center = (X_CENTER, Y_CENTER)
+    y_indices, x_indices = np.mgrid[0:Y_SIZE, 0:X_SIZE]
+    gaussian_data = data_fitting_functions.two_dimensional_gaussian(x_indices, y_indices, 1.0, X_CENTER, Y_CENTER, GAUSSIAN_X_WIDTH, GAUSSIAN_Y_WIDTH, 0)
+    X_CROP_WIDTH = 100 
+    Y_CROP_WIDTH = 150
+    cropped_rotated_image, cropped_rotated_center = image_processing_functions._rotate_and_crop_hybrid_image(gaussian_data, center, 90, 
+                                                                                x_crop_width = X_CROP_WIDTH, y_crop_width = Y_CROP_WIDTH)
+    rotated_x_center, rotated_y_center = cropped_rotated_center 
+    assert (np.abs(rotated_x_center - X_CROP_WIDTH / 2.0 < 1e-3))
+    assert (np.abs(rotated_y_center - Y_CROP_WIDTH / 2.0 < 1e-3))
+    EXPECTED_COUNTS_SUM = 5375.8749
+    counts_sum = np.sum(cropped_rotated_image)
+    assert (np.abs(counts_sum - EXPECTED_COUNTS_SUM) < 1e-3)
+
+
+def test_get_hybrid_trap_densities_along_harmonic_axis():
+    EXPERIMENT_PARAMETERS = loading_functions.load_experiment_parameters()
+    EXPECTED_X_CENTER = 228 
+    EXPECTED_Y_CENTER = 398
+    UM_PER_PIXEL = EXPERIMENT_PARAMETERS["top_um_per_pixel"] 
+    AXICON_DIAMETER_PIX = EXPERIMENT_PARAMETERS["axicon_diameter_pix"]
+    axicon_diameter_um = UM_PER_PIXEL * AXICON_DIAMETER_PIX
+    sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
+    hybrid_trap_harmonic_positions, hybrid_trap_harmonic_data = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(sample_hybrid_trap_data)
+    filtered_hybrid_trap_harmonic_data = scipy.signal.savgol_filter(hybrid_trap_harmonic_data, 15, 2)
+    max_index = np.argmax(hybrid_trap_harmonic_data) 
+    max_value = hybrid_trap_harmonic_data[max_index]
+    CENTER_SNIPPET_HALF_WIDTH = 10
+    center_snippet = sample_hybrid_trap_data[EXPECTED_Y_CENTER - CENTER_SNIPPET_HALF_WIDTH:EXPECTED_Y_CENTER+CENTER_SNIPPET_HALF_WIDTH, 
+                                            EXPECTED_X_CENTER - CENTER_SNIPPET_HALF_WIDTH: EXPECTED_X_CENTER + CENTER_SNIPPET_HALF_WIDTH]
+    center_snippet_average_2d_density = np.sum(center_snippet) / center_snippet.size
+    center_snippet_average_3d_density = center_snippet_average_2d_density / (UM_PER_PIXEL * AXICON_DIAMETER_PIX)
+    max_index = np.argmax(filtered_hybrid_trap_harmonic_data)
+    max_value = filtered_hybrid_trap_harmonic_data[max_index] 
+    max_position = hybrid_trap_harmonic_positions[max_index] 
+    assert(np.abs(max_position) < 10) 
+    assert(np.abs((center_snippet_average_3d_density - max_value) / center_snippet_average_3d_density < 1e-1))
+
+
     
 
