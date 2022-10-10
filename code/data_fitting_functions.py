@@ -232,7 +232,7 @@ def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
 HYBRID_TRAP_WIDTH_PIX = EXPERIMENT_PARAMETERS["axicon_diameter_pix"] 
 HYBRID_TRAP_TYPICAL_LENGTH_PIX = EXPERIMENT_PARAMETERS["hybrid_trap_typical_length_pix"]
 HYBRID_TRAP_TILT = EXPERIMENT_PARAMETERS["axicon_tilt_deg"]
-
+TOP_UM_PER_PIXEL = EXPERIMENT_PARAMETERS["top_um_per_pixel"]
 
 def hybrid_trap_center_finder(image_to_fit, center_guess = None, tilt = None, hybrid_pixel_width = None, hybrid_pixel_length = None):
     if(hybrid_pixel_width is None):
