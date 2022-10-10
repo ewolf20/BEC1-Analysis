@@ -7,6 +7,7 @@ from scipy.special import betainc
 from scipy.signal import argrelextrema
 
 from .science_functions import two_level_system_population_rabi
+from .loading_functions import load_experiment_parameters
 
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,

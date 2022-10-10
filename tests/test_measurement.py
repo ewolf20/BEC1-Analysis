@@ -10,6 +10,7 @@ path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
 
 TEST_MEASUREMENT_DIRECTORY_PATH = "./resources"
+TEST_MEASUREMENT_DIRECTORY_PATH_WITH_DUMP = "./resources/Test_Dump_Directory"
 
 TEST_IMAGE_FILE_PATH = "resources/805277_2022-04-06--8-49-08_Side.fits"
 TEST_IMAGE_FILE_NAME = "805277_2022-04-06--8-49-08_Side.fits"
@@ -56,6 +57,21 @@ class TestMeasurement:
         my_run_params_bytes = json.dumps(my_run_params).encode("ASCII")
         assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
         assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
+        os.rename(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "run_params_dump_test.json"), 
+                    os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "run_params_dump.json"))
+        try:
+            my_measurement_params_from_dump = Measurement(measurement_directory_path = TEST_MEASUREMENT_DIRECTORY_PATH, imaging_type = "side_low_mag")
+            my_measurement_params_from_dump._initialize_runs_dict()
+            assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID 
+            my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
+            my_run_params = my_run.get_parameters() 
+            my_run_params_bytes = json.dumps(my_run_params).encode("ASCII") 
+            assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
+        finally:
+            os.rename(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "run_params_dump.json"), 
+                    os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "run_params_dump_test.json"))
+
+
 
     @staticmethod 
     def test_runs_dict_dump_and_load():

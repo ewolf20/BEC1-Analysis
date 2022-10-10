@@ -1,8 +1,6 @@
 import datetime
-import importlib.resources as pkg_resources
 import json
 import os
-import sys
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -11,11 +9,9 @@ import numpy as np
 from astropy.io import fits
 
 from .image_processing_functions import get_absorption_image
+from . import loading_functions 
 
-
-path_to_file = os.path.dirname(os.path.abspath(__file__))
-path_to_satyendra = path_to_file + "/../../"
-sys.path.insert(0, path_to_satyendra)
+loading_functions.load_satyendra()
 
 from satyendra.code import breadboard_functions
 
@@ -55,7 +51,7 @@ class Measurement():
         self.image_format = image_format
         self.hold_images_in_memory = hold_images_in_memory
         if(not experiment_parameters):
-            self.experiment_parameters = Measurement.load_experiment_parameters()
+            self.experiment_parameters = loading_functions.load_experiment_parameters()
         else:
             self.experiment_parameters = experiment_parameters
         if(measurement_parameters):   
@@ -76,19 +72,23 @@ class Measurement():
         max_datetime = max(datetimes_list)
         sorted_run_ids_list = sorted(unique_run_ids_list)
         if(not use_saved_params):
-            run_parameters_list = breadboard_functions.get_run_parameter_dicts_from_ids(self.breadboard_client, sorted_run_ids_list,
+            DATA_DUMP_PARAMS_FILENAME = "run_params_dump.json" 
+            path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, DATA_DUMP_PARAMS_FILENAME)
+            if(os.path.exists(path_to_dump_file_in_measurement_folder)):
+                run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
+                                                                        make_raw_parameters_terse = (not self.run_parameters_verbose))
+            else:
+                run_parameters_list = breadboard_functions.get_run_parameter_dicts_from_ids(self.breadboard_client, sorted_run_ids_list,
                                                                                     start_datetime = min_datetime, end_datetime = max_datetime, 
                                                                                     verbose = self.run_parameters_verbose)
         else:
-            with open(saved_params_filename) as run_params_json:
-                run_parameters_dict = json.load(run_params_json)
-            unsorted_run_parameters_list = [(int(key), run_parameters_dict[key]) for key in run_parameters_dict]
-            run_parameters_list = [f[1] for f in sorted(unsorted_run_parameters_list, key = lambda x: x[0])]
-            if len(sorted_run_ids_list) != len(run_parameters_dict):
+            run_parameters_list = loading_functions.load_run_parameters_from_json(saved_params_filename)
+        if len(sorted_run_ids_list) != len(run_parameters_list):
+            raise RuntimeError("Saved breadboard parameters do not match run_ids in measurement folder.")
+        for run_parameters in run_parameters_list:
+            run_id = run_parameters['id']
+            if not run_id in sorted_run_ids_list:
                 raise RuntimeError("Saved breadboard parameters do not match run_ids in measurement folder.")
-            for run_id in sorted_run_ids_list:
-                if not str(run_id) in run_parameters_dict:
-                    raise RuntimeError("Saved breadboard parameters do not match run_ids in measurement folder.")
         runs_dict = {}
         for run_id, run_parameters in zip(sorted_run_ids_list, run_parameters_list):
             run_image_pathname_dict = {}
@@ -238,15 +238,6 @@ class Measurement():
     def _parse_datetime_from_filename(filename):
         datetime_string = filename.split(FILENAME_DELIMITER_CHAR)[1]
         return datetime.datetime.strptime(datetime_string, DATETIME_FORMAT_STRING)
-
-    @staticmethod 
-    def load_experiment_parameters():
-        from .. import secrets as s 
-        with pkg_resources.path(s, "experiment_parameters_secret.json") as parameters_path:
-            with open(parameters_path) as parameters_file:
-                return json.load(parameters_file)
-
-
         
 class Run():
     """Initialization method
