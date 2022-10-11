@@ -83,13 +83,6 @@ class Measurement():
                                                                                     verbose = self.run_parameters_verbose)
         else:
             run_parameters_list = loading_functions.load_run_parameters_from_json(saved_params_filename)
-        if len(sorted_run_ids_list) != len(run_parameters_list):
-            raise RuntimeError("Saved breadboard parameters do not match run_ids in measurement folder.")
-        for run_parameters in run_parameters_list:
-            run_id = run_parameters['id']
-            if not run_id in sorted_run_ids_list:
-                raise RuntimeError("Saved breadboard parameters do not match run_ids in measurement folder.")
-        runs_dict = {}
         matched_run_ids_and_parameters_list = [] 
         #O(n^2) naive search, but it's fine...
         for run_id in sorted_run_ids_list: 
@@ -99,6 +92,7 @@ class Measurement():
                     break
             else:
                 raise RuntimeError("Unable to find data for run id: " + str(run_id))
+        runs_dict = {}
         for run_id_and_parameters in matched_run_ids_and_parameters_list:
             run_id, run_parameters = run_id_and_parameters
             run_image_pathname_dict = {}
