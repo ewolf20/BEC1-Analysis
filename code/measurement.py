@@ -90,7 +90,17 @@ class Measurement():
             if not run_id in sorted_run_ids_list:
                 raise RuntimeError("Saved breadboard parameters do not match run_ids in measurement folder.")
         runs_dict = {}
-        for run_id, run_parameters in zip(sorted_run_ids_list, run_parameters_list):
+        matched_run_ids_and_parameters_list = [] 
+        #O(n^2) naive search, but it's fine...
+        for run_id in sorted_run_ids_list: 
+            for parameters in run_parameters_list:
+                if parameters['id'] == run_id:
+                    matched_run_ids_and_parameters_list.append((run_id, parameters))
+                    break
+            else:
+                raise RuntimeError("Unable to find data for run id: " + str(run_id))
+        for run_id_and_parameters in matched_run_ids_and_parameters_list:
+            run_id, run_parameters = run_id_and_parameters
             run_image_pathname_dict = {}
             run_id_image_filenames = [f for f in os.listdir(self.measurement_directory_path) if str(run_id) in f]
             for run_id_image_filename in run_id_image_filenames:
