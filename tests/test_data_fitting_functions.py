@@ -127,6 +127,16 @@ def test_fit_one_dimensional_cosine():
     assert((phase_n - SAMPLE_PHASE) / (SAMPLE_PHASE) < 5e-2)
     assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 5e-2)
 
+
+def test_sort_and_deduplicate_xy_data():
+    TARGET_X_ARRAY = np.array([0, 1, 2, 3, 4]) 
+    TARGET_Y_ARRAY = np.array([0, 2, 3, 6, 8]) 
+    initial_x_array = np.array([4, 2, 1, 2, 3, 0]) 
+    initial_y_array = np.array([8, 2, 2, 4, 6, 0]) 
+    final_x_array, final_y_array = data_fitting_functions._sort_and_deduplicate_xy_data(initial_x_array, initial_y_array)
+    assert (np.all(np.abs(final_x_array - TARGET_X_ARRAY) < 1e-5))
+    assert (np.all(np.abs(final_y_array - TARGET_Y_ARRAY) < 1e-5))
+
 def test_filter_1d_outliers():
     SAMPLE_CENTER = 23
     SAMPLE_AMP = 5.0 
