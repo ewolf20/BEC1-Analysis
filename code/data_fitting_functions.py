@@ -169,7 +169,8 @@ def _cosine_guess_helper(x_values, data):
     data_length = len(data)
     guessed_offset = sum(data) / len(data)
     centered_data = data - guessed_offset
-    centered_data_fft = np.fft.fft(centered_data) 
+    guessed_frequency, guessed_amp, guessed_phase = get_fft_peak(x_values_delta, centered_data, order = None)
+    centered_data_fft = np.fft.fft(centered_data)
     fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_values_delta
     positive_fft_cutoff = int(np.floor(data_length / 2)) 
     positive_fft_values = centered_data_fft[1:positive_fft_cutoff]
@@ -179,6 +180,35 @@ def _cosine_guess_helper(x_values, data):
     guessed_phase = np.angle(positive_fft_values[fft_peak_position])
     guessed_amp = np.abs(positive_fft_values[fft_peak_position]) * 2.0 / data_length
     return (guessed_frequency, guessed_amp, guessed_phase, guessed_offset)
+
+"""
+Convenience function for the fast fourier transform of data.
+
+Given an x, y dataset in correct order for FFT (sorted, and with equally spaced datapoints), 
+return the frequency, amplitude and phase associated with a peak in the fft spectrum.
+
+X_delta: The spacing between points in the independent variable. Required so that the corresponding frequency can be returned. 
+
+Y_data: The data to be transformed. 
+
+order: The order of the peak to return. If None, the largest non-zero order is returned.
+
+Remark: """
+def get_fft_peak(x_delta, y_data, order = None):
+    data_length = len(y_data)
+    centered_data_fft = np.fft.fft(y_data) 
+    fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_delta 
+    positive_fft_cutoff = int(np.floor(data_length / 2))
+    nonnegative_fft_values = centered_data_fft[0:positive_fft_cutoff]
+    nonnegative_fft_frequencies = fft_real_frequencies[0:positive_fft_cutoff]
+    if(order is None):
+        fft_peak_position = np.argmax(np.abs(nonnegative_fft_values[1:])) + 1
+    else:
+        fft_peak_position = order
+    fft_frequency = nonnegative_fft_frequencies[fft_peak_position] 
+    fft_phase = np.angle(nonnegative_fft_values[fft_peak_position])
+    fft_amp = np.abs(nonnegative_fft_values[fft_peak_position]) * 2.0 / data_length
+    return (fft_frequency, fft_phase, fft_amp)
 
 
 def one_dimensional_cosine(x_values, freq, amp, phase, offset):
