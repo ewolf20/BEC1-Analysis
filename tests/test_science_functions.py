@@ -41,7 +41,7 @@ def test_get_li_energy_hz_in_1D_trap():
     SAMPLE_DISPLACEMENT = 3.27
     SAMPLE_FREQUENCY = 12.5
     #Checked calculation manually for these values
-    EXPECTED_ENERGY = 12.5928e9
+    EXPECTED_ENERGY = 4.97144e11
     energy = science_functions.get_li_energy_hz_in_1D_trap(SAMPLE_DISPLACEMENT, SAMPLE_FREQUENCY)
     assert (np.abs((energy - EXPECTED_ENERGY) / EXPECTED_ENERGY) < 1e-4)
 
@@ -53,3 +53,25 @@ def test_get_box_fermi_energy_from_counts():
     EXPECTED_ENERGY = 420.459
     energy = science_functions.get_box_fermi_energy_from_counts(SAMPLE_COUNTS, SAMPLE_RADIUS_UM, SAMPLE_LENGTH_UM)
     assert (np.abs((energy - EXPECTED_ENERGY) / EXPECTED_ENERGY) < 1e-4)
+
+def test_get_hybrid_trap_average_energy():
+    EXPECTED_AVERAGE_ENERGY = 5182.68
+    SAMPLE_RADIUS_UM = 70 
+    SAMPLE_TRAP_FREQ = 23
+    trap_cross_section_um = np.pi * np.square(SAMPLE_RADIUS_UM)
+    sample_hybrid_trap_cut_data = np.load("resources/Sample_Box_Exp_Cut.npy")
+    harmonic_positions, densities = sample_hybrid_trap_cut_data 
+    harmonic_positions = harmonic_positions[100:800]
+    densities = densities[100:800]
+    average_particle_energy = science_functions.get_hybrid_trap_average_energy(harmonic_positions, densities, trap_cross_section_um, SAMPLE_TRAP_FREQ)
+    assert (np.abs((average_particle_energy - EXPECTED_AVERAGE_ENERGY) / EXPECTED_AVERAGE_ENERGY) < 1e-4)
+
+def test_get_li6_br_energy_MHz():
+    sample_field_G = 690
+    EXPECTED_STATE_1_ENERGY = -1049.0933
+    EXPECTED_STATE_2_ENERGY = -973.0597
+    state_1_energy = science_functions.get_li6_br_energy_MHz(sample_field_G, 1)
+    state_2_energy = science_functions.get_li6_br_energy_MHz(sample_field_G, 2)
+    assert (np.abs((EXPECTED_STATE_1_ENERGY - state_1_energy) / EXPECTED_STATE_1_ENERGY))
+    assert (np.abs((EXPECTED_STATE_2_ENERGY - state_2_energy) / EXPECTED_STATE_2_ENERGY))
+    
