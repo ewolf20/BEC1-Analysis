@@ -1,5 +1,6 @@
 import numpy as np 
 from scipy.integrate import trapezoid
+from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 
 #Taken from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
@@ -64,13 +65,24 @@ Function for getting the energy of the ground state hyperfine manifold of lithiu
 Given a field in gauss and a state index (indices 1-6, labelling energies from least to greatest, 
 return the energy of the state in MHz """
 def get_li6_br_energy_MHz(field_in_gauss, state_index):
-    m, plus_minus_bool = _convert_li_state_index_to_br_notation_li(state_index)
+    m, plus_minus_bool = _convert_li_state_index_to_br_notation(state_index)
     dimensionless_field = _convert_gauss_to_li_x(field_in_gauss)
     dimensionless_energy = _breit_rabi_function(dimensionless_field, m, plus_minus_bool, LI_G_I, LI_G_J, LI_F_PLUS)
     energy_MHz = dimensionless_energy * LI_HYPERFINE_CONSTANT_MHZ
     return energy_MHz
 
-
+"""
+Given a resonance frequency between two Breit-Rabi states of 6Li, return the field in Gauss."""
+def get_field_from_li6_resonance(resonance_MHz, states_tuple, initial_guess_gauss = 690):
+    state_A_index, state_B_index = states_tuple
+    m_A, plus_minus_bool_A = _convert_li_state_index_to_br_notation(state_A_index)
+    m_B, plus_minus_bool_B = _convert_li_state_index_to_br_notation(state_B_index)
+    def wrapped_splitting_function(x):
+        dimless_state_A_energy = _breit_rabi_function(x, m_A, plus_minus_bool_A, LI_G_I, LI_G_J, LI_F_PLUS)
+        dimless_state_B_energy = _breit_rabi_function(x, m_B, plus_minus_bool_B, LI_G_I, LI_G_J, LI_F_PLUS)
+        return LI_HYPERFINE_CONSTANT_MHZ * np.abs(dimless_state_A_energy - dimless_state_B_energy) - resonance_MHz
+    optimal_x = fsolve(wrapped_splitting_function, _convert_gauss_to_li_x(initial_guess_gauss))[0]
+    return _convert_li_x_to_gauss(optimal_x)
 
 def _breit_rabi_function(x, m, plus_minus_bool, g_I, g_J, F_plus):
     if(m == F_plus):
@@ -91,8 +103,11 @@ def _breit_rabi_stretched_minus(x, g_I, g_J, F_plus):
 def _convert_gauss_to_li_x(field_in_gauss):
     return field_in_gauss * (BOHR_MAGNETON_IN_MHZ_PER_G) * (LI_G_I + LI_G_J) / (LI_F_PLUS * LI_HYPERFINE_CONSTANT_MHZ)
 
+def _convert_li_x_to_gauss(x):
+    return x * (LI_F_PLUS * LI_HYPERFINE_CONSTANT_MHZ) / (BOHR_MAGNETON_IN_MHZ_PER_G * (LI_G_I + LI_G_J))
 
-def _convert_li_state_index_to_br_notation_li(index):
+
+def _convert_li_state_index_to_br_notation(index):
     if(index == 1):
         return (0.5, False) 
     elif(index == 2):

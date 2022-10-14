@@ -74,4 +74,12 @@ def test_get_li6_br_energy_MHz():
     state_2_energy = science_functions.get_li6_br_energy_MHz(sample_field_G, 2)
     assert (np.abs((EXPECTED_STATE_1_ENERGY - state_1_energy) / EXPECTED_STATE_1_ENERGY))
     assert (np.abs((EXPECTED_STATE_2_ENERGY - state_2_energy) / EXPECTED_STATE_2_ENERGY))
+
+def test_get_field_from_li6_resonance():
+    SAMPLE_RESONANCE_FREQ = 75.9156
+    EXPECTED_B_FIELD = 635.01
+    SAMPLE_INDICES = (1, 2)
+    extracted_field = science_functions.get_field_from_li6_resonance(SAMPLE_RESONANCE_FREQ, SAMPLE_INDICES)
+    assert(np.abs((extracted_field - EXPECTED_B_FIELD) / EXPECTED_B_FIELD) < 1e-5)
+    print(extracted_field)
     
