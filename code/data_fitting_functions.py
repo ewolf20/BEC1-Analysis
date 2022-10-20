@@ -9,6 +9,7 @@ from scipy.signal import argrelextrema
 from .science_functions import two_level_system_population_rabi
 from .loading_functions import load_experiment_parameters
 
+EXPERIMENT_PARAMETERS = load_experiment_parameters()
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
                                     filter_outliers = False, report_inliers = False):
@@ -111,6 +112,12 @@ def two_dimensional_gaussian(x, y, amp, x_center, y_center, sigma_x, sigma_y, of
     return amp * np.exp(-np.square(x - x_center) / (2 * np.square(sigma_x)) - np.square(y - y_center) / (2.0 * np.square(sigma_y))) + offset
     
 
+def two_dimensional_rotated_gaussian(x, y, amp, x_center, y_center, sigma_x_prime, sigma_y_prime, tilt_angle, offset):
+    x_diff = x - x_center 
+    y_diff = y - y_center 
+    x_prime_diff = np.cos(tilt_angle) * x_diff + np.sin(tilt_angle) * y_diff 
+    y_prime_diff = np.cos(tilt_angle) * y_diff - np.sin(tilt_angle) * x_diff 
+    return amp * np.exp(-np.square(x_prime_diff) / (2 * np.square(sigma_x_prime)) - np.square(y_prime_diff) / (2 * np.square(sigma_y_prime))) + offset
 
 def fit_one_dimensional_cosine(x_values, data, freq = None, amp = None, phase = None, offset = None, errors = None):
     if(not np.all([freq, amp, phase, offset])):
@@ -137,7 +144,7 @@ def fit_one_dimensional_cosine(x_values, data, freq = None, amp = None, phase = 
 
 def _cosine_guess_helper(x_values, data):
     SPACING_REL_TOLERANCE = 1e-3
-    sorted_x_values, sorted_data = _sort_xy_data(x_values, data)
+    sorted_x_values, sorted_data = _sort_and_deduplicate_xy_data(x_values, data)
     x_values_delta = sorted_x_values[1] - sorted_x_values[0]
     values_evenly_spaced = True
     for diff in np.diff(sorted_x_values):
@@ -145,8 +152,9 @@ def _cosine_guess_helper(x_values, data):
             values_evenly_spaced = False 
             break
     if(not values_evenly_spaced):
-        minimum_spacing = min(sorted_x_values[1:] - sorted_x_values[:-1])
+        MAXIMUM_INTERPOLATION_NUMBER = 1000
         x_width = sorted_x_values[-1] - sorted_x_values[0] 
+        minimum_spacing = max(min(np.diff(sorted_x_values)), x_width / MAXIMUM_INTERPOLATION_NUMBER)
         num_samps = int(np.floor(x_width / minimum_spacing)) + 1
         interpolated_x_values = np.linspace(sorted_x_values[0], sorted_x_values[-1], num_samps) 
         interpolation_function = interp1d(sorted_x_values, sorted_data, kind = "cubic")
@@ -160,7 +168,8 @@ def _cosine_guess_helper(x_values, data):
     data_length = len(data)
     guessed_offset = sum(data) / len(data)
     centered_data = data - guessed_offset
-    centered_data_fft = np.fft.fft(centered_data) 
+    guessed_frequency, guessed_amp, guessed_phase = get_fft_peak(x_values_delta, centered_data, order = None)
+    centered_data_fft = np.fft.fft(centered_data)
     fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_values_delta
     positive_fft_cutoff = int(np.floor(data_length / 2)) 
     positive_fft_values = centered_data_fft[1:positive_fft_cutoff]
@@ -170,6 +179,35 @@ def _cosine_guess_helper(x_values, data):
     guessed_phase = np.angle(positive_fft_values[fft_peak_position])
     guessed_amp = np.abs(positive_fft_values[fft_peak_position]) * 2.0 / data_length
     return (guessed_frequency, guessed_amp, guessed_phase, guessed_offset)
+
+"""
+Convenience function for the fast fourier transform of data.
+
+Given an x, y dataset in correct order for FFT (sorted, and with equally spaced datapoints), 
+return the frequency, amplitude and phase associated with a peak in the fft spectrum.
+
+X_delta: The spacing between points in the independent variable. Required so that the corresponding frequency can be returned. 
+
+Y_data: The data to be transformed. 
+
+order: The order of the peak to return. If None, the largest non-zero order is returned.
+
+Remark: """
+def get_fft_peak(x_delta, y_data, order = None):
+    data_length = len(y_data)
+    centered_data_fft = np.fft.fft(y_data) 
+    fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_delta 
+    positive_fft_cutoff = int(np.floor(data_length / 2))
+    nonnegative_fft_values = centered_data_fft[0:positive_fft_cutoff]
+    nonnegative_fft_frequencies = fft_real_frequencies[0:positive_fft_cutoff]
+    if(order is None):
+        fft_peak_position = np.argmax(np.abs(nonnegative_fft_values[1:])) + 1
+    else:
+        fft_peak_position = order
+    fft_frequency = nonnegative_fft_frequencies[fft_peak_position] 
+    fft_phase = np.angle(nonnegative_fft_values[fft_peak_position])
+    fft_amp = np.abs(nonnegative_fft_values[fft_peak_position]) * 2.0 / data_length
+    return (fft_frequency, fft_amp, fft_phase)
 
 
 def one_dimensional_cosine(x_values, freq, amp, phase, offset):
@@ -221,6 +259,46 @@ def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
     return populations_excited
 
 
+HYBRID_TRAP_WIDTH_PIX = EXPERIMENT_PARAMETERS["axicon_diameter_pix"] 
+HYBRID_TRAP_TYPICAL_LENGTH_PIX = EXPERIMENT_PARAMETERS["hybrid_trap_typical_length_pix"]
+HYBRID_TRAP_TILT = EXPERIMENT_PARAMETERS["axicon_tilt_deg"]
+TOP_UM_PER_PIXEL = EXPERIMENT_PARAMETERS["top_um_per_pixel"]
+
+def hybrid_trap_center_finder(image_to_fit, center_guess = None, tilt = None, hybrid_pixel_width = None, hybrid_pixel_length = None):
+    if(hybrid_pixel_width is None):
+        width_sigma = HYBRID_TRAP_WIDTH_PIX / 4
+    else:
+        width_sigma = hybrid_pixel_width 
+    if(hybrid_pixel_length is None):
+        length_sigma = HYBRID_TRAP_TYPICAL_LENGTH_PIX / 4
+    else:
+        length_sigma = hybrid_pixel_length
+    if(tilt is None):
+        #Positive tilt angles rotate the Gaussian counterclockwise
+        #on a scale with (0,0) at the lower left
+        tilt = HYBRID_TRAP_TILT * np.pi / 180
+    estimated_image_amplitude = np.sum(image_to_fit) / (HYBRID_TRAP_TYPICAL_LENGTH_PIX * HYBRID_TRAP_WIDTH_PIX)
+    def wrapped_hybrid_fitting_gaussian(coordinate, x_center, y_center):
+        y, x = coordinate 
+        return two_dimensional_rotated_gaussian(x, y, estimated_image_amplitude, x_center, y_center, width_sigma, 
+                                            length_sigma, tilt, 0)
+    #Numpy puts vertical (y) index first by default
+    image_indices_grid = np.indices(image_to_fit.shape)
+    flattened_image_indices = image_indices_grid.reshape((2, image_indices_grid[0].size)) 
+    flattened_image = image_to_fit.flatten()
+    if(center_guess is None):
+        image_y_length = image_to_fit.shape[0] 
+        y_center_guess = int(np.floor(image_y_length / 2)) 
+        image_x_length = image_to_fit.shape[1] 
+        x_center_guess = int(np.floor(image_x_length / 2))
+    else:
+        x_center_guess, y_center_guess = center_guess
+    params = np.array([x_center_guess, y_center_guess])
+    results = curve_fit(wrapped_hybrid_fitting_gaussian, flattened_image_indices, flattened_image, p0 = params)
+    popt, pcov = results 
+    return popt
+    
+
 """Helper function for finding the center of data with an even symmetry point.
 
 Given a dataset x, y, uses least-squares optimization to try to find the maximally evenly symmetric 
@@ -229,22 +307,8 @@ for all the available data."""
 
 def _find_center_helper(x_data, y_data):
     INTERPOLATION_PRECISION = 1000
-    #Deduplicate to allow interpolation
-    deduplicated_x_values_list = [] 
-    deduplicated_y_values_list = []
-    for x_value in x_data:
-        if not x_value in deduplicated_x_values_list:
-            deduplicated_x_values_list.append(x_value) 
-            counter = 0
-            y_sum = 0
-            for rechecked_x_value, y_value in zip(x_data, y_data):
-                if(rechecked_x_value == x_value):
-                    y_sum += y_value 
-                    counter += 1 
-            deduplicated_y_values_list.append(y_sum / counter)
-    deduplicated_x_values = np.array(deduplicated_x_values_list)
-    deduplicated_y_values = np.array(deduplicated_y_values_list)
-    y_interpolation = interp1d(deduplicated_x_values, deduplicated_y_values, kind = "cubic")
+    sorted_deduplicated_x_values, sorted_deduplicated_y_values = _sort_and_deduplicate_xy_data(x_data, y_data)
+    y_interpolation = interp1d(sorted_deduplicated_x_values, sorted_deduplicated_y_values, kind = "cubic")
     minimum_x = min(x_data)
     maximum_x = max(x_data)
     x_data_center = 0.5 * (maximum_x + minimum_x)
@@ -284,11 +348,6 @@ def _find_center_helper(x_data, y_data):
         AD_HOC_X_POWER = 26
         ad_hoc_penalty = data_abs_sum * np.power(normalized_distance_from_center, AD_HOC_X_POWER)
         return difference_metric + ad_hoc_penalty
-    #Sort the deduplicated data 
-    sorted_deduplicated_x_values, sorted_deduplicated_y_values = zip(*sorted(zip(deduplicated_x_values, deduplicated_y_values), 
-                                                                key = lambda f: f[0]))
-    sorted_deduplicated_x_values = np.array(sorted_deduplicated_x_values)
-    sorted_deduplicated_y_values = np.array(sorted_deduplicated_y_values)
     relative_maxima = argrelextrema(sorted_deduplicated_y_values, np.greater, order = 2)
     relative_minima = argrelextrema(sorted_deduplicated_y_values, np.less, order = 2)
     relative_extrema = np.append(relative_maxima, relative_minima) 
@@ -304,11 +363,30 @@ def _find_center_helper(x_data, y_data):
             minimal_function_value = optimized_function_value
     return best_center_guess
 
-def _sort_xy_data(x_values, y_values):
+def _sort_and_deduplicate_xy_data(x_values, y_values):
     sorted_x_values, sorted_y_values = zip(*sorted(zip(x_values, y_values), key = lambda f: f[0]))
     sorted_x_values = np.array(sorted_x_values) 
     sorted_y_values = np.array(sorted_y_values)
-    return (sorted_x_values, sorted_y_values)
+    deduplicated_x_values = [] 
+    deduplicated_y_values = [] 
+    most_recent_x_value = -np.inf 
+    most_recent_y_sum = 0.0
+    recurrence_counter = 0 
+    for x_value, y_value in zip(sorted_x_values, sorted_y_values):
+        if(x_value == most_recent_x_value):
+            recurrence_counter += 1
+            most_recent_y_sum += y_value 
+        else:
+            if(recurrence_counter > 0):
+                deduplicated_x_values.append(most_recent_x_value)
+                most_recent_y_average = most_recent_y_sum / recurrence_counter 
+                deduplicated_y_values.append(most_recent_y_average)
+            most_recent_x_value = x_value 
+            most_recent_y_sum = y_value
+            recurrence_counter = 1
+    deduplicated_x_values.append(most_recent_x_value)
+    deduplicated_y_values.append(most_recent_y_sum / recurrence_counter)
+    return (np.array(deduplicated_x_values), np.array(deduplicated_y_values))
 
 """
 Given a fitting function & parameter values and a set of x-y data (as np arrays)

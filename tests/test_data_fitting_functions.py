@@ -127,6 +127,16 @@ def test_fit_one_dimensional_cosine():
     assert((phase_n - SAMPLE_PHASE) / (SAMPLE_PHASE) < 5e-2)
     assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 5e-2)
 
+
+def test_sort_and_deduplicate_xy_data():
+    TARGET_X_ARRAY = np.array([0, 1, 2, 3, 4]) 
+    TARGET_Y_ARRAY = np.array([0, 2, 3, 6, 8]) 
+    initial_x_array = np.array([4, 2, 1, 2, 3, 0]) 
+    initial_y_array = np.array([8, 2, 2, 4, 6, 0]) 
+    final_x_array, final_y_array = data_fitting_functions._sort_and_deduplicate_xy_data(initial_x_array, initial_y_array)
+    assert (np.all(np.abs(final_x_array - TARGET_X_ARRAY) < 1e-5))
+    assert (np.all(np.abs(final_y_array - TARGET_Y_ARRAY) < 1e-5))
+
 def test_filter_1d_outliers():
     SAMPLE_CENTER = 23
     SAMPLE_AMP = 5.0 
@@ -176,3 +186,13 @@ def test_fit_rf_spect_detuning_scan():
     center_o, rabi_freq_o = popt_o
     assert (np.abs((center_o - SAMPLE_CENTER) / SAMPLE_CENTER) < 3e-2) 
     assert (np.abs((rabi_freq_o - SAMPLE_RABI) / SAMPLE_RABI) < 3e-2)
+
+
+def test_hybrid_trap_center_finder():
+    EXPECTED_X_CENTER = 228
+    EXPECTED_Y_CENTER = 398
+    sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
+    center_guess = data_fitting_functions.hybrid_trap_center_finder(sample_hybrid_trap_data) 
+    x_center_guess, y_center_guess = center_guess
+    assert (np.abs(x_center_guess - EXPECTED_X_CENTER) < 5) 
+    assert (np.abs(y_center_guess - EXPECTED_Y_CENTER) < 5)

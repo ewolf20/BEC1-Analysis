@@ -3,9 +3,14 @@ import os
 
 import numpy as np
 from scipy.optimize import fsolve
+from scipy import ndimage
 
 from .c_code._polrot_code import ffi as polrot_image_ffi
 from .c_code._polrot_code import lib as polrot_image_lib
+from . import data_fitting_functions
+from .loading_functions import load_experiment_parameters
+
+EXPERIMENT_PARAMETERS = load_experiment_parameters()
 
 
 """
@@ -358,6 +363,53 @@ def parallelizable_density_polrot_function(atom_density_1, atom_density_2, detun
         od_naught_2 = atom_density_2 * res_cross_section
         od_naught_vector = [od_naught_1, od_naught_2] 
         return wrapped_c_polrot_image_function(od_naught_vector, *extra_args)
+
+
+
+def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, center = None, axicon_diameter_pix = None, 
+                                                axicon_tilt_deg = None, um_per_pixel = None, rotate_data = True):
+    if(center is None):
+        center = data_fitting_functions.hybrid_trap_center_finder(hybrid_trap_density_image)
+    if(axicon_diameter_pix is None):
+        axicon_diameter_pix = EXPERIMENT_PARAMETERS["axicon_diameter_pix"]
+    if(axicon_tilt_deg is None):
+        axicon_tilt_deg = EXPERIMENT_PARAMETERS["axicon_tilt_deg"]
+    if(um_per_pixel is None):
+        um_per_pixel = EXPERIMENT_PARAMETERS["top_um_per_pixel"]
+    if(rotate_data):
+        image_to_use, rotated_center = _rotate_and_crop_hybrid_image(hybrid_trap_density_image, center, axicon_tilt_deg)    
+        rotated_x_center, rotated_y_center = rotated_center 
+        hybrid_trap_radius_um = um_per_pixel * axicon_diameter_pix / 2.0 
+        hybrid_trap_cross_sectional_area_um = np.pi * np.square(hybrid_trap_radius_um) 
+        radial_axis_index = 1
+        hybrid_trap_radial_integrated_density = um_per_pixel * np.sum(image_to_use, axis = radial_axis_index)
+        hybrid_trap_3D_density_harmonic_axis = hybrid_trap_radial_integrated_density / hybrid_trap_cross_sectional_area_um 
+        harmonic_axis_positions_um = um_per_pixel * (np.arange(len(image_to_use)) - rotated_y_center)
+        return (harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis) 
+    else:
+        raise NotImplementedError("Hybrid analysis without rotating data not yet implemented")
+
+def _rotate_and_crop_hybrid_image(image, center, rotation_angle_deg, x_crop_width = np.inf, y_crop_width = np.inf):
+    x_center, y_center = center 
+    image_y_width, image_x_width = image.shape
+    image_x_center = (image_x_width - 1) / 2.0 
+    image_y_center = (image_y_width - 1) / 2.0 
+    x_center_diff = x_center - image_x_center 
+    y_center_diff = y_center - image_y_center
+    rotation_angle_rad = np.pi / 180 * rotation_angle_deg
+    rotated_x_center_diff = np.cos(rotation_angle_rad) * x_center_diff + np.sin(rotation_angle_rad) * y_center_diff
+    rotated_y_center_diff = np.cos(rotation_angle_rad) * y_center_diff - np.sin(rotation_angle_rad) * x_center_diff 
+    rotated_x_center = image_x_center + rotated_x_center_diff 
+    rotated_y_center = image_y_center + rotated_y_center_diff 
+    rotated_image = ndimage.rotate(image, rotation_angle_deg, reshape = False)
+    cropped_y_max = int(min(image_y_width, np.round(rotated_y_center + y_crop_width / 2.0)))
+    cropped_y_min = int(max(0, np.round(rotated_y_center - y_crop_width / 2)))
+    cropped_x_max = int(min(image_x_width, np.round(rotated_x_center + x_crop_width / 2.0)))
+    cropped_x_min = int(max(0, np.round(rotated_x_center - x_crop_width / 2.0)))
+    cropped_rotated_image = rotated_image[cropped_y_min:cropped_y_max, cropped_x_min:cropped_x_max] 
+    final_x_center = rotated_x_center - cropped_x_min
+    final_y_center = rotated_y_center - cropped_y_min
+    return (cropped_rotated_image, (final_x_center, final_y_center)) 
 
 def _get_linewidth_from_species(species):
     LI6_NATURAL_LINEWIDTH_MHZ = 5.87
