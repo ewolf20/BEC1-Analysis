@@ -1,7 +1,6 @@
 import numpy as np 
 from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
-import matplotlib.pyplot as plt
 
 #Taken from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
 LI_6_MASS_KG = 9.98834e-27
@@ -24,7 +23,6 @@ def get_fermi_energy_hz_from_density(atom_density_m):
 
 def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq):
     harmonic_trap_energies = get_li_energy_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq)
-    plt.plot(harmonic_trap_energies, three_d_density_trap_profile_um)
     total_potential_energy = trapezoid(harmonic_trap_energies * three_d_density_trap_profile_um * trap_cross_section_um, x = harmonic_trap_positions_um)
     #1D Virial theorem; see Zhenjie Yan's PhD thesis
     #Formula still holds for an imbalanced cloud

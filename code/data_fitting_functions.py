@@ -1,7 +1,6 @@
 import warnings
 
 import numpy as np 
-import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
 from scipy.special import betainc
@@ -208,7 +207,7 @@ def get_fft_peak(x_delta, y_data, order = None):
     fft_frequency = nonnegative_fft_frequencies[fft_peak_position] 
     fft_phase = np.angle(nonnegative_fft_values[fft_peak_position])
     fft_amp = np.abs(nonnegative_fft_values[fft_peak_position]) * 2.0 / data_length
-    return (fft_frequency, fft_phase, fft_amp)
+    return (fft_frequency, fft_amp, fft_phase)
 
 
 def one_dimensional_cosine(x_values, freq, amp, phase, offset):
