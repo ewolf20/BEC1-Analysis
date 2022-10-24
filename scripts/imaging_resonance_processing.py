@@ -13,7 +13,7 @@ sys.path.insert(0, path_to_repo_folder)
 
 from satyendra.code.image_watchdog import ImageWatchdog
 from BEC1_Analysis.code.measurement import Run, Measurement
-from BEC1_Analysis.code import image_processing_functions, data_fitting_functions
+from BEC1_Analysis.code import image_processing_functions, data_fitting_functions, loading_functions
 
 SUPPORTED_IMAGE_TYPES = ['Side_lf', 'Side_hf', 'TopA', 'TopB', 'TopAB']
 
@@ -24,10 +24,26 @@ NORM_BOX_COORDINATES = None
 def main():
     measurement_directory_path = get_measurement_directory_input()
     imaging_mode_string = get_imaging_mode()
+    main_after_inputs(measurement_directory_path, imaging_mode_string)
+
+def main_after_inputs(measurement_directory_path, imaging_mode_string):
     workfolder_pathname = get_workfolder_path()
     if(not os.path.isdir(workfolder_pathname)):
         os.makedirs(workfolder_pathname)
     run_image_name_list, frequency_key_list, imaging_type_key = imaging_mode_decoder(imaging_mode_string)
+    my_measurement = setup_measurement(workfolder_pathname, measurement_directory_path, imaging_type_key, run_image_name_list)
+    clipboard_string = ""
+    for run_image_name, frequency_key in zip(run_image_name_list, frequency_key_list):
+        frequency_multiplier = get_frequency_multiplier(my_measurement, imaging_mode_string)
+        frequencies_array, counts_array = get_frequency_counts_data(my_measurement, run_image_name, frequency_key, frequency_multiplier)
+        if(not imaging_mode_string == "TopAB"):
+            title = "Data_" + imaging_mode_string
+        else:
+            title = "Data_" + run_image_name
+        clipboard_string = save_fit_and_plot_data(frequencies_array, counts_array, title, run_image_name, frequency_multiplier, clipboard_string)
+    loading_functions.universal_clipboard_copy(clipboard_string)
+
+def setup_measurement(workfolder_pathname, measurement_directory_path, imaging_type_key, run_image_name_list):
     my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = imaging_type_key)
     print("Initializing")
     saved_params_filename = os.path.join(workfolder_pathname, imaging_type_key + "_runs_dump.json")
@@ -51,134 +67,60 @@ def main():
         else:
             box_set = True
         run_to_use += 1
-    for run_image_name, frequency_key in zip(run_image_name_list, frequency_key_list):
-        frequencies_list = []
-        counts_list = []
-        for run_id in my_measurement.runs_dict:
-            print(str(run_id))
-            current_run = my_measurement.runs_dict[run_id]
-            current_image_stack = current_run.get_image(run_image_name, memmap = True)
-            current_od_image = image_processing_functions.get_absorption_od_image(current_image_stack, ROI = my_measurement.measurement_parameters['ROI'])
-            current_counts = image_processing_functions.pixel_sum(current_od_image)
-            counts_list.append(current_counts)
-            nominal_frequency = current_run.parameters[frequency_key] 
-            if(imaging_mode_string == "side_lf"):
-                frequency_multiplier = my_measurement.experiment_parameters["li_lf_freq_multiplier"]
-            else:
-                frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
-            frequencies_list.append(nominal_frequency * frequency_multiplier)
-        frequencies_array = np.array(frequencies_list)
-        counts_array = np.array(counts_list)
-        if(not imaging_mode_string == "TopAB"):
-            title = "Data_" + imaging_mode_string
-        else:
-            title = "Data_" + run_image_name
-        data_saving_path = os.path.join(workfolder_pathname, title + ".npy")
-        np.save(data_saving_path, np.stack((frequencies_array, counts_array)))
-        fit_results, inlier_indices = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies_array, counts_array, filter_outliers = True, 
-                                                                            report_inliers = True)
-        overall_indices = np.arange(len(frequencies_array))
-        outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)] 
-        outlier_frequencies = frequencies_array[outlier_indices]
-        outlier_counts = counts_array[outlier_indices]
-        inlier_frequencies = frequencies_array[inlier_indices] 
-        inlier_counts = counts_array[inlier_indices]
-        popt, pcov = fit_results
-        fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, fit_results)
-        with open(os.path.join(get_workfolder_path(), title + "_Fit_Report.txt"), 'w') as f:
-            f.write(fit_report) 
-        print(title + ":")
-        print(fit_report)
-        plt.plot(inlier_frequencies, inlier_counts, 'x', label = "Data")
-        plt.plot(outlier_frequencies, outlier_counts, 'rd', label = "Outliers")
-        frequencies_plotting_range = np.linspace(min(frequencies_array), max(frequencies_array), 100)
-        plt.plot(frequencies_plotting_range, data_fitting_functions.imaging_resonance_lorentzian(frequencies_plotting_range, *popt), label = "Fit")
-        plt.xlabel("Frequency (MHz)")
-        plt.ylabel("Counts")
-        plt.suptitle("Imaging Resonance: " + str(run_image_name))
-        plt.legend()
-        plt.savefig(os.path.join(get_workfolder_path(), title + "_Graph.png"))
-        plt.show()
+    return my_measurement
 
 
-# main() version for portal compatibility:
-def main_portal(measurement_directory_path, imaging_mode_string):
+def get_frequency_counts_data(my_measurement, run_image_name, frequency_key, frequency_multiplier):
+    frequencies_list = []
+    counts_list = []
+    for run_id in my_measurement.runs_dict:
+        print(str(run_id))
+        current_run = my_measurement.runs_dict[run_id]
+        current_image_stack = current_run.get_image(run_image_name, memmap = True)
+        current_od_image = image_processing_functions.get_absorption_od_image(current_image_stack, ROI = my_measurement.measurement_parameters['ROI'])
+        current_counts = image_processing_functions.pixel_sum(current_od_image)
+        counts_list.append(current_counts)
+        nominal_frequency = current_run.parameters[frequency_key] 
+        frequencies_list.append(nominal_frequency * frequency_multiplier)
+    frequencies_array = np.array(frequencies_list)
+    counts_array = np.array(counts_list)
+    return (frequencies_array, counts_array)
+
+
+def save_fit_and_plot_data(frequencies_array, counts_array, title, run_image_name, frequency_multiplier, clipboard_string):
     workfolder_pathname = get_workfolder_path()
-    if(not os.path.isdir(workfolder_pathname)):
-        os.makedirs(workfolder_pathname)
-    run_image_name_list, frequency_key_list, imaging_type_key = imaging_mode_decoder(imaging_mode_string)
-    my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = imaging_type_key)
-    print("Initializing")
-    saved_params_filename = os.path.join(workfolder_pathname, imaging_type_key + "_runs_dump.json")
-    if(os.path.isfile(saved_params_filename)):
-        try:
-            my_measurement._initialize_runs_dict(use_saved_params = True, saved_params_filename = saved_params_filename)
-        except RuntimeError:
-            my_measurement._initialize_runs_dict(use_saved_params = False)
-            my_measurement.dump_runs_dict(dump_filename = saved_params_filename)
-    else:
-        my_measurement._initialize_runs_dict(use_saved_params = False) 
-        my_measurement.dump_runs_dict(dump_filename = saved_params_filename)
-    run_to_use = 0
-    box_set = False
-    while (not box_set) and run_to_use < len(my_measurement.runs_dict):
-        try:
-            my_measurement.set_ROI(box_coordinates = ROI_COORDINATES, run_to_use = run_to_use, image_to_use = run_image_name_list[0])
-            my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES, run_to_use = run_to_use, image_to_use = run_image_name_list[0])
-        except TypeError:
-            pass 
-        else:
-            box_set = True
-        run_to_use += 1
-    for run_image_name, frequency_key in zip(run_image_name_list, frequency_key_list):
-        frequencies_list = []
-        counts_list = []
-        for run_id in my_measurement.runs_dict:
-            print(str(run_id))
-            current_run = my_measurement.runs_dict[run_id]
-            current_image_stack = current_run.get_image(run_image_name, memmap = True)
-            current_od_image = image_processing_functions.get_absorption_od_image(current_image_stack, ROI = my_measurement.measurement_parameters['ROI'])
-            current_counts = image_processing_functions.pixel_sum(current_od_image)
-            counts_list.append(current_counts)
-            nominal_frequency = current_run.parameters[frequency_key] 
-            if(imaging_mode_string == "side_lf"):
-                frequency_multiplier = my_measurement.experiment_parameters["li_lf_freq_multiplier"]
-            else:
-                frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
-            frequencies_list.append(nominal_frequency * frequency_multiplier)
-        frequencies_array = np.array(frequencies_list)
-        counts_array = np.array(counts_list)
-        if(not imaging_mode_string == "TopAB"):
-            title = "Data_" + imaging_mode_string
-        else:
-            title = "Data_" + run_image_name
-        data_saving_path = os.path.join(workfolder_pathname, title + ".npy")
-        np.save(data_saving_path, np.stack((frequencies_array, counts_array)))
-        fit_results, inlier_indices = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies_array, counts_array, filter_outliers = True, 
-                                                                            report_inliers = True)
-        overall_indices = np.arange(len(frequencies_array))
-        outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)] 
-        outlier_frequencies = frequencies_array[outlier_indices]
-        outlier_counts = counts_array[outlier_indices]
-        inlier_frequencies = frequencies_array[inlier_indices] 
-        inlier_counts = counts_array[inlier_indices]
-        popt, pcov = fit_results
-        fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, fit_results)
-        with open(os.path.join(get_workfolder_path(), title + "_Fit_Report.txt"), 'w') as f:
-            f.write(fit_report) 
-        print(title + ":")
-        print(fit_report)
-        plt.plot(inlier_frequencies, inlier_counts, 'x', label = "Data")
-        plt.plot(outlier_frequencies, outlier_counts, 'rd', label = "Outliers")
-        frequencies_plotting_range = np.linspace(min(frequencies_array), max(frequencies_array), 100)
-        plt.plot(frequencies_plotting_range, data_fitting_functions.imaging_resonance_lorentzian(frequencies_plotting_range, *popt), label = "Fit")
-        plt.xlabel("Frequency (MHz)")
-        plt.ylabel("Counts")
-        plt.suptitle("Imaging Resonance: " + str(run_image_name))
-        plt.legend()
-        plt.savefig(os.path.join(get_workfolder_path(), title + "_Graph.png"))
-        plt.show()
-
+    data_saving_path = os.path.join(workfolder_pathname, title + ".npy")
+    np.save(data_saving_path, np.stack((frequencies_array, counts_array)))
+    fit_results, inlier_indices = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies_array, counts_array, filter_outliers = True, 
+                                                                        report_inliers = True)
+    overall_indices = np.arange(len(frequencies_array))
+    outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)] 
+    outlier_frequencies = frequencies_array[outlier_indices]
+    outlier_counts = counts_array[outlier_indices]
+    inlier_frequencies = frequencies_array[inlier_indices] 
+    inlier_counts = counts_array[inlier_indices]
+    popt, pcov = fit_results
+    fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, fit_results, precision = 4)
+    with open(os.path.join(get_workfolder_path(), title + "_Fit_Report.txt"), 'w') as f:
+        f.write(fit_report) 
+        amp, center, gamma, offset = popt 
+        nominal_center = center / frequency_multiplier
+        nominal_resonance_string = "\nNominal Resonance: {0:.2f}\n".format(nominal_center)
+        f.write(nominal_resonance_string)
+        clipboard_string += title + ":\n" + fit_report + nominal_resonance_string
+    print(title + ":")
+    print(fit_report)
+    plt.plot(inlier_frequencies, inlier_counts, 'x', label = "Data")
+    plt.plot(outlier_frequencies, outlier_counts, 'rd', label = "Outliers")
+    frequencies_plotting_range = np.linspace(min(frequencies_array), max(frequencies_array), 100)
+    plt.plot(frequencies_plotting_range, data_fitting_functions.imaging_resonance_lorentzian(frequencies_plotting_range, *popt), label = "Fit")
+    plt.xlabel("Frequency (MHz)")
+    plt.ylabel("Counts")
+    plt.suptitle("Imaging Resonance: " + str(run_image_name))
+    plt.legend()
+    plt.savefig(os.path.join(workfolder_pathname, title + "_Graph.png"))
+    plt.show()
+    return clipboard_string
 
 def get_measurement_directory_input():
     print("Please enter the path to the measurement directory containing the runs to analyze.")
@@ -220,6 +162,13 @@ def imaging_mode_decoder(imaging_mode_string):
     elif(imaging_mode_string == "TopAB"):
         return ([TOP_A_RUN_IMAGE_NAME, TOP_B_RUN_IMAGE_NAME], [TOP_A_FREQ_KEY, TOP_B_FREQ_KEY], TOP_MEASUREMENT_KEY)
 
+
+def get_frequency_multiplier(my_measurement, imaging_mode_string):
+    if(imaging_mode_string == "side_lf"):
+        frequency_multiplier = my_measurement.experiment_parameters["li_lf_freq_multiplier"]
+    else:
+        frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+    return frequency_multiplier
 
 def get_workfolder_path():
     PRIVATE_DIRECTORY_REPO_NAME = "Private_BEC1_Analysis"
