@@ -17,6 +17,9 @@ from BEC1_Analysis.code import image_processing_functions, data_fitting_function
 ROI_COORDINATES = None
 NORM_BOX_COORDINATES = None 
 
+#Syntax: First two numbers denote the index of the initial (transferred from) and 
+#final (transferred to) state for spectroscopy. The key 'AB' indicates that the initial 
+#state is imaged in topA and the final in topB, whereas 'BA' indicates the reverse.
 ALLOWED_RESONANCE_TYPES = ["12_AB", "12_BA",  "21_AB", "21_BA", 
                          "13_AB", "13_BA", "31_AB", "31_BA", 
                          "23_AB", "23_BA", "32_AB", "32_BA"]
@@ -24,20 +27,22 @@ ALLOWED_RESONANCE_TYPES = ["12_AB", "12_BA",  "21_AB", "21_BA",
 def main():
     measurement_directory_path = get_measurement_directory_input()
     resonance_key = get_resonance_key_input()
-    main_after_inputs(measurement_directory_path, resonance_key)
+    center_guess_MHz, rabi_freq_guess = get_guesses_input()
+    main_after_inputs(measurement_directory_path, resonance_key, center_guess_MHz = center_guess_MHz, rabi_freq_guess = rabi_freq_guess)
 
-# main() version compatible with portal
-def main_after_inputs(measurement_directory_path, resonance_key):
+# main() version without command line input, compatible with portal
+def main_after_inputs(measurement_directory_path, resonance_key, center_guess_MHz = None, rabi_freq_guess = None):
     workfolder_pathname = get_workfolder_path()
     if(not os.path.isdir(workfolder_pathname)):
         os.makedirs(workfolder_pathname)
     my_measurement = setup_measurement(workfolder_pathname, measurement_directory_path)
     rf_frequencies_array, counts_A_array, counts_B_array, tau_value = get_rf_frequencies_and_counts(my_measurement, resonance_key)
-    save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key)
+    save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key, 
+                            center_guess_MHz = center_guess_MHz, rabi_freq_guess = rabi_freq_guess)
 
 def save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key, 
                             center_guess_MHz = None, rabi_freq_guess = None):
-    counts_data_saving_path = os.path.join(workfolder_pathname, + "RF_Spect_Counts.npy")
+    counts_data_saving_path = os.path.join(workfolder_pathname, "RF_Spect_Counts.npy")
     initial_final_key = resonance_key.split("_")[1] 
     if(initial_final_key == "AB"):
         initial_counts_array = counts_A_array 
@@ -46,30 +51,39 @@ def save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_a
         initial_counts_array = counts_B_array 
         final_counts_array = counts_A_array
     np.save(counts_data_saving_path, np.stack((rf_frequencies_array, initial_counts_array, final_counts_array)))
-    transfers = initial_counts_array / (initial_counts_array + final_counts_array)
-    fit_results, inlier_indices = data_fitting_functions.fit_rf_spect_detuning_scan(rf_frequencies_array * 1000, transfers, tau_value, 
-                                                                    center = center_guess_MHz * 1000, rabi_freq = rabi_freq_guess,
+    transfers = final_counts_array / (initial_counts_array + final_counts_array)
+    if(center_guess_MHz):
+        center_guess = center_guess_MHz * 1000 
+    else:
+        center_guess = None
+    try:
+        fit_results, inlier_indices = data_fitting_functions.fit_rf_spect_detuning_scan(rf_frequencies_array * 1000, transfers, tau_value, 
+                                                                    center = center_guess, rabi_freq = rabi_freq_guess,
                                                                     filter_outliers = True, report_inliers = True)
-    overall_indices = np.arange(len(rf_frequencies_array)) 
-    outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)]
-    popt, pcov = fit_results
-    center, rabi_freq = popt
-    fit_plotting_frequencies = np.linspace(min(rf_frequencies_array), max(rf_frequencies_array), 100)
-    plt.plot(rf_frequencies_array[inlier_indices], transfers[inlier_indices], 'x', label = "Data") 
-    plt.plot(rf_frequencies_array[outlier_indices], transfers[outlier_indices], 'rd', label = "Outliers")
-    plt.plot(fit_plotting_frequencies, data_fitting_functions.rf_spect_detuning_scan(fit_plotting_frequencies * 1000, tau_value, *popt)) 
-    plt.xlabel("RF Frequency (MHz)")
-    plt.ylabel("Transfer")
-    plt.legend()
-    plt.suptitle("RF Spectroscopy {0}: Center = {1:0.5e} MHz, Rabi Freq = {2:0.2e} kHz".format(resonance_key, center, rabi_freq))
-    plt.savefig(os.path.join(workfolder_pathname, "RF_Spectroscopy_Curve.png"))
-    plt.show()
-    fit_report = data_fitting_functions.fit_report(data_fitting_functions.rf_spect_detuning_scan, fit_results, precision = 5)
+    except RuntimeError as e:
+        plt.plot(rf_frequencies_array, transfers, 'x', label = "Data")
+        fit_report = "Fit failed. " + str(e)
+    else:
+        overall_indices = np.arange(len(rf_frequencies_array)) 
+        outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)]
+        popt, pcov = fit_results
+        center, rabi_freq = popt
+        fit_plotting_frequencies = np.linspace(min(rf_frequencies_array), max(rf_frequencies_array), 100)
+        plt.plot(rf_frequencies_array[inlier_indices], transfers[inlier_indices], 'x', label = "Data") 
+        plt.plot(rf_frequencies_array[outlier_indices], transfers[outlier_indices], 'rd', label = "Outliers")
+        plt.plot(fit_plotting_frequencies, data_fitting_functions.rf_spect_detuning_scan(fit_plotting_frequencies * 1000, tau_value, *popt)) 
+        plt.suptitle("RF Spectroscopy {0}: Center = {1:0.5e} MHz, Rabi Freq = {2:0.2e} kHz".format(resonance_key, center, rabi_freq))
+        fit_report = data_fitting_functions.fit_report(data_fitting_functions.rf_spect_detuning_scan, fit_results, precision = 5)
     with open(os.path.join(workfolder_pathname, "RF_Spectroscopy_Fit_Report.txt"), 'w') as f:
-        f.write(fit_report) 
+        f.write("RF Spect: " + fit_report) 
     print("RF Spect: ")
     print(fit_report)
     loading_functions.universal_clipboard_copy("RF Spect: \n" + fit_report)
+    plt.xlabel("RF Frequency (MHz)")
+    plt.ylabel("Transfer")
+    plt.legend()
+    plt.savefig(os.path.join(workfolder_pathname, "RF_Spectroscopy_Curve.png"))
+    plt.show()
     
 
 
@@ -89,6 +103,24 @@ def get_resonance_key_input():
     if(not user_input in ALLOWED_RESONANCE_TYPES):
         raise RuntimeError("Specified resonance not supported.") 
     return user_input
+
+
+def get_guesses_input():
+    print("If desired, please enter guesses for the RF resonance center (in MHz) and the rabi frequency (in kHz).")
+    print("To omit a guess, simply press enter with no input.")
+    print("Center Guess (MHz):")
+    center_guess_user_input = input() 
+    if(center_guess_user_input == ''):
+        center_guess = None 
+    else:
+        center_guess = float(center_guess_user_input)
+    print("Rabi Freq Guess (kHz):")
+    rabi_freq_guess_user_input = input() 
+    if(rabi_freq_guess_user_input == ''):
+        rabi_freq_guess = None 
+    else:
+        rabi_freq_guess = float(rabi_freq_guess_user_input)
+    return (center_guess, rabi_freq_guess)
 
 
 def get_rf_frequencies_and_counts(my_measurement, resonance_key):
@@ -180,6 +212,7 @@ def setup_measurement(workfolder_pathname, measurement_directory_path):
         else:
             box_set = True
         run_to_use += 1
+    return my_measurement
 
 def get_workfolder_path():
     PRIVATE_DIRECTORY_REPO_NAME = "Private_BEC1_Analysis"
