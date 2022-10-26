@@ -32,7 +32,7 @@ def main():
 
 # main() version without command line input, compatible with portal
 def main_after_inputs(measurement_directory_path, resonance_key, center_guess_MHz = None, rabi_freq_guess = None):
-    workfolder_pathname = get_workfolder_path()
+    workfolder_pathname = initialize_workfolder(measurement_directory_path)
     if(not os.path.isdir(workfolder_pathname)):
         os.makedirs(workfolder_pathname)
     my_measurement = setup_measurement(workfolder_pathname, measurement_directory_path)
@@ -151,7 +151,7 @@ def get_rf_frequencies_and_counts(my_measurement, resonance_key):
         counts_B = image_processing_functions.atom_count_pixel_sum(atom_density_B, pixel_area)
         counts_A_list.append(counts_A)
         counts_B_list.append(counts_B)
-        rf_frequency = current_run.parameters["RF_Box_Center"]
+        rf_frequency = current_run.parameters["RF23_Box_Center"]
         rf_frequencies_list.append(rf_frequency)
     rf_frequencies_array = np.array(rf_frequencies_list)
     counts_A_array = np.array(counts_A_list) 
@@ -214,14 +214,20 @@ def setup_measurement(workfolder_pathname, measurement_directory_path):
         run_to_use += 1
     return my_measurement
 
-def get_workfolder_path():
+def initialize_workfolder(measurement_directory_path):
     PRIVATE_DIRECTORY_REPO_NAME = "Private_BEC1_Analysis"
     path_to_private_directory_repo = os.path.join(path_to_repo_folder, PRIVATE_DIRECTORY_REPO_NAME)
-    current_datetime = datetime.datetime.now() 
+    current_datetime = datetime.datetime.now()
     current_year = current_datetime.strftime("%Y")
     current_year_month = current_datetime.strftime("%Y-%m")
     current_year_month_day = current_datetime.strftime("%Y-%m-%d")
-    workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + "_RF_Spectroscopy")
+    measurement_directory_folder_name = os.path.basename(os.path.normpath(measurement_directory_path))
+    workfolder_descriptor = "_RF_Spect_" + measurement_directory_folder_name
+    workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + workfolder_descriptor)
+    if(not os.path.isdir(workfolder_pathname)):
+        os.makedirs(workfolder_pathname)
+    with open(os.path.join(workfolder_pathname, "Source.txt"), 'w') as f:
+        f.write("Data source: " + measurement_directory_path)
     return workfolder_pathname
 
 

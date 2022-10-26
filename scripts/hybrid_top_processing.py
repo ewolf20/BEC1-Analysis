@@ -29,12 +29,10 @@ def main():
 
 # main() version without command line input, compatible with portal
 def main_after_inputs(measurement_directory_path, imaging_mode):
-    workfolder_pathname = get_workfolder_path()
-    if(not os.path.isdir(workfolder_pathname)):
-        os.makedirs(workfolder_pathname)
+    workfolder_pathname = initialize_workfolder(measurement_directory_path)
     my_measurement = setup_measurement(workfolder_pathname, measurement_directory_path)
     counts_1_array, counts_3_array, energies_1_array, energies_3_array = get_hybrid_trap_data(my_measurement, imaging_mode)
-    save_and_plot_data(workfolder_pathname, counts_1_array, counts_3_array, energies_1_array, energies_3_array)
+    save_and_plot_data(my_measurement, workfolder_pathname, counts_1_array, counts_3_array, energies_1_array, energies_3_array)
 
 
 def save_and_plot_data(my_measurement, workfolder_pathname, counts_1_array, counts_3_array, energies_1_array, energies_3_array):
@@ -66,6 +64,8 @@ def save_and_plot_data(my_measurement, workfolder_pathname, counts_1_array, coun
     report_string += "Average Total Energy: {0:.1f}\n".format(average_energy)
     report_string += "Total Energy Deviation: {0:.1f}\n".format(energy_deviation)
     loading_functions.universal_clipboard_copy(report_string)
+    with open(os.path.join(workfolder_pathname, "Results.txt"), 'w') as f:
+        f.write(report_string)
     print(report_string)
     plt.plot(counts_1_array, 'x', label = "State 1 Counts") 
     plt.plot(counts_3_array, 'o', label = "State 3 Counts")
@@ -74,7 +74,7 @@ def save_and_plot_data(my_measurement, workfolder_pathname, counts_1_array, coun
     plt.legend()
     measurement_directory_folder_name = os.path.basename(os.path.normpath(my_measurement.measurement_directory_path))
     plt.suptitle("Hybrid Trap Counts: " + measurement_directory_folder_name)
-    plt.savefig("Hybrid_Trap_Counts_Figure.png")
+    plt.savefig(os.path.join(workfolder_pathname, "Hybrid_Trap_Counts_Figure.png"))
     plt.show()
     plt.plot(energies_1_array, 'x', label = "State 1 Energy")
     plt.plot(energies_3_array, 'o', label = "State 3 Energy")
@@ -83,7 +83,7 @@ def save_and_plot_data(my_measurement, workfolder_pathname, counts_1_array, coun
     plt.xlabel("Iteration") 
     plt.ylabel("Energy (Hz)") 
     plt.suptitle("Hybrid Trap Energies: " + measurement_directory_folder_name) 
-    plt.savefig("Hybrid_Trap_Energies_Figure.png")
+    plt.savefig(os.path.join(workfolder_pathname, "Hybrid_Trap_Energies_Figure.png"))
     plt.show()
     
 
@@ -170,7 +170,7 @@ def get_measurement_directory_input():
     if(not os.path.isdir(user_input)):
         raise RuntimeError("Unable to find the measurement directory.")
     return user_input
-    
+
 
 def get_imaging_mode_input():
     print("Please enter the imaging mode for hybrid top. Supported options are:") 
@@ -208,16 +208,21 @@ def setup_measurement(workfolder_pathname, measurement_directory_path):
         run_to_use += 1
     return my_measurement
 
-def get_workfolder_path():
+def initialize_workfolder(measurement_directory_path):
     PRIVATE_DIRECTORY_REPO_NAME = "Private_BEC1_Analysis"
     path_to_private_directory_repo = os.path.join(path_to_repo_folder, PRIVATE_DIRECTORY_REPO_NAME)
-    current_datetime = datetime.datetime.now() 
+    current_datetime = datetime.datetime.now()
     current_year = current_datetime.strftime("%Y")
     current_year_month = current_datetime.strftime("%Y-%m")
     current_year_month_day = current_datetime.strftime("%Y-%m-%d")
-    workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + "_RF_Spectroscopy")
+    measurement_directory_folder_name = os.path.basename(os.path.normpath(measurement_directory_path))
+    workfolder_descriptor = "_Hybrid_Trap_Analysis_" + measurement_directory_folder_name
+    workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + workfolder_descriptor)
+    if(not os.path.isdir(workfolder_pathname)):
+        os.makedirs(workfolder_pathname)
+    with open(os.path.join(workfolder_pathname, "Source.txt"), 'w') as f:
+        f.write("Data source: " + measurement_directory_path)
     return workfolder_pathname
-
 
 if __name__ == "__main__":
     main()

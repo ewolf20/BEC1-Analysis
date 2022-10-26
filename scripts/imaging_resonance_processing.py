@@ -27,9 +27,7 @@ def main():
     main_after_inputs(measurement_directory_path, imaging_mode_string)
 
 def main_after_inputs(measurement_directory_path, imaging_mode_string):
-    workfolder_pathname = get_workfolder_path()
-    if(not os.path.isdir(workfolder_pathname)):
-        os.makedirs(workfolder_pathname)
+    workfolder_pathname = initialize_workfolder(measurement_directory_path)
     run_image_name_list, frequency_key_list, imaging_type_key = imaging_mode_decoder(imaging_mode_string)
     my_measurement = setup_measurement(workfolder_pathname, measurement_directory_path, imaging_type_key, run_image_name_list)
     clipboard_string = ""
@@ -40,7 +38,8 @@ def main_after_inputs(measurement_directory_path, imaging_mode_string):
             title = "Data_" + imaging_mode_string
         else:
             title = "Data_" + run_image_name
-        clipboard_string = save_fit_and_plot_data(frequencies_array, counts_array, title, run_image_name, frequency_multiplier, clipboard_string)
+        clipboard_string = save_fit_and_plot_data(workfolder_pathname, frequencies_array, counts_array, title, run_image_name,
+                                                 frequency_multiplier, clipboard_string)
     loading_functions.universal_clipboard_copy(clipboard_string)
 
 def setup_measurement(workfolder_pathname, measurement_directory_path, imaging_type_key, run_image_name_list):
@@ -87,8 +86,7 @@ def get_frequency_counts_data(my_measurement, run_image_name, frequency_key, fre
     return (frequencies_array, counts_array)
 
 
-def save_fit_and_plot_data(frequencies_array, counts_array, title, run_image_name, frequency_multiplier, clipboard_string):
-    workfolder_pathname = get_workfolder_path()
+def save_fit_and_plot_data(workfolder_pathname, frequencies_array, counts_array, title, run_image_name, frequency_multiplier, clipboard_string):
     data_saving_path = os.path.join(workfolder_pathname, title + ".npy")
     np.save(data_saving_path, np.stack((frequencies_array, counts_array)))
     fit_results, inlier_indices = data_fitting_functions.fit_imaging_resonance_lorentzian(frequencies_array, counts_array, filter_outliers = True, 
@@ -101,11 +99,11 @@ def save_fit_and_plot_data(frequencies_array, counts_array, title, run_image_nam
     inlier_counts = counts_array[inlier_indices]
     popt, pcov = fit_results
     fit_report = data_fitting_functions.fit_report(data_fitting_functions.imaging_resonance_lorentzian, fit_results, precision = 4)
-    with open(os.path.join(get_workfolder_path(), title + "_Fit_Report.txt"), 'w') as f:
+    with open(os.path.join(workfolder_pathname, title + "_Fit_Report.txt"), 'w') as f:
         f.write(fit_report) 
         amp, center, gamma, offset = popt 
         nominal_center = center / frequency_multiplier
-        nominal_resonance_string = "\nNominal Resonance: {0:.2f}\n".format(nominal_center)
+        nominal_resonance_string = "\nNominal Resonance: {0:.2f}\n\n".format(nominal_center)
         f.write(nominal_resonance_string)
         clipboard_string += title + ":\n" + fit_report + nominal_resonance_string
     print(title + ":")
@@ -170,14 +168,20 @@ def get_frequency_multiplier(my_measurement, imaging_mode_string):
         frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
     return frequency_multiplier
 
-def get_workfolder_path():
+def initialize_workfolder(measurement_directory_path):
     PRIVATE_DIRECTORY_REPO_NAME = "Private_BEC1_Analysis"
     path_to_private_directory_repo = os.path.join(path_to_repo_folder, PRIVATE_DIRECTORY_REPO_NAME)
-    current_datetime = datetime.datetime.now() 
+    current_datetime = datetime.datetime.now()
     current_year = current_datetime.strftime("%Y")
     current_year_month = current_datetime.strftime("%Y-%m")
     current_year_month_day = current_datetime.strftime("%Y-%m-%d")
-    workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + "_Imaging_Resonance")
+    measurement_directory_folder_name = os.path.basename(os.path.normpath(measurement_directory_path))
+    workfolder_descriptor = "_Imaging_Resonance_" + measurement_directory_folder_name
+    workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + workfolder_descriptor)
+    if(not os.path.isdir(workfolder_pathname)):
+        os.makedirs(workfolder_pathname)
+    with open(os.path.join(workfolder_pathname, "Source.txt"), 'w') as f:
+        f.write("Data source: " + measurement_directory_path)
     return workfolder_pathname
 
 
