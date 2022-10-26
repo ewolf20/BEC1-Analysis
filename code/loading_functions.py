@@ -1,7 +1,9 @@
 import importlib.resources as pkg_resources
 import json
 import os 
+import subprocess
 import sys
+
 
 
 
@@ -38,3 +40,14 @@ def load_run_parameters_from_json(parameters_path, make_raw_parameters_terse = F
             unsorted_parameters_list.append((run_id, run_parameters))
     sorted_parameters_list = [f[1] for f in sorted(unsorted_parameters_list, key = lambda x: x[0])] 
     return sorted_parameters_list
+
+
+def universal_clipboard_copy(text_to_copy):
+    if(sys.platform.startswith("darwin")):
+        #Copy command for MacOS 
+        subprocess.run("pbcopy", universal_newlines = True, input = text_to_copy)
+    elif(sys.platform.startswith("win32")):
+        #Copy command for Windows 
+        subprocess.run("clip", universal_newlines= True, input = text_to_copy)
+    else:
+        raise RuntimeError("Unsupported operating system: " + sys.platform)
