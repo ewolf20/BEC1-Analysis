@@ -25,8 +25,7 @@ ALLOWED_IMAGING_MODES = ['polrot', 'abs']
 def main():
     measurement_directory_path = get_measurement_directory_input()
     imaging_mode = get_imaging_mode_input()
-    center_guess_MHz, rabi_freq_guess = get_guesses_input()
-    main_after_inputs(measurement_directory_path, resonance_key, center_guess_MHz = center_guess_MHz, rabi_freq_guess = rabi_freq_guess)
+    main_after_inputs(measurement_directory_path, imaging_mode)
 
 # main() version without command line input, compatible with portal
 def main_after_inputs(measurement_directory_path, imaging_mode):
@@ -34,76 +33,59 @@ def main_after_inputs(measurement_directory_path, imaging_mode):
     if(not os.path.isdir(workfolder_pathname)):
         os.makedirs(workfolder_pathname)
     my_measurement = setup_measurement(workfolder_pathname, measurement_directory_path)
-    if(imaging_mode == "abs"):
-        counts_1_array, counts_3_array, energies_1_array, energies_3_array = get_hybrid_trap_data_abs(my_measurement)
-    elif(imaging_mode == "polrot"):
-        counts_1_array, counts_3_array, energies_1_array, energies_3_array = get_hybrid_trap_data_polrot(my_measurement)
-    save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key, 
-                            center_guess_MHz = center_guess_MHz, rabi_freq_guess = rabi_freq_guess)
+    counts_1_array, counts_3_array, energies_1_array, energies_3_array = get_hybrid_trap_data(my_measurement, imaging_mode)
+    save_and_plot_data(workfolder_pathname, counts_1_array, counts_3_array, energies_1_array, energies_3_array)
 
-def save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key, 
-                            center_guess_MHz = None, rabi_freq_guess = None):
-    counts_data_saving_path = os.path.join(workfolder_pathname, "RF_Spect_Counts.npy")
-    initial_final_key = resonance_key.split("_")[1] 
-    if(initial_final_key == "AB"):
-        initial_counts_array = counts_A_array 
-        final_counts_array = counts_B_array 
-    elif(initial_final_key == "BA"):
-        initial_counts_array = counts_B_array 
-        final_counts_array = counts_A_array
-    np.save(counts_data_saving_path, np.stack((rf_frequencies_array, initial_counts_array, final_counts_array)))
-    transfers = final_counts_array / (initial_counts_array + final_counts_array)
-    if(center_guess_MHz):
-        center_guess = center_guess_MHz * 1000 
-    else:
-        center_guess = None
-    try:
-        fit_results, inlier_indices = data_fitting_functions.fit_rf_spect_detuning_scan(rf_frequencies_array * 1000, transfers, tau_value, 
-                                                                    center = center_guess, rabi_freq = rabi_freq_guess,
-                                                                    filter_outliers = True, report_inliers = True)
-    except RuntimeError as e:
-        plt.plot(rf_frequencies_array, transfers, 'x', label = "Data")
-        fit_report = "Fit failed. " + str(e)
-    else:
-        overall_indices = np.arange(len(rf_frequencies_array)) 
-        outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)]
-        popt, pcov = fit_results
-        center, rabi_freq = popt
-        fit_plotting_frequencies = np.linspace(min(rf_frequencies_array), max(rf_frequencies_array), 100)
-        plt.plot(rf_frequencies_array[inlier_indices], transfers[inlier_indices], 'x', label = "Data") 
-        plt.plot(rf_frequencies_array[outlier_indices], transfers[outlier_indices], 'rd', label = "Outliers")
-        plt.plot(fit_plotting_frequencies, data_fitting_functions.rf_spect_detuning_scan(fit_plotting_frequencies * 1000, tau_value, *popt)) 
-        plt.suptitle("RF Spectroscopy {0}: Center = {1:0.5e} MHz, Rabi Freq = {2:0.2e} kHz".format(resonance_key, center, rabi_freq))
-        fit_report = data_fitting_functions.fit_report(data_fitting_functions.rf_spect_detuning_scan, fit_results, precision = 5)
-    with open(os.path.join(workfolder_pathname, "RF_Spectroscopy_Fit_Report.txt"), 'w') as f:
-        f.write("RF Spect: " + fit_report) 
-    print("RF Spect: ")
-    print(fit_report)
-    loading_functions.universal_clipboard_copy("RF Spect: \n" + fit_report)
-    plt.xlabel("RF Frequency (MHz)")
-    plt.ylabel("Transfer")
+
+def save_and_plot_data(my_measurement, workfolder_pathname, counts_1_array, counts_3_array, energies_1_array, energies_3_array):
+    counts_data_saving_path = os.path.join(workfolder_pathname, "Hybrid_Exp_Counts.npy")
+    np.save(counts_data_saving_path, np.stack((counts_1_array, counts_3_array)))
+    energies_data_saving_path = os.path.join(workfolder_pathname, "Hybrid_Exp_Energies.npy")
+    energies_array = (counts_1_array * energies_1_array + counts_3_array * energies_3_array) / (counts_1_array + counts_3_array)
+    np.save(energies_data_saving_path, np.stack((energies_1_array, energies_3_array, energies_array))) 
+    average_counts_1 = sum(counts_1_array) / len(counts_1_array) 
+    counts_1_deviation = np.sqrt(sum(np.square(counts_1_array - average_counts_1)) / len(counts_1_array))
+    average_counts_3 = sum(counts_3_array) / len(counts_3_array) 
+    counts_3_deviation = np.sqrt(sum(np.square(counts_3_array - average_counts_3)) / len(counts_3_array))
+    imbalances = (counts_3_array - counts_1_array) / (counts_3_array + counts_1_array)
+    average_imbalance = sum(imbalances) / len(imbalances) 
+    imbalances_deviation = np.sqrt(sum(np.square(imbalances - average_imbalance)) / len(imbalances))
+    average_energy = sum(energies_array) / len(energies_array)
+    energy_deviation = np.sqrt(sum(np.square(energies_array - average_energy)) / len(energies_array))
+    average_energy_1 = sum(energies_1_array) / len(energies_1_array)
+    average_energy_3 = sum(energies_3_array) / len(energies_3_array)
+    report_string = ''
+    report_string += "Average Counts State 1: {0:.0f}\n".format(average_counts_1)
+    report_string += "State 1 Counts Deviation: {0:.0f}\n".format(counts_1_deviation) 
+    report_string += "Average Counts State 3: {0:.0f}\n".format(average_counts_3)
+    report_string += "State 3 Counts Deviation: {0:.0f}\n".format(counts_3_deviation)
+    report_string += "Average Imbalance: {0:.3f}\n".format(average_imbalance)
+    report_string += "Imbalance Deviation: {0:.3f}\n".format(imbalances_deviation)
+    report_string += "Average Energy State 1: {0:.1f}\n".format(average_energy_1)
+    report_string += "Average Energy State 3: {0:.1f}\n".format(average_energy_3)
+    report_string += "Average Total Energy: {0:.1f}\n".format(average_energy)
+    report_string += "Total Energy Deviation: {0:.1f}\n".format(energy_deviation)
+    loading_functions.universal_clipboard_copy(report_string)
+    print(report_string)
+    plt.plot(counts_1_array, 'x', label = "State 1 Counts") 
+    plt.plot(counts_3_array, 'o', label = "State 3 Counts")
+    plt.xlabel("Iteration") 
+    plt.ylabel("Atom counts")
     plt.legend()
-    plt.savefig(os.path.join(workfolder_pathname, "RF_Spectroscopy_Curve.png"))
+    measurement_directory_folder_name = os.path.basename(os.path.normpath(my_measurement.measurement_directory_path))
+    plt.suptitle("Hybrid Trap Counts: " + measurement_directory_folder_name)
+    plt.savefig("Hybrid_Trap_Counts_Figure.png")
+    plt.show()
+    plt.plot(energies_1_array, 'x', label = "State 1 Energy")
+    plt.plot(energies_3_array, 'o', label = "State 3 Energy")
+    plt.plot(energies_array, 'd', label = "Average Energy") 
+    plt.legend() 
+    plt.xlabel("Iteration") 
+    plt.ylabel("Energy (Hz)") 
+    plt.suptitle("Hybrid Trap Energies: " + measurement_directory_folder_name) 
+    plt.savefig("Hybrid_Trap_Energies_Figure.png")
     plt.show()
     
-
-
-
-def get_measurement_directory_input():
-    print("Please enter the path to the measurement directory containing the runs to analyze.")
-    user_input = input()
-    if(not os.path.isdir(user_input)):
-        raise RuntimeError("Unable to find the measurement directory.")
-    return user_input
-
-def get_imaging_mode_input():
-    print("Please enter the imaging mode for hybrid top. Supported options are:") 
-    for imaging_mode in ALLOWED_IMAGING_MODES:
-        print(imaging_mode)
-    user_input = input()
-    if(not user_input in ALLOWED_IMAGING_MODES):
-        raise RuntimeError("Specified imaging mode not supported.") 
-    return user_input
 
 def get_hybrid_trap_data(my_measurement, imaging_mode):
     pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
@@ -117,16 +99,10 @@ def get_hybrid_trap_data(my_measurement, imaging_mode):
     for run_id in my_measurement.runs_dict:
         print(str(run_id))
         current_run = my_measurement.runs_dict[run_id]
-        image_stack_A = current_run.get_image("TopA", memmap = True)
-        image_stack_B = current_run.get_image("TopB", memmap = True)
-        imaging_freq_A = current_run.parameters["ImagFreq1"]
-        imaging_freq_B = current_run.parameters["ImagFreq2"]
-        detuning_1 = frequency_multiplier * (imaging_freq_A - res_freq_state_1)
-        detuning_3 = frequency_multiplier * (imaging_freq_B - res_freq_state_3)
-        atom_density_1 = image_processing_functions.get_atom_density_absorption(image_stack_A, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                    detuning = detuning_1)
-        atom_density_3 = image_processing_functions.get_atom_density_absorption(image_stack_B, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                    detuning = detuning_3)
+        if(imaging_mode == "abs"):
+            atom_density_1, atom_density_3 = get_density_from_abs_image(my_measurement, current_run)
+        elif(imaging_mode == "polrot"):
+            atom_density_1, atom_density_3 = get_density_from_polrot_image(my_measurement, current_run)
         counts_1 = image_processing_functions.atom_count_pixel_sum(atom_density_1, pixel_area)
         counts_3 = image_processing_functions.atom_count_pixel_sum(atom_density_3, pixel_area)
         counts_1_list.append(counts_1)
@@ -150,11 +126,60 @@ def get_hybrid_trap_data(my_measurement, imaging_mode):
     return (counts_1_array, counts_3_array, energies_1_array, energies_3_array)    
 
 def get_density_from_abs_image(my_measurement, current_run):
-    frequency_multiplier = my_measurement.experiment_parameters[""]
+    frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+    res_freq_state_1 = my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"]
+    res_freq_state_3 = my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]
     image_stack_A = current_run.get_image("TopA", memmap = True) 
     image_stack_B = current_run.get_image("TopB", memmap = True)
     imaging_freq_A = current_run.parameters["ImagFreq1"]
     imaging_freq_B = current_run.parameters["ImagFreq2"] 
+    detuning_1 = frequency_multiplier * (imaging_freq_A - res_freq_state_1)
+    detuning_3 = frequency_multiplier * (imaging_freq_B - res_freq_state_3)
+    atom_density_image_state_1 = image_processing_functions.get_atom_density_absorption(image_stack_A, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                            detuning = detuning_1)
+    atom_density_image_state_3 = image_processing_functions.get_atom_density_absorption(image_stack_B, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                            detuning = detuning_3)
+    return (atom_density_image_state_1, atom_density_image_state_3)
+
+
+def get_density_from_polrot_image(my_measurement, current_run):
+    frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+    res_freq_state_1 = my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"]
+    res_freq_state_3 = my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]
+    image_stack_A = current_run.get_image("TopA", memmap = True) 
+    image_stack_B = current_run.get_image("TopB", memmap = True)
+    imaging_freq_A = current_run.parameters["ImagFreq1"]
+    imaging_freq_B = current_run.parameters["ImagFreq2"] 
+    detuning_1A = frequency_multiplier * (imaging_freq_A - res_freq_state_1)
+    detuning_2A = frequency_multiplier * (imaging_freq_A - res_freq_state_3)
+    detuning_1B = frequency_multiplier * (imaging_freq_B - res_freq_state_1) 
+    detuning_2B = frequency_multiplier * (imaging_freq_B - res_freq_state_3)
+    abs_image_A = image_processing_functions.get_absorption_image(image_stack_A, 
+                                                                    ROI = my_measurement.measurement_parameters["ROI"])
+    abs_image_B = image_processing_functions.get_absorption_image(image_stack_B, 
+                                                                    ROI = my_measurement.measurement_parameters["ROI"])
+    atom_density_image_state_1, atom_density_image_state_3 = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B, 
+                                                                    detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
+                                                                    phase_sign = my_measurement.experiment_parameters["polrot_phase_sign"])
+    return (atom_density_image_state_1, atom_density_image_state_3)
+
+
+def get_measurement_directory_input():
+    print("Please enter the path to the measurement directory containing the runs to analyze.")
+    user_input = input()
+    if(not os.path.isdir(user_input)):
+        raise RuntimeError("Unable to find the measurement directory.")
+    return user_input
+    
+
+def get_imaging_mode_input():
+    print("Please enter the imaging mode for hybrid top. Supported options are:") 
+    for imaging_mode in ALLOWED_IMAGING_MODES:
+        print(imaging_mode)
+    user_input = input()
+    if(not user_input in ALLOWED_IMAGING_MODES):
+        raise RuntimeError("Specified imaging mode not supported.") 
+    return user_input
 
 
 def setup_measurement(workfolder_pathname, measurement_directory_path):
