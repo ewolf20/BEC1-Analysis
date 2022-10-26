@@ -34,7 +34,7 @@ def main():
     nominal_resonance_frequency_1 = my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"]
     nominal_resonance_frequency_3 = my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
-    pixel_area = my_measurement.experiment_parameters["top_um_per_pixel"]
+    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
     polrot_phase_sign = my_measurement.experiment_parameters["polrot_phase_sign"]
     #Other code as necessary
     for run_id in my_measurement.runs_dict:
