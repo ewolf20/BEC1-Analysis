@@ -1,6 +1,7 @@
 import numpy as np 
 from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
+from scipy.signal import savgol_filter
 
 #Taken from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
 LI_6_MASS_KG = 9.98834e-27
@@ -35,6 +36,20 @@ def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_t
     total_counts = trapezoid(trap_cross_section_um * three_d_density_trap_profile_um, x = harmonic_trap_positions_um)
     return total_energy / total_counts
 
+def get_hybrid_trap_compressibilities(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_freq):
+    pixel_number = len(harmonic_trap_positions_um)
+    position_delta = harmonic_trap_positions_um[1] - harmonic_trap_positions_um[0]
+    window_width = pixel_number // 20
+    deriv_polyorder = 2
+    if not np.all(np.isclose(np.diff(harmonic_trap_positions_um), position_delta)):
+        raise NotImplementedError("Compressibility for non-uniform harmonic trap pixel spacing is not implemented yet.")
+    fermi_energies = get_fermi_energy_hz_from_density(three_d_density_trap_profile_um * 1e18)
+    d_mu_d_y_um = savgol_filter(fermi_energies, window_width, deriv_polyorder, deriv = 1, delta = position_delta)
+    d_V_d_y_um = get_li_energy_m_deriv_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq) * 1e-6
+    d_mu_d_V = d_mu_d_y_um / d_V_d_y_um
+    compressibilities = - d_mu_d_V 
+    return compressibilities
+
 #By convention, uses kHz as the base unit.
 def two_level_system_population_rabi(t, omega_r, detuning):
     generalized_rabi = np.sqrt(np.square(omega_r) + np.square(detuning))
@@ -45,6 +60,11 @@ def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)
     li_energy_hz = li_energy_mks / (2 * np.pi * H_BAR_MKS)
     return li_energy_hz
+
+def get_li_energy_m_deriv_hz_in_1D_trap(displacement_m, trap_freq_hz):
+    li_energy_deriv_m_mks = LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * displacement_m
+    li_energy_deriv_m_hz = li_energy_deriv_m_mks / (2 * np.pi * H_BAR_MKS)
+    return li_energy_deriv_m_hz
 
 
 #Data from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
