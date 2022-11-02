@@ -72,11 +72,8 @@ def test_get_hybrid_trap_compressibility():
     sample_hybrid_trap_cut_data = np.load("resources/Sample_Box_Exp_Cut.npy")
     harmonic_positions, densities = sample_hybrid_trap_cut_data
     harmonic_energies = science_functions.get_li_energy_hz_in_1D_trap(harmonic_positions * 1e-6, SAMPLE_TRAP_FREQ)
-    fermi_energies = science_functions.get_fermi_energy_hz_from_density(densities * 1e18)
-    plt.plot(harmonic_energies, fermi_energies, 'x')
-    plt.show()
-    compressibilities = science_functions.get_hybrid_trap_compressibilities(harmonic_positions, densities, SAMPLE_TRAP_FREQ)
-    plt.plot(harmonic_positions, compressibilities)
+    positions, compressibilities = science_functions.get_hybrid_trap_compressibilities(harmonic_positions, densities, SAMPLE_TRAP_FREQ)
+    plt.plot(positions, compressibilities) 
     plt.show()
     
 
@@ -95,5 +92,4 @@ def test_get_field_from_li6_resonance():
     SAMPLE_INDICES = (1, 2)
     extracted_field = science_functions.get_field_from_li6_resonance(SAMPLE_RESONANCE_FREQ, SAMPLE_INDICES)
     assert(np.abs((extracted_field - EXPECTED_B_FIELD) / EXPECTED_B_FIELD) < 1e-5)
-    print(extracted_field)
     
