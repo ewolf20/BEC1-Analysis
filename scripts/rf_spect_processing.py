@@ -144,8 +144,10 @@ def get_rf_frequencies_and_counts(my_measurement, resonance_key):
         imaging_freq_B = current_run.parameters["ImagFreq2"] 
         detuning_A, detuning_B = get_detunings_from_resonance_key(my_measurement, resonance_key, imaging_freq_A, imaging_freq_B)
         atom_density_A = image_processing_functions.get_atom_density_absorption(image_stack_A, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                    norm_box_coordinates = my_measurement.measurement_parameters["norm_box"],
                                                                     detuning = detuning_A)
         atom_density_B = image_processing_functions.get_atom_density_absorption(image_stack_B, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                    norm_box_coordinates = my_measurement.measurement_parameters["norm_box"],
                                                                     detuning = detuning_B)
         counts_A = image_processing_functions.atom_count_pixel_sum(atom_density_A, pixel_area)
         counts_B = image_processing_functions.atom_count_pixel_sum(atom_density_B, pixel_area)

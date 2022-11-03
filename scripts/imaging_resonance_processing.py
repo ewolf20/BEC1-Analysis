@@ -76,7 +76,8 @@ def get_frequency_counts_data(my_measurement, run_image_name, frequency_key, fre
         print(str(run_id))
         current_run = my_measurement.runs_dict[run_id]
         current_image_stack = current_run.get_image(run_image_name, memmap = True)
-        current_od_image = image_processing_functions.get_absorption_od_image(current_image_stack, ROI = my_measurement.measurement_parameters['ROI'])
+        current_od_image = image_processing_functions.get_absorption_od_image(current_image_stack, ROI = my_measurement.measurement_parameters['ROI'], 
+                                                                            norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
         current_counts = image_processing_functions.pixel_sum(current_od_image)
         counts_list.append(current_counts)
         nominal_frequency = current_run.parameters[frequency_key] 

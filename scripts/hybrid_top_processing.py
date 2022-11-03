@@ -135,9 +135,11 @@ def get_density_from_abs_image(my_measurement, current_run):
     imaging_freq_B = current_run.parameters["ImagFreq2"] 
     detuning_1 = frequency_multiplier * (imaging_freq_A - res_freq_state_1)
     detuning_3 = frequency_multiplier * (imaging_freq_B - res_freq_state_3)
-    atom_density_image_state_1 = image_processing_functions.get_atom_density_absorption(image_stack_A, ROI = my_measurement.measurement_parameters["ROI"], 
+    atom_density_image_state_1 = image_processing_functions.get_atom_density_absorption(image_stack_A, ROI = my_measurement.measurement_parameters["ROI"],
+                                                                            norm_box_coordinates = my_measurement.measurement_parameters["norm_box"],
                                                                             detuning = detuning_1)
-    atom_density_image_state_3 = image_processing_functions.get_atom_density_absorption(image_stack_B, ROI = my_measurement.measurement_parameters["ROI"], 
+    atom_density_image_state_3 = image_processing_functions.get_atom_density_absorption(image_stack_B, ROI = my_measurement.measurement_parameters["ROI"],
+                                                                            norm_box_coordinates = my_measurement.measurement_parameters["norm_box"],
                                                                             detuning = detuning_3)
     return (atom_density_image_state_1, atom_density_image_state_3)
 
@@ -155,9 +157,11 @@ def get_density_from_polrot_image(my_measurement, current_run):
     detuning_1B = frequency_multiplier * (imaging_freq_B - res_freq_state_1) 
     detuning_2B = frequency_multiplier * (imaging_freq_B - res_freq_state_3)
     abs_image_A = image_processing_functions.get_absorption_image(image_stack_A, 
-                                                                    ROI = my_measurement.measurement_parameters["ROI"])
+                                                                    ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                    norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     abs_image_B = image_processing_functions.get_absorption_image(image_stack_B, 
-                                                                    ROI = my_measurement.measurement_parameters["ROI"])
+                                                                    ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                    norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     atom_density_image_state_1, atom_density_image_state_3 = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B, 
                                                                     detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
                                                                     phase_sign = my_measurement.experiment_parameters["polrot_phase_sign"])
