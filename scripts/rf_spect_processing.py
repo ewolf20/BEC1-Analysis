@@ -153,7 +153,7 @@ def get_rf_frequencies_and_counts(my_measurement, resonance_key):
         counts_B = image_processing_functions.atom_count_pixel_sum(atom_density_B, pixel_area)
         counts_A_list.append(counts_A)
         counts_B_list.append(counts_B)
-        rf_frequency = current_run.parameters["RF23_Box_Center"]
+        rf_frequency = current_run.parameters["RF_Box_Center"]
         rf_frequencies_list.append(rf_frequency)
     rf_frequencies_array = np.array(rf_frequencies_list)
     counts_A_array = np.array(counts_A_list) 
