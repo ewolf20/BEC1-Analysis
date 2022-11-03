@@ -39,6 +39,7 @@ def get_sha_hash_string(my_bytes):
 
 def test_get_absorption_image():
     ROI = [270, 0, 480, 180]
+    norm_box = [300, 250, 400, 300]
     test_image_array = load_test_image()
     absorption_image_full = image_processing_functions.get_absorption_image(test_image_array)
     saved_absorption_image_full = np.load(ABSORPTION_NUMPY_ARRAY_FILEPATH)
@@ -47,6 +48,17 @@ def test_get_absorption_image():
     xmin, ymin, xmax, ymax = ROI 
     saved_absorption_image_ROI = saved_absorption_image_full[ymin:ymax, xmin:xmax]
     assert np.all(np.abs(absorption_image_ROI - saved_absorption_image_ROI) < 1e-4)
+    absorption_image_ROI_norm = image_processing_functions.get_absorption_image(test_image_array, ROI = ROI, norm_box_coordinates = norm_box)
+    norm_xmin, norm_ymin, norm_xmax, norm_ymax = norm_box 
+    with_atoms = test_image_array[0] 
+    without_atoms = test_image_array[1] 
+    dark = test_image_array[2]
+    norm_with_atoms_subtracted = with_atoms[norm_ymin:norm_ymax, norm_xmin:norm_xmax] - dark[norm_ymin:norm_ymax, norm_xmin:norm_xmax]
+    norm_without_atoms_subtracted = without_atoms[norm_ymin:norm_ymax, norm_xmin:norm_xmax] - dark[norm_ymin:norm_ymax, norm_xmin:norm_xmax]
+    norm_ratio = np.sum(norm_with_atoms_subtracted) / np.sum(norm_without_atoms_subtracted)
+    unnorm_to_norm_ratio_array = (absorption_image_ROI / absorption_image_ROI_norm).flatten()
+    unnorm_to_norm_ratio_array = unnorm_to_norm_ratio_array[~np.isnan(unnorm_to_norm_ratio_array)]
+    assert np.all(np.isclose(norm_ratio, unnorm_to_norm_ratio_array))
 
 
 def test_get_absorption_od_image():

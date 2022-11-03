@@ -40,27 +40,25 @@ def _roi_crop_helper(image_stack, ROI = None):
         return (safe_subtract(image_with_atoms, image_dark),  safe_subtract(image_without_atoms, image_dark))
 
 """
-Convenience function for safely subtracting two arrays of unsigned type."""
-def safe_subtract(x, y):
-    newtype = np.result_type(x, y, np.byte)
+Convenience function for safely subtracting two arrays of unsigned type.
+
+Minimum cast: A numpy dtype which represents the 'minimal datatype' to which the 
+minuend and subtrahend must be cast. For unsigned type, np.byte is the default, 
+enforcing a signed type without data loss. 
+
+Please note: if the differences returned by safe_subtract are later manipulated, 
+it may be necessary to use a 'larger' minimum cast for safety. np.byte only guarantees 
+that no overflows are obtained when two unsigned integers are subtracted."""
+
+def safe_subtract(x, y, minimum_cast = np.byte):
+    newtype = np.result_type(x, y, minimum_cast)
     return x.astype(newtype) - y.astype(newtype)
 
-#TODO: Figure out issue with roa!
 """
 Helper function for finding the multiplier for the without_atoms image to compensate for light intensity shifts.
+"""
 
-The norm_strategy flag dictates how normalization is done. One can either have:
-
-aor: Average of ratios - takes the ratio of with atoms to without atoms pixel-by-pixel, averages this ratio, and then 
-demands the average be 1
-
-roa: ratio of averages - takes the average pixel brightness of the with and without atoms images, then takes the ratio 
-of these averages and demands that this be 1.
-
-A priori we would expect roa to be better, but in the experimental data I've seen so far it's much worse. Need to figure this
-out."""
-
-def _norm_box_helper(image_stack, norm_box_coordinates = None, norm_strategy = "aor"):
+def _norm_box_helper(image_stack, norm_box_coordinates = None):
     image_with_atoms = image_stack[0] 
     image_without_atoms = image_stack[1] 
     image_dark = image_stack[2]
@@ -69,12 +67,9 @@ def _norm_box_helper(image_stack, norm_box_coordinates = None, norm_strategy = "
         norm_with_atoms = image_with_atoms[norm_y_min:norm_y_max, norm_x_min:norm_x_max]
         norm_without_atoms = image_without_atoms[norm_y_min:norm_y_max, norm_x_min:norm_x_max] 
         norm_dark = image_dark[norm_y_min:norm_y_max, norm_x_min:norm_x_max]
-        if(norm_strategy == "roa"):
-            with_atoms_light_sum = sum(sum(safe_subtract(norm_with_atoms, norm_dark)))
-            without_atoms_light_sum = sum(sum(safe_subtract(norm_without_atoms, norm_dark)))
-            with_without_light_ratio = with_atoms_light_sum / without_atoms_light_sum
-        elif(norm_strategy == "aor"):
-            with_without_light_ratio = sum(sum(safe_subtract(norm_with_atoms, norm_dark) / safe_subtract(norm_without_atoms, norm_dark))) / norm_with_atoms.size
+        with_atoms_light_sum = np.sum(safe_subtract(norm_with_atoms, norm_dark).astype(float))
+        without_atoms_light_sum = np.sum(safe_subtract(norm_without_atoms, norm_dark).astype(float))
+        with_without_light_ratio = with_atoms_light_sum / without_atoms_light_sum
         return with_without_light_ratio
     else:
         return 1

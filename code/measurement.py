@@ -37,7 +37,6 @@ class Measurement():
     the coordinates of a background box.
     run_parameters_verbose: Whether the runs store the entire set of experiment parameters, or just those being scanned.
     load_breadboard: Whether to load a connection to breadboard. If False, the measurement operates in offline mode. """
-#TODO Add test for offline mode measurement!!!
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
                     hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False, load_breadboard = True):
         if(load_breadboard):
@@ -103,6 +102,8 @@ class Measurement():
                         run_id_image_pathname = os.path.join(self.measurement_directory_path, run_id_image_filename)
                         run_image_pathname_dict[image_name] = run_id_image_pathname 
                         break
+                else:
+                    raise RuntimeError("Run image does not match specification. Is the imaging type correct?")
             current_run = Run(run_id, run_image_pathname_dict, self.breadboard_client, hold_images_in_memory= self.hold_images_in_memory, 
                                 parameters = run_parameters, image_format = self.image_format)
             runs_dict[run_id] = current_run
