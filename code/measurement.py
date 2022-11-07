@@ -52,7 +52,8 @@ class Measurement():
         if(not experiment_parameters):
             experiment_parameters_path = os.path.join(measurement_directory_path, "experiment_parameters.json")
             with open(experiment_parameters_path, 'r') as json_file:
-                self.experiment_parameters = json.load(json_file)
+                experiment_parameters_dict = json.load(json_file)
+                self.experiment_parameters = experiment_parameters_dict["Values"]
         else:
             self.experiment_parameters = experiment_parameters
         if(measurement_parameters):   
