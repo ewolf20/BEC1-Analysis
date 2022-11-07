@@ -50,7 +50,9 @@ class Measurement():
         self.image_format = image_format
         self.hold_images_in_memory = hold_images_in_memory
         if(not experiment_parameters):
-            self.experiment_parameters = loading_functions.load_experiment_parameters()
+            experiment_parameters_path = os.path.join(measurement_directory_path, "experiment_parameters.json")
+            with open(experiment_parameters_path, 'r') as json_file:
+                self.experiment_parameters = json.load(json_file)
         else:
             self.experiment_parameters = experiment_parameters
         if(measurement_parameters):   
@@ -73,17 +75,12 @@ class Measurement():
         if(not use_saved_params):
             DATA_DUMP_PARAMS_FILENAME = "run_params_dump.json" 
             path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, DATA_DUMP_PARAMS_FILENAME)
-            if(os.path.exists(path_to_dump_file_in_measurement_folder)):
-                run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
+            run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
                                                                         make_raw_parameters_terse = (not self.run_parameters_verbose))
-            else:
-                run_parameters_list = breadboard_functions.get_run_parameter_dicts_from_ids(self.breadboard_client, sorted_run_ids_list,
-                                                                                    start_datetime = min_datetime, end_datetime = max_datetime, 
-                                                                                    verbose = self.run_parameters_verbose)
         else:
             run_parameters_list = loading_functions.load_run_parameters_from_json(saved_params_filename)
         runs_dict = {}
-        matched_run_ids_and_parameters_list = [] 
+        matched_run_ids_and_parameters_list = []
         #O(n^2) naive search, but it's fine...
         for run_id in sorted_run_ids_list: 
             for parameters in run_parameters_list:
