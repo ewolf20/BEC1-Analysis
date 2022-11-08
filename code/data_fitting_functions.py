@@ -7,9 +7,6 @@ from scipy.special import betainc
 from scipy.signal import argrelextrema
 
 from .science_functions import two_level_system_population_rabi
-from .loading_functions import load_experiment_parameters
-
-EXPERIMENT_PARAMETERS = load_experiment_parameters()
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
                                     filter_outliers = False, report_inliers = False):
@@ -259,29 +256,15 @@ def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
     return populations_excited
 
 
-HYBRID_TRAP_WIDTH_PIX = EXPERIMENT_PARAMETERS["axicon_diameter_pix"] 
-HYBRID_TRAP_TYPICAL_LENGTH_PIX = EXPERIMENT_PARAMETERS["hybrid_trap_typical_length_pix"]
-HYBRID_TRAP_TILT = EXPERIMENT_PARAMETERS["axicon_tilt_deg"]
-TOP_UM_PER_PIXEL = EXPERIMENT_PARAMETERS["top_um_per_pixel"]
-
-def hybrid_trap_center_finder(image_to_fit, center_guess = None, tilt = None, hybrid_pixel_width = None, hybrid_pixel_length = None):
-    if(hybrid_pixel_width is None):
-        width_sigma = HYBRID_TRAP_WIDTH_PIX / 4
-    else:
-        width_sigma = hybrid_pixel_width 
-    if(hybrid_pixel_length is None):
-        length_sigma = HYBRID_TRAP_TYPICAL_LENGTH_PIX / 4
-    else:
-        length_sigma = hybrid_pixel_length
-    if(tilt is None):
-        #Positive tilt angles rotate the Gaussian counterclockwise
-        #on a scale with (0,0) at the lower left
-        tilt = HYBRID_TRAP_TILT * np.pi / 180
-    estimated_image_amplitude = np.sum(image_to_fit) / (HYBRID_TRAP_TYPICAL_LENGTH_PIX * HYBRID_TRAP_WIDTH_PIX)
+def hybrid_trap_center_finder(image_to_fit, tilt_deg, hybrid_pixel_width, hybrid_pixel_length, center_guess = None):
+    width_sigma = hybrid_pixel_width / 4
+    length_sigma = hybrid_pixel_length / 4
+    tilt_rad = tilt_deg * np.pi / 180
+    estimated_image_amplitude = np.sum(image_to_fit) / (hybrid_pixel_length * hybrid_pixel_width)
     def wrapped_hybrid_fitting_gaussian(coordinate, x_center, y_center):
         y, x = coordinate 
         return two_dimensional_rotated_gaussian(x, y, estimated_image_amplitude, x_center, y_center, width_sigma, 
-                                            length_sigma, tilt, 0)
+                                            length_sigma, tilt_rad, 0)
     #Numpy puts vertical (y) index first by default
     image_indices_grid = np.indices(image_to_fit.shape)
     flattened_image_indices = image_indices_grid.reshape((2, image_indices_grid[0].size)) 

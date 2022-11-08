@@ -57,20 +57,13 @@ class TestMeasurement:
         my_run_params_bytes = json.dumps(my_run_params).encode("ASCII")
         assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
         assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
-        os.rename(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "run_params_dump_test.json"), 
-                    os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "run_params_dump.json"))
-        try:
-            my_measurement_params_from_dump = Measurement(measurement_directory_path = TEST_MEASUREMENT_DIRECTORY_PATH, imaging_type = "side_low_mag")
-            my_measurement_params_from_dump._initialize_runs_dict()
-            assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID 
-            my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
-            my_run_params = my_run.get_parameters() 
-            my_run_params_bytes = json.dumps(my_run_params).encode("ASCII") 
-            assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
-        finally:
-            os.rename(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "run_params_dump.json"), 
-                    os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "run_params_dump_test.json"))
-
+        my_measurement_params_from_dump = Measurement(measurement_directory_path = TEST_MEASUREMENT_DIRECTORY_PATH, imaging_type = "side_low_mag")
+        my_measurement_params_from_dump._initialize_runs_dict()
+        assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID 
+        my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
+        my_run_params = my_run.get_parameters() 
+        my_run_params_bytes = json.dumps(my_run_params).encode("ASCII") 
+        assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
 
 
     @staticmethod 
@@ -121,26 +114,18 @@ class TestMeasurement:
 class TestRun:
 
     #Class variable runs
-    my_run_with_memory = Run(TEST_IMAGE_RUN_ID, TEST_IMAGE_PATHNAME_DICT, breadboard_client = load_breadboard_client())
-    my_run_without_memory = Run(TEST_IMAGE_RUN_ID, TEST_IMAGE_PATHNAME_DICT, breadboard_client = load_breadboard_client())
+    my_run_with_memory = Run(TEST_IMAGE_RUN_ID, TEST_IMAGE_PATHNAME_DICT, {})
+    my_run_without_memory = Run(TEST_IMAGE_RUN_ID, TEST_IMAGE_PATHNAME_DICT, {})
 
     @staticmethod
     def test__init__():
-        my_run = Run(TEST_IMAGE_RUN_ID, TEST_IMAGE_PATHNAME_DICT, breadboard_client = load_breadboard_client())
+        my_run = Run(TEST_IMAGE_RUN_ID, TEST_IMAGE_PATHNAME_DICT, {})
         assert True
 
     @staticmethod
     def test_load_image():
         my_image = TestRun.my_run_without_memory.load_image(TEST_IMAGE_FILE_PATH)
         assert check_sha_hash(my_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
-
-    @staticmethod 
-    def test_load_parameters():
-        my_parameters_dict = TestRun.my_run_without_memory.get_parameters()
-        my_parameters_json_string = json.dumps(my_parameters_dict)
-        my_parameters_json_bytes = my_parameters_json_string.encode("ASCII") 
-        assert check_sha_hash(my_parameters_json_bytes, RUN_PARAMS_SHA_CHECKSUM)
-        
 
     @staticmethod
     def test_get_image():
