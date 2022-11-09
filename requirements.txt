@@ -1,13 +1,8 @@
 astropy==5.0.4
 attrs==21.4.0
-certifi==2021.10.8
 cffi==1.15.0
-charset-normalizer==2.0.12
-cryptography==37.0.2
 cycler==0.11.0
 fonttools==4.32.0
-future==0.18.2
-idna==3.3
 iniconfig==1.1.1
 kiwisolver==1.4.2
 matplotlib==3.5.1
@@ -24,9 +19,6 @@ pytest==7.1.1
 python-dateutil==2.8.2
 pytz==2022.1
 PyYAML==6.0
-requests==2.27.1
 scipy==1.8.1
 six==1.16.0
 tomli==2.0.1
-tqdm==4.64.0
-urllib3==1.26.9

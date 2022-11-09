@@ -13,8 +13,6 @@ from . import loading_functions
 
 loading_functions.load_satyendra()
 
-from satyendra.code import breadboard_functions
-
 IMAGE_FORMATS_LIST = ['.fits']
 IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
 MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['TopA', 'TopB'],
@@ -36,13 +34,9 @@ class Measurement():
     measurement_parameters: dict {parname:value} of measurement-level params, e.g. a list of run ids which are flagged as bad shots or 
     the coordinates of a background box.
     run_parameters_verbose: Whether the runs store the entire set of experiment parameters, or just those being scanned.
-    load_breadboard: Whether to load a connection to breadboard. If False, the measurement operates in offline mode. """
+    """
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False, load_breadboard = True):
-        if(load_breadboard):
-            self.breadboard_client = breadboard_functions.load_breadboard_client() 
-        else:
-            self.breadboard_client = None
+                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False):
         if(not measurement_directory_path):
             measurement_directory_path = os.getcwd() 
         self.measurement_directory_path = measurement_directory_path 
@@ -50,7 +44,10 @@ class Measurement():
         self.image_format = image_format
         self.hold_images_in_memory = hold_images_in_memory
         if(not experiment_parameters):
-            self.experiment_parameters = loading_functions.load_experiment_parameters()
+            experiment_parameters_path = os.path.join(measurement_directory_path, "experiment_parameters.json")
+            with open(experiment_parameters_path, 'r') as json_file:
+                experiment_parameters_dict = json.load(json_file)
+                self.experiment_parameters = experiment_parameters_dict["Values"]
         else:
             self.experiment_parameters = experiment_parameters
         if(measurement_parameters):   
@@ -77,13 +74,12 @@ class Measurement():
                 run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
                                                                         make_raw_parameters_terse = (not self.run_parameters_verbose))
             else:
-                run_parameters_list = breadboard_functions.get_run_parameter_dicts_from_ids(self.breadboard_client, sorted_run_ids_list,
-                                                                                    start_datetime = min_datetime, end_datetime = max_datetime, 
-                                                                                    verbose = self.run_parameters_verbose)
+                raise RuntimeError("""Drawing parameters directly from breadboard is deprecated. You may use ImageWatchdog.get_run_metadata()
+                                    to generate a run params json for legacy datasets.""")
         else:
             run_parameters_list = loading_functions.load_run_parameters_from_json(saved_params_filename)
         runs_dict = {}
-        matched_run_ids_and_parameters_list = [] 
+        matched_run_ids_and_parameters_list = []
         #O(n^2) naive search, but it's fine...
         for run_id in sorted_run_ids_list: 
             for parameters in run_parameters_list:
@@ -104,7 +100,7 @@ class Measurement():
                         break
                 else:
                     raise RuntimeError("Run image does not match specification. Is the imaging type correct?")
-            current_run = Run(run_id, run_image_pathname_dict, self.breadboard_client, hold_images_in_memory= self.hold_images_in_memory, 
+            current_run = Run(run_id, run_image_pathname_dict, hold_images_in_memory= self.hold_images_in_memory, 
                                 parameters = run_parameters, image_format = self.image_format)
             runs_dict[run_id] = current_run
         self.runs_dict = runs_dict
@@ -115,8 +111,8 @@ class Measurement():
     Dumps the parameters of the runs dict to a .json file.
     
     When called, save a dictionary {run_ID, params} of the parameters of each run in the current 
-    runs dict. Avoids repeating calls to breadboard."""
-    def dump_runs_dict(self, dump_filename = "run_params_dump.json"):
+    runs dict. Allows measurement-specific updates to the run parameters."""
+    def dump_runs_dict(self, dump_filename = "measurement_run_params_dump.json"):
         with open(dump_filename, 'w') as dump_file:
             dump_dict = {} 
             for run_id in self.runs_dict:
@@ -252,20 +248,12 @@ class Run():
     run_id: int, the run id
     image_pathnames_dict: A dict {image_name:image_pathname} of paths to each image associated with the given run. The names image_name are taken 
     from the list in MEASUREMENT_IMAGE_NAME_DICT which corresponds to the imaging_type of the overarching measurement. 
-    breadboard_client: A client for querying breadboard to obtain the run parameters.
     image_format: The file extension of the image files
-    parameters: The run parameters. If None, these are initialized by querying breadboard.
-    parameters_verbose: Only used if parameters is None. If True, the parameters as queried from breadboard include all cicero information, not just list bound variables. 
+    parameters: The run parameters.
     """
-    def __init__(self, run_id, image_pathnames_dict, breadboard_client = None, hold_images_in_memory = True, image_format = ".fits", parameters = None, 
-                parameters_verbose = False):
+    def __init__(self, run_id, image_pathnames_dict, parameters, hold_images_in_memory = True, image_format = ".fits"):
         self.run_id = run_id
-        self.parameters_verbose = parameters_verbose
-        self.breadboard_client = breadboard_client
-        if(not parameters):
-            self.parameters = self.load_parameters() 
-        else:
-            self.parameters = parameters
+        self.parameters = parameters
         if('badshot' in self.parameters):
             self.is_badshot = self.parameters['badshot']
         else:
@@ -294,12 +282,6 @@ class Run():
     def get_default_image(self, memmap = False):
         for image_name in self.image_dict:
             return self.get_image(image_name, memmap = memmap)
-
-
-    #TODO check formatting of returned dict from breadboard
-    #TODO add support for recently uploaded runs
-    def load_parameters(self):
-        return breadboard_functions.get_run_parameter_dict_from_id(self.breadboard_client, self.run_id, verbose = self.parameters_verbose)
 
     def get_parameter_value(self, value_name):
         return self.parameters[value_name]

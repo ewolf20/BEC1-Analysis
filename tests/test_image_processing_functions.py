@@ -21,7 +21,7 @@ ABSORPTION_NUMPY_ARRAY_FILEPATH = "resources/Test_Image_Absorption.npy"
 OD_NUMPY_ARRAY_FILEPATH = "resources/Test_Image_OD.npy"
 
 
-from BEC1_Analysis.code import image_processing_functions, data_fitting_functions, loading_functions
+from BEC1_Analysis.code import image_processing_functions, data_fitting_functions
 
 def load_test_image():
     with fits.open(TEST_IMAGE_FILE_PATH) as hdul:
@@ -215,14 +215,16 @@ def test_rotate_and_crop_hybrid_image():
 
 
 def test_get_hybrid_trap_densities_along_harmonic_axis():
-    EXPERIMENT_PARAMETERS = loading_functions.load_experiment_parameters()
     EXPECTED_X_CENTER = 228 
     EXPECTED_Y_CENTER = 398
-    UM_PER_PIXEL = EXPERIMENT_PARAMETERS["top_um_per_pixel"] 
-    AXICON_DIAMETER_PIX = EXPERIMENT_PARAMETERS["axicon_diameter_pix"]
-    axicon_diameter_um = UM_PER_PIXEL * AXICON_DIAMETER_PIX
+    SAMPLE_UM_PER_PIXEL = 0.6
+    SAMPLE_AXICON_DIAMETER_PIX = 189
+    SAMPLE_AXICON_LENGTH_PIX = 250
+    SAMPLE_TILT_DEG = 6.3
+    axicon_diameter_um = SAMPLE_UM_PER_PIXEL * SAMPLE_AXICON_DIAMETER_PIX
     sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
-    hybrid_trap_harmonic_positions, hybrid_trap_harmonic_data = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(sample_hybrid_trap_data)
+    hybrid_trap_harmonic_positions, hybrid_trap_harmonic_data = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(sample_hybrid_trap_data, 
+                                                                SAMPLE_TILT_DEG, SAMPLE_AXICON_DIAMETER_PIX, SAMPLE_AXICON_LENGTH_PIX, SAMPLE_UM_PER_PIXEL)
     filtered_hybrid_trap_harmonic_data = scipy.signal.savgol_filter(hybrid_trap_harmonic_data, 15, 2)
     max_index = np.argmax(hybrid_trap_harmonic_data) 
     max_value = hybrid_trap_harmonic_data[max_index]
@@ -230,7 +232,7 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
     center_snippet = sample_hybrid_trap_data[EXPECTED_Y_CENTER - CENTER_SNIPPET_HALF_WIDTH:EXPECTED_Y_CENTER+CENTER_SNIPPET_HALF_WIDTH, 
                                             EXPECTED_X_CENTER - CENTER_SNIPPET_HALF_WIDTH: EXPECTED_X_CENTER + CENTER_SNIPPET_HALF_WIDTH]
     center_snippet_average_2d_density = np.sum(center_snippet) / center_snippet.size
-    center_snippet_average_3d_density = center_snippet_average_2d_density / (UM_PER_PIXEL * AXICON_DIAMETER_PIX)
+    center_snippet_average_3d_density = center_snippet_average_2d_density / (SAMPLE_UM_PER_PIXEL * SAMPLE_AXICON_DIAMETER_PIX)
     max_index = np.argmax(filtered_hybrid_trap_harmonic_data)
     max_value = filtered_hybrid_trap_harmonic_data[max_index] 
     max_position = hybrid_trap_harmonic_positions[max_index] 

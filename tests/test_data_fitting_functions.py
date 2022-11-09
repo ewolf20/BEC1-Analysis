@@ -191,8 +191,11 @@ def test_fit_rf_spect_detuning_scan():
 def test_hybrid_trap_center_finder():
     EXPECTED_X_CENTER = 228
     EXPECTED_Y_CENTER = 398
+    SAMPLE_WIDTH = 189
+    SAMPLE_LENGTH = 250
+    SAMPLE_TILT_DEG = 6.3
     sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
-    center_guess = data_fitting_functions.hybrid_trap_center_finder(sample_hybrid_trap_data) 
+    center_guess = data_fitting_functions.hybrid_trap_center_finder(sample_hybrid_trap_data, SAMPLE_TILT_DEG, SAMPLE_WIDTH, SAMPLE_LENGTH) 
     x_center_guess, y_center_guess = center_guess
     assert (np.abs(x_center_guess - EXPECTED_X_CENTER) < 5) 
     assert (np.abs(y_center_guess - EXPECTED_Y_CENTER) < 5)

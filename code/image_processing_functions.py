@@ -8,9 +8,6 @@ from scipy import ndimage
 from .c_code._polrot_code import ffi as polrot_image_ffi
 from .c_code._polrot_code import lib as polrot_image_lib
 from . import data_fitting_functions
-from .loading_functions import load_experiment_parameters
-
-EXPERIMENT_PARAMETERS = load_experiment_parameters()
 
 
 """
@@ -361,16 +358,10 @@ def parallelizable_density_polrot_function(atom_density_1, atom_density_2, detun
 
 
 
-def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, center = None, axicon_diameter_pix = None, 
-                                                axicon_tilt_deg = None, um_per_pixel = None, rotate_data = True):
+def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix,
+                                                 um_per_pixel, center = None, rotate_data = True):
     if(center is None):
-        center = data_fitting_functions.hybrid_trap_center_finder(hybrid_trap_density_image)
-    if(axicon_diameter_pix is None):
-        axicon_diameter_pix = EXPERIMENT_PARAMETERS["axicon_diameter_pix"]
-    if(axicon_tilt_deg is None):
-        axicon_tilt_deg = EXPERIMENT_PARAMETERS["axicon_tilt_deg"]
-    if(um_per_pixel is None):
-        um_per_pixel = EXPERIMENT_PARAMETERS["top_um_per_pixel"]
+        center = data_fitting_functions.hybrid_trap_center_finder(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix)
     if(rotate_data):
         image_to_use, rotated_center = _rotate_and_crop_hybrid_image(hybrid_trap_density_image, center, axicon_tilt_deg)    
         rotated_x_center, rotated_y_center = rotated_center 
