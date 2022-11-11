@@ -189,10 +189,12 @@ Y_data: The data to be transformed.
 
 order: The order of the peak to return. If None, the largest non-zero order is returned.
 
+Axis: Specifies the axis along which to (1D) Fourier transform for greater than 1D data. 
+
 Remark: """
-def get_fft_peak(x_delta, y_data, order = None):
+def get_fft_peak(x_delta, y_data, order = None, axis = -1):
     data_length = len(y_data)
-    centered_data_fft = np.fft.fft(y_data) 
+    centered_data_fft = np.fft.fft(y_data, axis = axis) 
     fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_delta 
     positive_fft_cutoff = int(np.floor(data_length / 2))
     nonnegative_fft_values = centered_data_fft[0:positive_fft_cutoff]
