@@ -61,7 +61,7 @@ class Measurement():
     
     Creates a dictionary {run_id:Run} of runs in the measurement. Each individual run is an object containing the run parameters and images."""
     #TODO: Update so that the error is more descriptive when the wrong measurement type is specified
-    def _initialize_runs_dict(self, use_saved_params = False, saved_params_filename = "run_params_dump.json"):
+    def _initialize_runs_dict(self, use_saved_params = False, saved_params_filename = "measurement_run_params_dump.json"):
         unique_run_ids_list = list(set([Measurement._parse_run_id_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f]))
         datetimes_list = list([Measurement._parse_datetime_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f])
         min_datetime = min(datetimes_list) 
