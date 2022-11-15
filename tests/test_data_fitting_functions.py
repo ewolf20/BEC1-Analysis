@@ -128,6 +128,50 @@ def test_fit_one_dimensional_cosine():
     assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 5e-2)
 
 
+def test_get_fft_peak():
+    NUM_ANGLE_POINTS = 100
+    X_DELTA = 1.0 / NUM_ANGLE_POINTS
+    COSINE_FREQUENCY = 16
+    COSINE_PHASE = 1.0
+    COSINE_AMPLITUDE = 2.3
+    angles = np.linspace(0, 1, NUM_ANGLE_POINTS, endpoint = False)
+    cosine_with_phase = COSINE_AMPLITUDE * np.cos(2 * np.pi * COSINE_FREQUENCY * angles + COSINE_PHASE)
+    peak_freq, peak_amp, peak_phase = data_fitting_functions.get_fft_peak(X_DELTA, cosine_with_phase)
+    assert np.isclose(COSINE_FREQUENCY, peak_freq)
+    assert np.isclose(COSINE_AMPLITUDE, peak_amp)
+    assert np.isclose(COSINE_PHASE, peak_phase)
+    order_freq, order_amp, order_phase = data_fitting_functions.get_fft_peak(X_DELTA, cosine_with_phase, order = 16)
+    assert np.isclose(COSINE_FREQUENCY, order_freq)
+    assert np.isclose(COSINE_AMPLITUDE, order_amp)
+    assert np.isclose(COSINE_PHASE, order_phase)
+    NUM_ONES_INDICES = 10
+    cosine_with_phase_array = np.matmul(cosine_with_phase.reshape((NUM_ANGLE_POINTS, 1)), np.ones((1, NUM_ONES_INDICES)))
+    cosine_with_phase_array_transposed = np.transpose(cosine_with_phase_array) 
+    peak_array_freq, peak_array_amp, peak_array_phase = data_fitting_functions.get_fft_peak(X_DELTA, cosine_with_phase_array, axis = 0)
+    assert len(peak_array_freq) == NUM_ONES_INDICES
+    assert len(peak_array_amp) == NUM_ONES_INDICES
+    assert len(peak_array_phase) == NUM_ONES_INDICES
+    assert np.allclose(peak_array_freq, COSINE_FREQUENCY)
+    assert np.allclose(peak_array_amp, COSINE_AMPLITUDE)
+    assert np.allclose(peak_array_phase, COSINE_PHASE)
+    peak_array_transpose_freq, peak_array_transpose_amp, peak_array_transpose_phase = data_fitting_functions.get_fft_peak(X_DELTA,
+                                                                                     cosine_with_phase_array_transposed, axis = 1)
+    assert len(peak_array_transpose_freq) == NUM_ONES_INDICES
+    assert len(peak_array_transpose_amp) == NUM_ONES_INDICES
+    assert len(peak_array_transpose_phase) == NUM_ONES_INDICES
+    assert np.allclose(peak_array_transpose_freq, COSINE_FREQUENCY)
+    assert np.allclose(peak_array_transpose_amp, COSINE_AMPLITUDE)
+    assert np.allclose(peak_array_transpose_phase, COSINE_PHASE)
+    order_array_freq, order_array_amp, order_array_phase = data_fitting_functions.get_fft_peak(X_DELTA, cosine_with_phase_array, axis = 0, order = 16)
+    assert len(order_array_freq) == NUM_ONES_INDICES
+    assert len(order_array_amp) == NUM_ONES_INDICES
+    assert len(order_array_phase) == NUM_ONES_INDICES
+    assert np.allclose(order_array_freq, COSINE_FREQUENCY)
+    assert np.allclose(order_array_amp, COSINE_AMPLITUDE)
+    assert np.allclose(order_array_phase, COSINE_PHASE)
+
+
+
 def test_sort_and_deduplicate_xy_data():
     TARGET_X_ARRAY = np.array([0, 1, 2, 3, 4]) 
     TARGET_Y_ARRAY = np.array([0, 2, 3, 6, 8]) 

@@ -192,20 +192,28 @@ order: The order of the peak to return. If None, the largest non-zero order is r
 Axis: Specifies the axis along which to (1D) Fourier transform for greater than 1D data. 
 
 Remark: """
+#TODO: Make this work for vectorized input!!!
 def get_fft_peak(x_delta, y_data, order = None, axis = -1):
-    data_length = len(y_data)
-    centered_data_fft = np.fft.fft(y_data, axis = axis) 
+    #Put the axis to fft on at the end
+    original_axis_position = axis 
+    new_axis_position = -1
+    moved_axis_ydata = np.moveaxis(y_data, original_axis_position, new_axis_position)
+    data_length = moved_axis_ydata.shape[new_axis_position]
+    centered_data_fft = np.fft.fft(moved_axis_ydata, axis = new_axis_position)
     fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_delta 
     positive_fft_cutoff = int(np.floor(data_length / 2))
-    nonnegative_fft_values = centered_data_fft[0:positive_fft_cutoff]
-    nonnegative_fft_frequencies = fft_real_frequencies[0:positive_fft_cutoff]
+    positive_fft_values = centered_data_fft[..., 1:positive_fft_cutoff]
+    positive_fft_frequencies = fft_real_frequencies[1:positive_fft_cutoff]
     if(order is None):
-        fft_peak_position = np.argmax(np.abs(nonnegative_fft_values[1:])) + 1
+        fft_peak_indices = np.argmax(np.abs(positive_fft_values), axis = new_axis_position, keepdims = True)
+        fft_peak_values = np.squeeze(np.take_along_axis(positive_fft_values, fft_peak_indices, axis = new_axis_position), axis = new_axis_position)
+        fft_frequency = positive_fft_frequencies[np.squeeze(fft_peak_indices, axis = new_axis_position)]
     else:
-        fft_peak_position = order
-    fft_frequency = nonnegative_fft_frequencies[fft_peak_position] 
-    fft_phase = np.angle(nonnegative_fft_values[fft_peak_position])
-    fft_amp = np.abs(nonnegative_fft_values[fft_peak_position]) * 2.0 / data_length
+        fft_peak_index = order - 1
+        fft_peak_values = positive_fft_values[..., fft_peak_index]
+        fft_frequency = positive_fft_frequencies[fft_peak_index] * np.ones(fft_peak_values.shape)
+    fft_phase = np.angle(fft_peak_values)
+    fft_amp = np.abs(fft_peak_values) * 2.0 / data_length
     return (fft_frequency, fft_amp, fft_phase)
 
 
@@ -404,6 +412,16 @@ def _studentized_residual_test(t, degrees_of_freedom, confidence):
     #Scipy betainc is the _regularized_ incomplete beta function
     probability_of_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
     return probability_of_occurrence > confidence
+
+def _dynamic_np_slice(m, axis, start = None, stop = None):
+    if start is None:
+        start = 0 
+    if stop is None:
+        stop = m.shape[axis] 
+    slc = [slice(None)] * len(m.shape)
+    slc[axis] = slice(start, stop) 
+    slc = tuple(slc) 
+    return m[slc]
     
 
 """
