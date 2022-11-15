@@ -166,15 +166,6 @@ def _cosine_guess_helper(x_values, data):
     guessed_offset = sum(data) / len(data)
     centered_data = data - guessed_offset
     guessed_frequency, guessed_amp, guessed_phase = get_fft_peak(x_values_delta, centered_data, order = None)
-    centered_data_fft = np.fft.fft(centered_data)
-    fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_values_delta
-    positive_fft_cutoff = int(np.floor(data_length / 2)) 
-    positive_fft_values = centered_data_fft[1:positive_fft_cutoff]
-    positive_fft_frequencies = fft_real_frequencies[1:positive_fft_cutoff] 
-    fft_peak_position = np.argmax(np.abs(positive_fft_values)) 
-    guessed_frequency = positive_fft_frequencies[fft_peak_position] 
-    guessed_phase = np.angle(positive_fft_values[fft_peak_position])
-    guessed_amp = np.abs(positive_fft_values[fft_peak_position]) * 2.0 / data_length
     return (guessed_frequency, guessed_amp, guessed_phase, guessed_offset)
 
 """
