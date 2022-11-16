@@ -51,3 +51,17 @@ def test_generalized_bootstrap():
     bootstrap_array_standard_deviation = bootstrap_array_result.standard_error
     expected_array_bootstrap_standard_deviation = ARRAY_EXTRA_AXIS_LENGTH * EXPECTED_BOOTSTRAP_STANDARD_DEVIATION
     assert (np.abs((bootstrap_array_standard_deviation - expected_array_bootstrap_standard_deviation) / expected_array_bootstrap_standard_deviation) < 2e-1)
+
+def test_monte_carlo_error_propagation():
+    a = 2.0 
+    b = 3.0 
+    a_error = 0.5 
+    b_error = 0.2
+    NUM_MONTE_CARLO_SAMPLES = 10000
+    EXPECTED_VARIANCE = (np.square(a) + np.square(a_error)) * (np.square(b) + np.square(b_error)) - np.square(a) * np.square(b) 
+    monte_carlo_variance = statistics_functions.monte_carlo_error_propagation(np.multiply, (a, b), (a_error, b_error), vectorized = True, 
+                                                    monte_carlo_samples = NUM_MONTE_CARLO_SAMPLES)
+    monte_carlo_unvectorized_variance = statistics_functions.monte_carlo_error_propagation(np.multiply, (a, b), (a_error, b_error), vectorized = False, 
+                                                    monte_carlo_samples = NUM_MONTE_CARLO_SAMPLES)
+    assert(np.isclose(monte_carlo_variance, EXPECTED_VARIANCE, rtol = 1e-1))
+    assert(np.isclose(monte_carlo_variance, monte_carlo_unvectorized_variance, rtol = 1e-1))

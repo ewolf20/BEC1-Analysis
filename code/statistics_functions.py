@@ -45,11 +45,11 @@ vectorized: An argument indicating whether the function statistic supports vecto
 
     If True, it is assumed that the function statistic can handle ndarrays data_i of arbitrary shape and supports two keyword arguments: resampling_axis 
     and additional_axes. Resampling axis is, as stipulated below, the axis of the ndarray data_i along which values should be resampled;
-    a typical use case would be for statistic to average over this axis. Additional_axes 
-    may be an int or a tuple of ints; statistic may use additional_axes in essentially any way. 
+    a typical use case would be for statistic to average over this axis. Additional_axes is a (potentially empty) tuple of ints; 
+    statistic may use additional_axes in essentially any way. 
     
     It is further assumed that:
-        a) The function statistic collapses resampling_axis and additional_axes (e.g. integrates, averages, etc over them), 
+        a) The function statistic collapses resampling_axis and additional_axes (i.e. these axes do not appear in the return value), 
         b) If statistic is a vector-valued function of the sample distribution, the axes associated with this vector value appear first in any returned array, and 
         c) Except for any shift in axis index from a) or b), any axis of data_i not appearing in resampling_axis or additional_axes is preserved untouched. 
 
@@ -148,3 +148,41 @@ def _reshape_data_array_for_vectorized_bootstrap(rng, data_array, resampling_axi
     #and the penultimate axis indexes the different resamples used for bootstrapping.
     vectorized_resampled_array = transposed_data_array[..., resampling_indices] 
     return (vectorized_resampled_array, new_additional_axes)
+
+
+"""
+Convenience function for normally distributed error propagation through arbitrary functions via Monte Carlo.
+
+Given a function fun of scalar arguments params with independent, normally distributed errors of standard deviation 
+param_sigmas, calculate the variance of the function value.
+
+Parameters:
+fun: The function whose output is to be evaluated. Must have signature f(*params) = a. Whether a is scalar or a 1D 
+for scalar values of the parameters will influence the return type.
+
+params: The center values of the parameters being used to evaluate the function. 
+
+param_sigmas: The sigma values for the (assumed normally distributed) errors on the parameters
+
+vectorized: Whether the function supports vector input; if so, calculations will be done in vectorized fashion for greater speed. 
+    Note: If vectorized is true and a is a 1D vector for scalar parameter values, then it is assumed that the index associated with 
+    a comes first in the array returned by the function.  
+
+"""
+def monte_carlo_error_propagation(fun, params, param_sigmas, vectorized = False, monte_carlo_samples = 1000):
+    randomized_params_array = np.zeros((len(params), monte_carlo_samples))
+    for i, param, param_sigma in zip(range(len(params)), params, param_sigmas):
+        monte_carlo_param_values = np.random.normal(loc = param, scale = param_sigma, size = monte_carlo_samples)
+        randomized_params_array[i] = monte_carlo_param_values
+    if(not vectorized):
+        function_values = []
+        for j in range(monte_carlo_samples):
+            function_values.append(fun(*randomized_params_array[:, j]))
+        #Now, if present, the index of a comes first, followed by the monte carlo index
+        function_values = np.transpose(np.array(function_values))
+    else:
+        function_values = fun(*randomized_params_array)
+    function_value_averages = np.average(function_values, axis = -1, keepdims = True) 
+    function_value_deviations = function_values - function_value_averages 
+    function_covariance_matrix = np.matmul(function_value_deviations, np.transpose(function_value_deviations)) / np.size(function_values, axis = -1)
+    return np.squeeze(function_covariance_matrix)
