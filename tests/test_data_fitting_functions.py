@@ -96,7 +96,7 @@ def test_fit_one_dimensional_cosine():
     NOISE_AMP = 0.1
     sequential_x = np.linspace(0, X_ENDPOINT, NUM_SAMPS) 
     noiseless_sequential_y = data_fitting_functions.one_dimensional_cosine(sequential_x, SAMPLE_FREQ, SAMPLE_AMP, SAMPLE_PHASE, SAMPLE_OFFSET)
-    noisy_sequential_y = noiseless_sequential_y + np.random.normal(loc = 0.0, scale = NOISE_AMP, size = len(noiseless_sequential_y))
+    noisy_sequential_y = np.load(os.path.join(TEST_DATA_DIRECTORY_PATH, "Sample_Cosine_Data.npy"))
     fit_results_sequential = data_fitting_functions.fit_one_dimensional_cosine(sequential_x, noisy_sequential_y)
     popt_s, pcov_s = fit_results_sequential 
     freq_s, amp_s, phase_s, offset_s = popt_s
@@ -210,7 +210,7 @@ def test_fit_rf_spect_detuning_scan():
     SAMPLE_TAU = 0.2
     sample_frequencies = np.linspace(0, 50, 100)
     sample_transfers = data_fitting_functions.rf_spect_detuning_scan(sample_frequencies, SAMPLE_TAU, SAMPLE_CENTER, SAMPLE_RABI)
-    sample_noisy_transfers = sample_transfers + np.random.normal(loc = 0.0, scale = 0.005, size = len(sample_transfers))
+    sample_noisy_transfers = np.load(os.path.join(TEST_DATA_DIRECTORY_PATH, "Sample_RF_Transfers.npy"))
     fit_results = data_fitting_functions.fit_rf_spect_detuning_scan(sample_frequencies, sample_noisy_transfers, SAMPLE_TAU)
     popt, pcov = fit_results 
     center, rabi_freq = popt
