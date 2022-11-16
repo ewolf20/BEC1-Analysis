@@ -9,11 +9,11 @@ from scipy.signal import argrelextrema
 from .science_functions import two_level_system_population_rabi
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
-                                    filter_outliers = False, report_inliers = False):
+                                    filter_outliers = False, report_inliers = False, monte_carlo_cov = False, monte_carlo_samples = 100):
     #Cast to guarantee we can use array syntax
     frequencies = np.array(frequencies) 
     counts = np.array(counts)
-    if(errors):
+    if(not errors is None):
         errors = np.array(errors)
     #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
     INITIAL_GAMMA_GUESS = 5.0
@@ -46,15 +46,17 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         popt, pcov = results
         inlier_indices = _filter_1d_outliers(frequencies, counts, imaging_resonance_lorentzian, 
                                                             popt)
-        outlier_filtered_frequencies = frequencies[inlier_indices] 
-        outlier_filtered_counts = counts[inlier_indices] 
+        frequencies = frequencies[inlier_indices] 
+        counts = counts[inlier_indices] 
         if(errors):
             errors = errors[inlier_indices]
-        refitted_results = curve_fit(imaging_resonance_lorentzian, outlier_filtered_frequencies, outlier_filtered_counts, p0 = popt, sigma = errors)
-        if(report_inliers):
-            return (refitted_results, inlier_indices)
-        else:
-            return refitted_results
+        results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = popt, sigma = errors)
+    if(monte_carlo_cov):
+        popt, _ = results 
+        pcov = _monte_carlo_covariance_helper(imaging_resonance_lorentzian, frequencies, counts, errors, popt, num_samples = monte_carlo_samples)
+        results = (popt, pcov) 
+    if(report_inliers):
+        return (results, inlier_indices) 
     else:
         return results
 
@@ -166,15 +168,6 @@ def _cosine_guess_helper(x_values, data):
     guessed_offset = sum(data) / len(data)
     centered_data = data - guessed_offset
     guessed_frequency, guessed_amp, guessed_phase = get_fft_peak(x_values_delta, centered_data, order = None)
-    centered_data_fft = np.fft.fft(centered_data)
-    fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_values_delta
-    positive_fft_cutoff = int(np.floor(data_length / 2)) 
-    positive_fft_values = centered_data_fft[1:positive_fft_cutoff]
-    positive_fft_frequencies = fft_real_frequencies[1:positive_fft_cutoff] 
-    fft_peak_position = np.argmax(np.abs(positive_fft_values)) 
-    guessed_frequency = positive_fft_frequencies[fft_peak_position] 
-    guessed_phase = np.angle(positive_fft_values[fft_peak_position])
-    guessed_amp = np.abs(positive_fft_values[fft_peak_position]) * 2.0 / data_length
     return (guessed_frequency, guessed_amp, guessed_phase, guessed_offset)
 
 """
@@ -189,21 +182,31 @@ Y_data: The data to be transformed.
 
 order: The order of the peak to return. If None, the largest non-zero order is returned.
 
+Axis: Specifies the axis along which to (1D) Fourier transform for greater than 1D data. 
+
 Remark: """
-def get_fft_peak(x_delta, y_data, order = None):
-    data_length = len(y_data)
-    centered_data_fft = np.fft.fft(y_data) 
+#TODO: Make this work for vectorized input!!!
+def get_fft_peak(x_delta, y_data, order = None, axis = -1):
+    #Put the axis to fft on at the end
+    original_axis_position = axis 
+    new_axis_position = -1
+    moved_axis_ydata = np.moveaxis(y_data, original_axis_position, new_axis_position)
+    data_length = moved_axis_ydata.shape[new_axis_position]
+    centered_data_fft = np.fft.fft(moved_axis_ydata, axis = new_axis_position)
     fft_real_frequencies = np.fft.fftfreq(data_length) * 1.0 / x_delta 
     positive_fft_cutoff = int(np.floor(data_length / 2))
-    nonnegative_fft_values = centered_data_fft[0:positive_fft_cutoff]
-    nonnegative_fft_frequencies = fft_real_frequencies[0:positive_fft_cutoff]
+    positive_fft_values = centered_data_fft[..., 1:positive_fft_cutoff]
+    positive_fft_frequencies = fft_real_frequencies[1:positive_fft_cutoff]
     if(order is None):
-        fft_peak_position = np.argmax(np.abs(nonnegative_fft_values[1:])) + 1
+        fft_peak_indices = np.argmax(np.abs(positive_fft_values), axis = new_axis_position, keepdims = True)
+        fft_peak_values = np.squeeze(np.take_along_axis(positive_fft_values, fft_peak_indices, axis = new_axis_position), axis = new_axis_position)
+        fft_frequency = positive_fft_frequencies[np.squeeze(fft_peak_indices, axis = new_axis_position)]
     else:
-        fft_peak_position = order
-    fft_frequency = nonnegative_fft_frequencies[fft_peak_position] 
-    fft_phase = np.angle(nonnegative_fft_values[fft_peak_position])
-    fft_amp = np.abs(nonnegative_fft_values[fft_peak_position]) * 2.0 / data_length
+        fft_peak_index = order - 1
+        fft_peak_values = positive_fft_values[..., fft_peak_index]
+        fft_frequency = positive_fft_frequencies[fft_peak_index] * np.ones(fft_peak_values.shape)
+    fft_phase = np.angle(fft_peak_values)
+    fft_amp = np.abs(fft_peak_values) * 2.0 / data_length
     return (fft_frequency, fft_amp, fft_phase)
 
 
@@ -402,6 +405,35 @@ def _studentized_residual_test(t, degrees_of_freedom, confidence):
     #Scipy betainc is the _regularized_ incomplete beta function
     probability_of_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
     return probability_of_occurrence > confidence
+
+def _dynamic_np_slice(m, axis, start = None, stop = None):
+    if start is None:
+        start = 0 
+    if stop is None:
+        stop = m.shape[axis] 
+    slc = [slice(None)] * len(m.shape)
+    slc[axis] = slice(start, stop) 
+    slc = tuple(slc) 
+    return m[slc]
+
+"""
+Helper function for using a Monte Carlo analysis to get the covariance matrix of 
+the best-fit parameters for a function fun to a dataset x_data, y_data."""
+def _monte_carlo_covariance_helper(fun, x_data, y_data, y_errors, popt, num_samples = 100):
+    if(y_errors is None):
+        raise RuntimeError("Monte Carlo covariance analysis not supported for non-specified errors.")
+    popt_list = []
+    for i in range(num_samples):
+        simulated_y_data = y_data + np.random.normal(loc = 0.0, scale = y_errors, size = y_errors.shape)
+        results = curve_fit(fun, x_data, simulated_y_data, p0 = popt)
+        simulated_popt, _ = results 
+        popt_list.append(simulated_popt) 
+    #Make sure the monte carlo sample axis is -1 and the parameter axis is 0
+    popt_array = np.transpose(np.array(popt_list))
+    popt_average = np.average(popt_array, axis = -1, keepdims = True) 
+    popt_deviations_array = popt_array - popt_average
+    pcov = np.matmul(popt_deviations_array, np.transpose(popt_deviations_array)) / np.size(popt_deviations_array, axis = -1)
+    return pcov
     
 
 """

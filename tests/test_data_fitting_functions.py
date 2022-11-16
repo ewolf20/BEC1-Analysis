@@ -5,6 +5,8 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np 
 
+from scipy.optimize import curve_fit
+
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
@@ -96,7 +98,7 @@ def test_fit_one_dimensional_cosine():
     NOISE_AMP = 0.1
     sequential_x = np.linspace(0, X_ENDPOINT, NUM_SAMPS) 
     noiseless_sequential_y = data_fitting_functions.one_dimensional_cosine(sequential_x, SAMPLE_FREQ, SAMPLE_AMP, SAMPLE_PHASE, SAMPLE_OFFSET)
-    noisy_sequential_y = noiseless_sequential_y + np.random.normal(loc = 0.0, scale = NOISE_AMP, size = len(noiseless_sequential_y))
+    noisy_sequential_y = np.load(os.path.join(TEST_DATA_DIRECTORY_PATH, "Sample_Cosine_Data.npy"))
     fit_results_sequential = data_fitting_functions.fit_one_dimensional_cosine(sequential_x, noisy_sequential_y)
     popt_s, pcov_s = fit_results_sequential 
     freq_s, amp_s, phase_s, offset_s = popt_s
@@ -126,6 +128,50 @@ def test_fit_one_dimensional_cosine():
     assert((amp_n - SAMPLE_AMP) / (SAMPLE_AMP) < 5e-2)
     assert((phase_n - SAMPLE_PHASE) / (SAMPLE_PHASE) < 5e-2)
     assert((offset_n - SAMPLE_OFFSET) / (SAMPLE_OFFSET) < 5e-2)
+
+
+def test_get_fft_peak():
+    NUM_ANGLE_POINTS = 100
+    X_DELTA = 1.0 / NUM_ANGLE_POINTS
+    COSINE_FREQUENCY = 16
+    COSINE_PHASE = 1.0
+    COSINE_AMPLITUDE = 2.3
+    angles = np.linspace(0, 1, NUM_ANGLE_POINTS, endpoint = False)
+    cosine_with_phase = COSINE_AMPLITUDE * np.cos(2 * np.pi * COSINE_FREQUENCY * angles + COSINE_PHASE)
+    peak_freq, peak_amp, peak_phase = data_fitting_functions.get_fft_peak(X_DELTA, cosine_with_phase)
+    assert np.isclose(COSINE_FREQUENCY, peak_freq)
+    assert np.isclose(COSINE_AMPLITUDE, peak_amp)
+    assert np.isclose(COSINE_PHASE, peak_phase)
+    order_freq, order_amp, order_phase = data_fitting_functions.get_fft_peak(X_DELTA, cosine_with_phase, order = 16)
+    assert np.isclose(COSINE_FREQUENCY, order_freq)
+    assert np.isclose(COSINE_AMPLITUDE, order_amp)
+    assert np.isclose(COSINE_PHASE, order_phase)
+    NUM_ONES_INDICES = 10
+    cosine_with_phase_array = np.matmul(cosine_with_phase.reshape((NUM_ANGLE_POINTS, 1)), np.ones((1, NUM_ONES_INDICES)))
+    cosine_with_phase_array_transposed = np.transpose(cosine_with_phase_array) 
+    peak_array_freq, peak_array_amp, peak_array_phase = data_fitting_functions.get_fft_peak(X_DELTA, cosine_with_phase_array, axis = 0)
+    assert len(peak_array_freq) == NUM_ONES_INDICES
+    assert len(peak_array_amp) == NUM_ONES_INDICES
+    assert len(peak_array_phase) == NUM_ONES_INDICES
+    assert np.allclose(peak_array_freq, COSINE_FREQUENCY)
+    assert np.allclose(peak_array_amp, COSINE_AMPLITUDE)
+    assert np.allclose(peak_array_phase, COSINE_PHASE)
+    peak_array_transpose_freq, peak_array_transpose_amp, peak_array_transpose_phase = data_fitting_functions.get_fft_peak(X_DELTA,
+                                                                                     cosine_with_phase_array_transposed, axis = 1)
+    assert len(peak_array_transpose_freq) == NUM_ONES_INDICES
+    assert len(peak_array_transpose_amp) == NUM_ONES_INDICES
+    assert len(peak_array_transpose_phase) == NUM_ONES_INDICES
+    assert np.allclose(peak_array_transpose_freq, COSINE_FREQUENCY)
+    assert np.allclose(peak_array_transpose_amp, COSINE_AMPLITUDE)
+    assert np.allclose(peak_array_transpose_phase, COSINE_PHASE)
+    order_array_freq, order_array_amp, order_array_phase = data_fitting_functions.get_fft_peak(X_DELTA, cosine_with_phase_array, axis = 0, order = 16)
+    assert len(order_array_freq) == NUM_ONES_INDICES
+    assert len(order_array_amp) == NUM_ONES_INDICES
+    assert len(order_array_phase) == NUM_ONES_INDICES
+    assert np.allclose(order_array_freq, COSINE_FREQUENCY)
+    assert np.allclose(order_array_amp, COSINE_AMPLITUDE)
+    assert np.allclose(order_array_phase, COSINE_PHASE)
+
 
 
 def test_sort_and_deduplicate_xy_data():
@@ -159,14 +205,13 @@ def test_filter_1d_outliers():
     assert len(inlier_indices) == (len(sample_frequencies) - 1)
 
 
-
 def test_fit_rf_spect_detuning_scan():
     SAMPLE_CENTER = 22
     SAMPLE_RABI = 1.47
     SAMPLE_TAU = 0.2
     sample_frequencies = np.linspace(0, 50, 100)
     sample_transfers = data_fitting_functions.rf_spect_detuning_scan(sample_frequencies, SAMPLE_TAU, SAMPLE_CENTER, SAMPLE_RABI)
-    sample_noisy_transfers = sample_transfers + np.random.normal(loc = 0.0, scale = 0.005, size = len(sample_transfers))
+    sample_noisy_transfers = np.load(os.path.join(TEST_DATA_DIRECTORY_PATH, "Sample_RF_Transfers.npy"))
     fit_results = data_fitting_functions.fit_rf_spect_detuning_scan(sample_frequencies, sample_noisy_transfers, SAMPLE_TAU)
     popt, pcov = fit_results 
     center, rabi_freq = popt
@@ -199,3 +244,23 @@ def test_hybrid_trap_center_finder():
     x_center_guess, y_center_guess = center_guess
     assert (np.abs(x_center_guess - EXPECTED_X_CENTER) < 5) 
     assert (np.abs(y_center_guess - EXPECTED_Y_CENTER) < 5)
+
+
+def test_monte_carlo_covariance_helper():
+    NUM_SAMPLES = 10000
+    DATA_LENGTH = 100
+    SAMPLE_SLOPE = 2.3 
+    SAMPLE_INTERCEPT = -3.1
+    EXPECTED_COVARIANCE_MATRIX = np.array([[ 0.11762376, -0.05881188],
+                                            [-0.05881188,  0.03940594]])
+    def my_fitting_function(x, a, b):
+        return a*x + b 
+    x_values = np.linspace(0, 1, 100) 
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    y_values = SAMPLE_SLOPE * x_values + SAMPLE_INTERCEPT + normal_randoms[:len(x_values)]
+    errors = np.ones(len(x_values)) 
+    results = curve_fit(my_fitting_function, x_values, y_values, sigma = errors, absolute_sigma = True)
+    popt, pcov = results
+    pcov_monte = data_fitting_functions._monte_carlo_covariance_helper(my_fitting_function, x_values, y_values, errors, popt, 
+                                                                num_samples = NUM_SAMPLES)
+    assert np.all(np.abs((pcov_monte - pcov) / pcov) < 2e-1)
