@@ -2,6 +2,7 @@ from collections import namedtuple
 from dataclasses import make_dataclass 
 
 import numpy as np 
+from scipy.special import betainc
 
 
 #Redefining classes used in scipy.stat.bootstrap in case they move in future releases
@@ -186,3 +187,26 @@ def monte_carlo_error_propagation(fun, params, param_sigmas, vectorized = False,
     function_value_deviations = function_values - function_value_averages 
     function_covariance_matrix = np.matmul(function_value_deviations, np.transpose(function_value_deviations)) / np.size(function_values, axis = -1)
     return np.squeeze(function_covariance_matrix)
+
+
+
+"""
+Given a data sample data, returns a boolean representing whether the mean of the data is greater than mean_value with
+confidence specified by confidence_level"""
+def mean_location_test(data, mean_test_value, confidence_level = 0.95):
+    sample_mean = np.average(data) 
+    #Presumably confidence_level will always be greater than 50%
+    if(sample_mean < mean_test_value):
+        return False
+    deviations = data - sample_mean 
+    student_sigma = np.sqrt(np.sum(np.square(deviations)) / (len(deviations) - 1))
+    studentized_mean_difference = (sample_mean - mean_test_value) / (student_sigma / np.sqrt(len(data)))
+    t = studentized_mean_difference
+    print(t)
+    #Degrees of freedom
+    nu = len(data) - 1
+    x = nu / (np.square(t) + nu)
+    alpha = 1.0 - confidence_level 
+    #Fraction of the t distribution lying at above the studentized mean difference
+    probability_of_t_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
+    return probability_of_t_occurrence < alpha
