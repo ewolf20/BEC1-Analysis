@@ -5,6 +5,8 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np 
 
+from scipy.optimize import curve_fit
+
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
@@ -203,7 +205,6 @@ def test_filter_1d_outliers():
     assert len(inlier_indices) == (len(sample_frequencies) - 1)
 
 
-
 def test_fit_rf_spect_detuning_scan():
     SAMPLE_CENTER = 22
     SAMPLE_RABI = 1.47
@@ -243,3 +244,23 @@ def test_hybrid_trap_center_finder():
     x_center_guess, y_center_guess = center_guess
     assert (np.abs(x_center_guess - EXPECTED_X_CENTER) < 5) 
     assert (np.abs(y_center_guess - EXPECTED_Y_CENTER) < 5)
+
+
+def test_monte_carlo_covariance_helper():
+    NUM_SAMPLES = 10000
+    DATA_LENGTH = 100
+    SAMPLE_SLOPE = 2.3 
+    SAMPLE_INTERCEPT = -3.1
+    EXPECTED_COVARIANCE_MATRIX = np.array([[ 0.11762376, -0.05881188],
+                                            [-0.05881188,  0.03940594]])
+    def my_fitting_function(x, a, b):
+        return a*x + b 
+    x_values = np.linspace(0, 1, 100) 
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    y_values = SAMPLE_SLOPE * x_values + SAMPLE_INTERCEPT + normal_randoms[:len(x_values)]
+    errors = np.ones(len(x_values)) 
+    results = curve_fit(my_fitting_function, x_values, y_values, sigma = errors, absolute_sigma = True)
+    popt, pcov = results
+    pcov_monte = data_fitting_functions._monte_carlo_covariance_helper(my_fitting_function, x_values, y_values, errors, popt, 
+                                                                num_samples = NUM_SAMPLES)
+    assert np.all(np.abs((pcov_monte - pcov) / pcov) < 2e-1)

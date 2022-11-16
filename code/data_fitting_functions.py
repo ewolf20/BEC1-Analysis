@@ -9,11 +9,11 @@ from scipy.signal import argrelextrema
 from .science_functions import two_level_system_population_rabi
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
-                                    filter_outliers = False, report_inliers = False):
+                                    filter_outliers = False, report_inliers = False, monte_carlo_cov = False, monte_carlo_samples = 100):
     #Cast to guarantee we can use array syntax
     frequencies = np.array(frequencies) 
     counts = np.array(counts)
-    if(errors):
+    if(not errors is None):
         errors = np.array(errors)
     #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
     INITIAL_GAMMA_GUESS = 5.0
@@ -46,15 +46,17 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         popt, pcov = results
         inlier_indices = _filter_1d_outliers(frequencies, counts, imaging_resonance_lorentzian, 
                                                             popt)
-        outlier_filtered_frequencies = frequencies[inlier_indices] 
-        outlier_filtered_counts = counts[inlier_indices] 
+        frequencies = frequencies[inlier_indices] 
+        counts = counts[inlier_indices] 
         if(errors):
             errors = errors[inlier_indices]
-        refitted_results = curve_fit(imaging_resonance_lorentzian, outlier_filtered_frequencies, outlier_filtered_counts, p0 = popt, sigma = errors)
-        if(report_inliers):
-            return (refitted_results, inlier_indices)
-        else:
-            return refitted_results
+        results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = popt, sigma = errors)
+    if(monte_carlo_cov):
+        popt, _ = results 
+        pcov = _monte_carlo_covariance_helper(imaging_resonance_lorentzian, frequencies, counts, errors, popt, num_samples = monte_carlo_samples)
+        results = (popt, pcov) 
+    if(report_inliers):
+        return (results, inlier_indices) 
     else:
         return results
 
@@ -413,6 +415,25 @@ def _dynamic_np_slice(m, axis, start = None, stop = None):
     slc[axis] = slice(start, stop) 
     slc = tuple(slc) 
     return m[slc]
+
+"""
+Helper function for using a Monte Carlo analysis to get the covariance matrix of 
+the best-fit parameters for a function fun to a dataset x_data, y_data."""
+def _monte_carlo_covariance_helper(fun, x_data, y_data, y_errors, popt, num_samples = 100):
+    if(y_errors is None):
+        raise RuntimeError("Monte Carlo covariance analysis not supported for non-specified errors.")
+    popt_list = []
+    for i in range(num_samples):
+        simulated_y_data = y_data + np.random.normal(loc = 0.0, scale = y_errors, size = y_errors.shape)
+        results = curve_fit(fun, x_data, simulated_y_data, p0 = popt)
+        simulated_popt, _ = results 
+        popt_list.append(simulated_popt) 
+    #Make sure the monte carlo sample axis is -1 and the parameter axis is 0
+    popt_array = np.transpose(np.array(popt_list))
+    popt_average = np.average(popt_array, axis = -1, keepdims = True) 
+    popt_deviations_array = popt_array - popt_average
+    pcov = np.matmul(popt_deviations_array, np.transpose(popt_deviations_array)) / np.size(popt_deviations_array, axis = -1)
+    return pcov
     
 
 """
