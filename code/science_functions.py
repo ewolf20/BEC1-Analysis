@@ -35,6 +35,17 @@ def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_t
     total_counts = trapezoid(trap_cross_section_um * three_d_density_trap_profile_um, x = harmonic_trap_positions_um)
     return total_energy / total_counts
 
+"""
+Helper function for autocutting the hybrid trap data to avoid wings where it is zero."""
+def hybrid_trap_autocut(three_d_density_trap_profile_um):
+    AUTOCUT_WINDOW = 100
+    AUTOCUT_SAVGOL_ORDER = 2
+    data_length = len(three_d_density_trap_profile_um)
+    middle_index = int(np.floor(data_length / 2))
+    #Statistics-based autocut
+    
+
+
 #By convention, uses kHz as the base unit.
 def two_level_system_population_rabi(t, omega_r, detuning):
     generalized_rabi = np.sqrt(np.square(omega_r) + np.square(detuning))

@@ -192,21 +192,21 @@ def monte_carlo_error_propagation(fun, params, param_sigmas, vectorized = False,
 
 """
 Given a data sample data, returns a boolean representing whether the mean of the data is greater than mean_value with
-confidence specified by confidence_level"""
-def mean_location_test(data, mean_test_value, confidence_level = 0.95):
-    sample_mean = np.average(data) 
-    #Presumably confidence_level will always be greater than 50%
-    if(sample_mean < mean_test_value):
-        return False
+confidence specified by confidence_level
+
+Axis is provided to support vectorized input."""
+def mean_location_test(data, mean_test_value, confidence_level = 0.95, axis = -1):
+    number_samples = np.size(data, axis = axis)
+    sample_mean = np.average(data, axis = axis, keepdims = True) 
     deviations = data - sample_mean 
-    student_sigma = np.sqrt(np.sum(np.square(deviations)) / (len(deviations) - 1))
-    studentized_mean_difference = (sample_mean - mean_test_value) / (student_sigma / np.sqrt(len(data)))
+    sample_mean = np.squeeze(sample_mean)
+    student_sigma = np.sqrt(np.sum(np.square(deviations), axis = axis) / (number_samples - 1))
+    studentized_mean_difference = (sample_mean - mean_test_value) / (student_sigma / np.sqrt(number_samples))
     t = studentized_mean_difference
-    print(t)
     #Degrees of freedom
-    nu = len(data) - 1
+    nu = number_samples - 1
     x = nu / (np.square(t) + nu)
-    alpha = 1.0 - confidence_level 
+    alpha = 1.0 - confidence_level
     #Fraction of the t distribution lying at above the studentized mean difference
     probability_of_t_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
     return probability_of_t_occurrence < alpha
