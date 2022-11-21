@@ -364,14 +364,19 @@ def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axi
         center = data_fitting_functions.hybrid_trap_center_finder(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix)
     if(rotate_data):
         image_to_use, rotated_center = _rotate_and_crop_hybrid_image(hybrid_trap_density_image, center, axicon_tilt_deg)    
-        rotated_x_center, rotated_y_center = rotated_center 
-        hybrid_trap_radius_um = um_per_pixel * axicon_diameter_pix / 2.0 
-        hybrid_trap_cross_sectional_area_um = np.pi * np.square(hybrid_trap_radius_um) 
+        rotated_x_center, rotated_y_center = rotated_center
+        hybrid_trap_radius_um = um_per_pixel * axicon_diameter_pix / 2.0
+        hybrid_trap_cross_sectional_area_um = np.pi * np.square(hybrid_trap_radius_um)
         radial_axis_index = 1
         hybrid_trap_radial_integrated_density = um_per_pixel * np.sum(image_to_use, axis = radial_axis_index)
         hybrid_trap_3D_density_harmonic_axis = hybrid_trap_radial_integrated_density / hybrid_trap_cross_sectional_area_um 
         harmonic_axis_positions_um = um_per_pixel * (np.arange(len(image_to_use)) - rotated_y_center)
-        return (harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis) 
+        #Fit lorentzian to the 1D-integrated data to improve center-finding fidelity
+        results = data_fitting_functions.fit_imaging_resonance_lorentzian(harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
+        popt, pcov = results
+        amp, center, gamma, offset = popt
+        refitted_harmonic_axis_positions_um = harmonic_axis_positions_um - center
+        return (refitted_harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
     else:
         raise NotImplementedError("Hybrid analysis without rotating data not yet implemented")
 

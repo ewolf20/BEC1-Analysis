@@ -11,7 +11,7 @@ sys.path.insert(0, path_to_analysis)
 
 RESOURCES_DIRECTORY_PATH = "./resources"
 
-from BEC1_Analysis.code import science_functions
+from BEC1_Analysis.code import science_functions, loading_functions
 
 def test_two_level_system_population_rabi():
     TEST_DETUNING_A = 1
@@ -66,6 +66,17 @@ def test_get_hybrid_trap_average_energy():
     average_particle_energy = science_functions.get_hybrid_trap_average_energy(harmonic_positions, densities, trap_cross_section_um, SAMPLE_TRAP_FREQ)
     assert (np.abs((average_particle_energy - EXPECTED_AVERAGE_ENERGY) / EXPECTED_AVERAGE_ENERGY) < 1e-4)
 
+
+def test_get_hybrid_trap_compressibility():
+    SAMPLE_TRAP_FREQ = 23.6
+    sample_hybrid_trap_cut_data = np.load("resources/Sample_Box_Exp_Cut.npy")
+    harmonic_positions, densities = sample_hybrid_trap_cut_data
+    harmonic_energies = science_functions.get_li_energy_hz_in_1D_trap(harmonic_positions * 1e-6, SAMPLE_TRAP_FREQ)
+    positions, compressibilities = science_functions.get_hybrid_trap_compressibilities(harmonic_positions, densities, SAMPLE_TRAP_FREQ)
+    plt.plot(positions, compressibilities) 
+    plt.show()
+    
+
 def test_get_li6_br_energy_MHz():
     sample_field_G = 690
     EXPECTED_STATE_1_ENERGY = -1049.0933
@@ -81,5 +92,4 @@ def test_get_field_from_li6_resonance():
     SAMPLE_INDICES = (1, 2)
     extracted_field = science_functions.get_field_from_li6_resonance(SAMPLE_RESONANCE_FREQ, SAMPLE_INDICES)
     assert(np.abs((extracted_field - EXPECTED_B_FIELD) / EXPECTED_B_FIELD) < 1e-5)
-    print(extracted_field)
     
