@@ -209,4 +209,4 @@ def mean_location_test(data, mean_test_value, confidence_level = 0.95, axis = -1
     alpha = 1.0 - confidence_level
     #Fraction of the t distribution lying at above the studentized mean difference
     probability_of_t_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
-    return probability_of_t_occurrence < alpha
+    return np.where(sample_mean < mean_test_value, False, probability_of_t_occurrence < alpha)

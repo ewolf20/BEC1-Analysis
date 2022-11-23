@@ -1,6 +1,9 @@
 import numpy as np 
 from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
+from scipy.signal import savgol_filter
+
+from . import statistics_functions
 
 #Taken from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
 LI_6_MASS_KG = 9.98834e-27
@@ -37,12 +40,43 @@ def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_t
 
 """
 Helper function for autocutting the hybrid trap data to avoid wings where it is zero."""
-def hybrid_trap_autocut(three_d_density_trap_profile_um):
+def hybrid_trap_autocut(three_d_density_trap_profile_um, mode = "statistics"):
     AUTOCUT_WINDOW = 100
     AUTOCUT_SAVGOL_ORDER = 2
     data_length = len(three_d_density_trap_profile_um)
     middle_index = int(np.floor(data_length / 2))
-    #Statistics-based autocut
+    if(mode == "statistics"):
+        #Statistics-based autocut
+        window_range = np.arange(AUTOCUT_WINDOW).reshape(1, AUTOCUT_WINDOW)
+        data_range = np.arange(data_length).reshape(data_length, 1) 
+        #Hack that takes advantage of numpy broadcasting; final shape is (data_length, AUTOCUT_WINDOW)
+        window_indices = window_range + data_range
+        window_indices = np.minimum(window_indices, data_length - 1) 
+        #Implement edge strategy analogous to "mirror" for savgol filter
+        window_indices = np.where(window_indices < 0, np.abs(window_indices), window_indices)
+        window_indices = np.where(window_indices > data_length - 1, 2 * (data_length - 1) - window_indices, window_indices)
+        data_window_array = three_d_density_trap_profile_um[window_indices]
+        data_window_is_nonzero_array = statistics_functions.mean_location_test(data_window_array, 0.0, axis = -1)
+    elif(mode == "savgol"):
+        filtered_data = savgol_filter(three_d_density_trap_profile_um, AUTOCUT_WINDOW, AUTOCUT_SAVGOL_ORDER)
+        data_window_is_nonzero_array = filtered_data > 0.0
+    else:
+        raise RuntimeError("Unsupported mode for hybrid trap autocut")
+    data_window_is_nonzero_first_half = data_window_is_nonzero_array[:middle_index] 
+    data_window_is_nonzero_second_half = data_window_is_nonzero_array[middle_index:] 
+    first_half_is_zero_indices, = (~data_window_is_nonzero_first_half).nonzero()
+    if(len(first_half_is_zero_indices) > 0):
+        last_first_half_zero_index = first_half_is_zero_indices[-1]
+    else:
+        last_first_half_zero_index = -1
+    second_half_is_zero_indices = (~data_window_is_nonzero_second_half).nonzero()
+    if(len(second_half_is_zero_indices) > 0):
+        first_second_half_zero_index = second_half_is_zero_indices[0] 
+    else:
+        first_second_half_zero_index = data_length
+    start_index = last_first_half_zero_index + 1 
+    stop_index_exclusive = first_second_half_zero_index
+    return (start_index, stop_index_exclusive)
     
 
 

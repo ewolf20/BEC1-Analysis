@@ -68,10 +68,14 @@ def test_monte_carlo_error_propagation():
 
 def test_mean_location_test():
     random_normals = np.load("resources/Sample_Normal_Randoms.npy")
+    random_normals_length = len(random_normals)
     #Random normals contains 100 normal deviates of standard deviation 1
     assert not statistics_functions.mean_location_test(random_normals, 0)
     assert statistics_functions.mean_location_test(random_normals + 1.0, 0) 
     assert not statistics_functions.mean_location_test(random_normals + 0.3, 0.3) 
     assert statistics_functions.mean_location_test(random_normals + 0.6, 0.3) 
     assert statistics_functions.mean_location_test(random_normals, -0.3)
-    
+    #Test vectorization
+    ARRAY_DIMENSION_LENGTH = 10
+    random_normals_array = np.matmul(random_normals.reshape(random_normals_length, 1), np.linspace(0, 1, ARRAY_DIMENSION_LENGTH).reshape(1, ARRAY_DIMENSION_LENGTH))
+    assert np.all(statistics_functions.mean_location_test(random_normals_array + 1.0, 0, axis = 0)) 
