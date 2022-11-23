@@ -20,7 +20,7 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
     data_average = sum(counts) / len(counts)
     frequency_average = sum(frequencies) / len(frequencies)
     frequency_range = max(frequencies) - min(frequencies) 
-    center_guess = frequency_average
+    center_guess = frequencies[np.argmax(np.abs(counts))]
     gamma_guess = INITIAL_GAMMA_GUESS
     offset_guess = data_average
     if(max(counts) - data_average > data_average - min(counts)):
