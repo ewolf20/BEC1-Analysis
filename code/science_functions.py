@@ -10,6 +10,16 @@ LI_6_MASS_KG = 9.98834e-27
 #Taken from https://physics.nist.gov/cgi-bin/cuu/Value?hbar
 H_BAR_MKS = 1.054572e-34
 
+#Data from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
+LI_HYPERFINE_CONSTANT_MHZ = 152.1368
+LI_G_J = 2.0023010
+LI_G_I = 0.0004476540
+LI_I = 1
+LI_F_PLUS = LI_I + 0.5
+
+#Data from https://physics.nist.gov/cgi-bin/cuu/Value?mubshhz
+BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
+
 
 def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
     box_volume_m = np.pi * np.square(box_radius_um) * box_length_um * 1e-18
@@ -41,17 +51,18 @@ def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_t
 """
 Helper function for autocutting the hybrid trap data to avoid wings where it is zero."""
 def hybrid_trap_autocut(three_d_density_trap_profile_um, mode = "statistics"):
-    AUTOCUT_WINDOW = 100
+    AUTOCUT_WINDOW = 101
     AUTOCUT_SAVGOL_ORDER = 2
     data_length = len(three_d_density_trap_profile_um)
     middle_index = int(np.floor(data_length / 2))
     if(mode == "statistics"):
         #Statistics-based autocut
-        window_range = np.arange(AUTOCUT_WINDOW).reshape(1, AUTOCUT_WINDOW)
+        window_start = (-AUTOCUT_WINDOW + 1) // 2
+        window_end = (AUTOCUT_WINDOW + 1) // 2
+        window_range = np.arange(window_start, window_end).reshape(1, AUTOCUT_WINDOW)
         data_range = np.arange(data_length).reshape(data_length, 1) 
         #Hack that takes advantage of numpy broadcasting; final shape is (data_length, AUTOCUT_WINDOW)
         window_indices = window_range + data_range
-        window_indices = np.minimum(window_indices, data_length - 1) 
         #Implement edge strategy analogous to "mirror" for savgol filter
         window_indices = np.where(window_indices < 0, np.abs(window_indices), window_indices)
         window_indices = np.where(window_indices > data_length - 1, 2 * (data_length - 1) - window_indices, window_indices)
@@ -69,15 +80,14 @@ def hybrid_trap_autocut(three_d_density_trap_profile_um, mode = "statistics"):
         last_first_half_zero_index = first_half_is_zero_indices[-1]
     else:
         last_first_half_zero_index = -1
-    second_half_is_zero_indices = (~data_window_is_nonzero_second_half).nonzero()
+    second_half_is_zero_indices = (~data_window_is_nonzero_second_half).nonzero()[0]
     if(len(second_half_is_zero_indices) > 0):
-        first_second_half_zero_index = second_half_is_zero_indices[0] 
+        first_second_half_zero_index = second_half_is_zero_indices[0] + middle_index
     else:
         first_second_half_zero_index = data_length
     start_index = last_first_half_zero_index + 1 
     stop_index_exclusive = first_second_half_zero_index
     return (start_index, stop_index_exclusive)
-    
 
 
 #By convention, uses kHz as the base unit.
@@ -90,17 +100,6 @@ def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)
     li_energy_hz = li_energy_mks / (2 * np.pi * H_BAR_MKS)
     return li_energy_hz
-
-
-#Data from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
-LI_HYPERFINE_CONSTANT_MHZ = 152.1368
-LI_G_J = 2.0023010
-LI_G_I = 0.0004476540
-LI_I = 1
-LI_F_PLUS = LI_I + 0.5
-
-#Data from https://physics.nist.gov/cgi-bin/cuu/Value?mubshhz
-BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 
 """
 Function for getting the energy of the ground state hyperfine manifold of lithium.

@@ -66,6 +66,22 @@ def test_get_hybrid_trap_average_energy():
     average_particle_energy = science_functions.get_hybrid_trap_average_energy(harmonic_positions, densities, trap_cross_section_um, SAMPLE_TRAP_FREQ)
     assert (np.abs((average_particle_energy - EXPECTED_AVERAGE_ENERGY) / EXPECTED_AVERAGE_ENERGY) < 1e-4)
 
+
+def test_hybrid_trap_autocut():
+    EXPECTED_STAT_START = 116
+    EXPECTED_STAT_STOP = 716
+    EXPECTED_SAVGOL_START = 110 
+    EXPECTED_SAVGOL_STOP = 725
+    sample_hybrid_trap_cut_data = np.load("resources/Sample_Box_Exp_Cut.npy")
+    harmonic_positions, densities = sample_hybrid_trap_cut_data 
+    statistics_start_index, statistics_stop_index = science_functions.hybrid_trap_autocut(densities, mode = "statistics")
+    savgol_start_index, savgol_stop_index = science_functions.hybrid_trap_autocut(densities, mode = "savgol")
+    assert statistics_start_index == EXPECTED_STAT_START
+    assert statistics_stop_index == EXPECTED_STAT_STOP
+    assert savgol_start_index == EXPECTED_SAVGOL_START
+    assert savgol_stop_index == EXPECTED_SAVGOL_STOP
+
+
 def test_get_li6_br_energy_MHz():
     sample_field_G = 690
     EXPECTED_STATE_1_ENERGY = -1049.0933
