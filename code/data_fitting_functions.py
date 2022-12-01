@@ -376,8 +376,9 @@ def _sort_and_deduplicate_xy_data(x_values, y_values):
 Given a fitting function & parameter values and a set of x-y data (as np arrays)
 they purport to fit, filter outliers using Student's t-test at the specified confidence level.
 
-Returns the indices of the x-y data which are _INLIERS_"""
-def _filter_1d_outliers(x_values, y_values, fitting_func, popt, confidence = 1e-4):
+Returns the indices of the x-y data which are _INLIERS_, i.e. the complement of outliers,
+points that can be identified as having a chance of less than alpha to occur."""
+def _filter_1d_outliers(x_values, y_values, fitting_func, popt, alpha = 1e-4):
     num_params = len(popt)
     num_samples = len(y_values)
     fit_values = fitting_func(x_values, *popt)
@@ -390,19 +391,19 @@ def _filter_1d_outliers(x_values, y_values, fitting_func, popt, confidence = 1e-
         sigma_sans_current = np.sqrt(sigma_squared_sans_current)
         studentized_residual = residual / sigma_sans_current 
         studentized_residuals[i] = studentized_residual
-    is_inlier_array = _studentized_residual_test(studentized_residuals, num_samples - num_params - 1, confidence)
+    is_inlier_array = _studentized_residual_test(studentized_residuals, num_samples - num_params - 1, alpha)
     inlier_indices = np.nonzero(is_inlier_array)[0]
     return inlier_indices
 
 #Source for approach: https://en.wikipedia.org/wiki/Studentized_residual
-def _studentized_residual_test(t, degrees_of_freedom, confidence):
+def _studentized_residual_test(t, degrees_of_freedom, alpha):
     nu = degrees_of_freedom
     abs_t = np.abs(t)
     x = nu / (np.square(t) + nu)
     #Formula source: https://en.wikipedia.org/wiki/Student%27s_t-distribution
     #Scipy betainc is the _regularized_ incomplete beta function
     probability_of_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
-    return probability_of_occurrence > confidence
+    return probability_of_occurrence > alpha
 
 def _dynamic_np_slice(m, axis, start = None, stop = None):
     if start is None:

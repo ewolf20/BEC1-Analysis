@@ -8,11 +8,11 @@ path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
 
-from BEC1_Analysis.code import statistics_functions 
+from BEC1_Analysis.code import statistics_functions
 
 class NumberClass():
     def __init__(self, val):
-        self.val = val 
+        self.val = val
     
     def give_val(self):
         return self.val
@@ -65,3 +65,17 @@ def test_monte_carlo_error_propagation():
                                                     monte_carlo_samples = NUM_MONTE_CARLO_SAMPLES)
     assert(np.isclose(monte_carlo_variance, EXPECTED_VARIANCE, rtol = 1e-1))
     assert(np.isclose(monte_carlo_variance, monte_carlo_unvectorized_variance, rtol = 1e-1))
+
+def test_mean_location_test():
+    random_normals = np.load("resources/Sample_Normal_Randoms.npy")
+    random_normals_length = len(random_normals)
+    #Random normals contains 100 normal deviates of standard deviation 1
+    assert not statistics_functions.mean_location_test(random_normals, 0)
+    assert statistics_functions.mean_location_test(random_normals + 1.0, 0) 
+    assert not statistics_functions.mean_location_test(random_normals + 0.3, 0.3) 
+    assert statistics_functions.mean_location_test(random_normals + 0.6, 0.3) 
+    assert statistics_functions.mean_location_test(random_normals, -0.3)
+    #Test vectorization
+    ARRAY_DIMENSION_LENGTH = 10
+    random_normals_array = np.matmul(random_normals.reshape(random_normals_length, 1), np.linspace(0, 1, ARRAY_DIMENSION_LENGTH).reshape(1, ARRAY_DIMENSION_LENGTH))
+    assert np.all(statistics_functions.mean_location_test(random_normals_array + 1.0, 0, axis = 0)) 

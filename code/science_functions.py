@@ -4,10 +4,23 @@ from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
 
+from . import statistics_functions
+
+
 #Taken from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
 LI_6_MASS_KG = 9.98834e-27
 #Taken from https://physics.nist.gov/cgi-bin/cuu/Value?hbar
 H_BAR_MKS = 1.054572e-34
+
+#Data from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
+LI_HYPERFINE_CONSTANT_MHZ = 152.1368
+LI_G_J = 2.0023010
+LI_G_I = 0.0004476540
+LI_I = 1
+LI_F_PLUS = LI_I + 0.5
+
+#Data from https://physics.nist.gov/cgi-bin/cuu/Value?mubshhz
+BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 
 
 def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
@@ -23,7 +36,12 @@ def get_fermi_energy_hz_from_density(atom_density_m):
     return fermi_energy_hz
 
 
-def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq):
+def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
+                                autocut_mode = "statistics"):
+    if autocut:
+        start_index, stop_index = hybrid_trap_autocut(three_d_density_trap_profile_um, mode = autocut_mode)
+        harmonic_trap_positions_um = harmonic_trap_positions_um[start_index:stop_index]
+        three_d_density_trap_profile_um = three_d_density_trap_profile_um[start_index:stop_index]
     harmonic_trap_energies = get_li_energy_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq)
     total_potential_energy = trapezoid(harmonic_trap_energies * three_d_density_trap_profile_um * trap_cross_section_um, x = harmonic_trap_positions_um)
     #1D Virial theorem; see Zhenjie Yan's PhD thesis
@@ -32,10 +50,53 @@ def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_tra
     return total_energy
 
 
-def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq):
-    total_energy = get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq)
+def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
+                                    autocut_mode = "statistics"):
+    total_energy = get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, 
+                                        autocut = autocut, autocut_mode = autocut_mode)
     total_counts = trapezoid(trap_cross_section_um * three_d_density_trap_profile_um, x = harmonic_trap_positions_um)
     return total_energy / total_counts
+
+"""
+Helper function for autocutting the hybrid trap data to avoid wings where it is zero."""
+def hybrid_trap_autocut(three_d_density_trap_profile_um, mode = "statistics"):
+    AUTOCUT_WINDOW = 101
+    AUTOCUT_SAVGOL_ORDER = 2
+    data_length = len(three_d_density_trap_profile_um)
+    middle_index = int(np.floor(data_length / 2))
+    if(mode == "statistics"):
+        #Statistics-based autocut
+        window_start = (-AUTOCUT_WINDOW + 1) // 2
+        window_end = (AUTOCUT_WINDOW + 1) // 2
+        window_range = np.arange(window_start, window_end).reshape(1, AUTOCUT_WINDOW)
+        data_range = np.arange(data_length).reshape(data_length, 1) 
+        #Hack that takes advantage of numpy broadcasting; final shape is (data_length, AUTOCUT_WINDOW)
+        window_indices = window_range + data_range
+        #Implement edge strategy analogous to "mirror" for savgol filter
+        window_indices = np.where(window_indices < 0, np.abs(window_indices), window_indices)
+        window_indices = np.where(window_indices > data_length - 1, 2 * (data_length - 1) - window_indices, window_indices)
+        data_window_array = three_d_density_trap_profile_um[window_indices]
+        data_window_is_nonzero_array = statistics_functions.mean_location_test(data_window_array, 0.0, axis = -1)
+    elif(mode == "savgol"):
+        filtered_data = savgol_filter(three_d_density_trap_profile_um, AUTOCUT_WINDOW, AUTOCUT_SAVGOL_ORDER)
+        data_window_is_nonzero_array = filtered_data > 0.0
+    else:
+        raise RuntimeError("Unsupported mode for hybrid trap autocut")
+    data_window_is_nonzero_first_half = data_window_is_nonzero_array[:middle_index] 
+    data_window_is_nonzero_second_half = data_window_is_nonzero_array[middle_index:] 
+    first_half_is_zero_indices, = (~data_window_is_nonzero_first_half).nonzero()
+    if(len(first_half_is_zero_indices) > 0):
+        last_first_half_zero_index = first_half_is_zero_indices[-1]
+    else:
+        last_first_half_zero_index = -1
+    second_half_is_zero_indices = (~data_window_is_nonzero_second_half).nonzero()[0]
+    if(len(second_half_is_zero_indices) > 0):
+        first_second_half_zero_index = second_half_is_zero_indices[0] + middle_index
+    else:
+        first_second_half_zero_index = data_length
+    start_index = last_first_half_zero_index + 1 
+    stop_index_exclusive = first_second_half_zero_index
+    return (start_index, stop_index_exclusive)
 
 def get_hybrid_trap_compressibilities(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_freq, 
                                         energy_cutoff_hz = 10000):
@@ -76,21 +137,6 @@ def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_hz = li_energy_mks / (2 * np.pi * H_BAR_MKS)
     return li_energy_hz
 
-def get_li_displacement_um_from_1D_trap_energy(li_energy_hz, trap_freq_hz):
-    li_energy_mks = li_energy_hz * (2 * np.pi * H_BAR_MKS)
-    displacement_m = np.sqrt(2 * li_energy_mks / (LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz)))
-    return displacement_m * 1e6
-
-
-#Data from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
-LI_HYPERFINE_CONSTANT_MHZ = 152.1368
-LI_G_J = 2.0023010
-LI_G_I = 0.0004476540
-LI_I = 1
-LI_F_PLUS = LI_I + 0.5
-
-#Data from https://physics.nist.gov/cgi-bin/cuu/Value?mubshhz
-BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 
 """
 Function for getting the energy of the ground state hyperfine manifold of lithium.
