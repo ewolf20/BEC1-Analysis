@@ -107,8 +107,14 @@ def get_hybrid_trap_data(my_measurement, imaging_mode):
         counts_3 = image_processing_functions.atom_count_pixel_sum(atom_density_3, pixel_area)
         counts_1_list.append(counts_1)
         counts_3_list.append(counts_3)
-        state_1_harmonic_positions, state_1_harmonic_densities = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(atom_density_1)
-        state_3_harmonic_positions, state_3_harmonic_densities = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(atom_density_3)
+        state_1_harmonic_positions, state_1_harmonic_densities = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(atom_density_1, 
+                                        my_measurement.experiment_parameters["axicon_tilt_deg"], my_measurement.experiment_parameters["axicon_diameter_pix"],
+                                        my_measurement.experiment_parameters["hybrid_trap_typical_length_pix"], 
+                                        my_measurement.experiment_parameters["top_um_per_pixel"])
+        state_3_harmonic_positions, state_3_harmonic_densities = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(atom_density_3, 
+                                        my_measurement.experiment_parameters["axicon_tilt_deg"], my_measurement.experiment_parameters["axicon_diameter_pix"],
+                                        my_measurement.experiment_parameters["hybrid_trap_typical_length_pix"], 
+                                        my_measurement.experiment_parameters["top_um_per_pixel"])
         state_1_average_energy = science_functions.get_hybrid_trap_average_energy(
             state_1_harmonic_positions, state_1_harmonic_densities, 
             hybrid_cross_section_um, hybrid_trap_frequency

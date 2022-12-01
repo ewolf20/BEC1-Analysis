@@ -11,7 +11,7 @@ sys.path.insert(0, path_to_analysis)
 
 RESOURCES_DIRECTORY_PATH = "./resources"
 
-from BEC1_Analysis.code import science_functions
+from BEC1_Analysis.code import science_functions, loading_functions
 
 def test_two_level_system_population_rabi():
     TEST_DETUNING_A = 1
@@ -87,6 +87,17 @@ def test_hybrid_trap_autocut():
     assert savgol_start_index == EXPECTED_SAVGOL_START
     assert savgol_stop_index == EXPECTED_SAVGOL_STOP
 
+
+
+def test_get_hybrid_trap_compressibility():
+    SAMPLE_TRAP_FREQ = 23.6
+    sample_hybrid_trap_cut_data = np.load("resources/Sample_Box_Exp_Cut.npy")
+    harmonic_positions, densities = sample_hybrid_trap_cut_data
+    harmonic_energies = science_functions.get_li_energy_hz_in_1D_trap(harmonic_positions * 1e-6, SAMPLE_TRAP_FREQ)
+    positions, compressibilities = science_functions.get_hybrid_trap_compressibilities(harmonic_positions, densities, SAMPLE_TRAP_FREQ)
+    plt.plot(positions, compressibilities) 
+    plt.show()
+    
 
 def test_get_li6_br_energy_MHz():
     sample_field_G = 690

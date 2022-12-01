@@ -9,7 +9,7 @@ from scipy.signal import argrelextrema
 from .science_functions import two_level_system_population_rabi
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
-                                    filter_outliers = False, report_inliers = False, monte_carlo_cov = False, monte_carlo_samples = 100):
+                                    filter_outliers = False, report_inliers = False, monte_carlo_cov = False, monte_carlo_samples = 1000):
     #Cast to guarantee we can use array syntax
     frequencies = np.array(frequencies) 
     counts = np.array(counts)
@@ -20,7 +20,7 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
     data_average = sum(counts) / len(counts)
     frequency_average = sum(frequencies) / len(frequencies)
     frequency_range = max(frequencies) - min(frequencies) 
-    center_guess = frequency_average
+    center_guess = frequencies[np.argmax(np.abs(counts))]
     gamma_guess = INITIAL_GAMMA_GUESS
     offset_guess = data_average
     if(max(counts) - data_average > data_average - min(counts)):
@@ -183,9 +183,7 @@ Y_data: The data to be transformed.
 order: The order of the peak to return. If None, the largest non-zero order is returned.
 
 Axis: Specifies the axis along which to (1D) Fourier transform for greater than 1D data. 
-
-Remark: """
-#TODO: Make this work for vectorized input!!!
+"""
 def get_fft_peak(x_delta, y_data, order = None, axis = -1):
     #Put the axis to fft on at the end
     original_axis_position = axis 
