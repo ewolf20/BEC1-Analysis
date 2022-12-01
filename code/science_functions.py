@@ -34,7 +34,12 @@ def get_fermi_energy_hz_from_density(atom_density_m):
     return fermi_energy_hz
 
 
-def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq):
+def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
+                                autocut_mode = "statistics"):
+    if autocut:
+        start_index, stop_index = hybrid_trap_autocut(three_d_density_trap_profile_um, mode = autocut_mode)
+        harmonic_trap_positions_um = harmonic_trap_positions_um[start_index:stop_index]
+        three_d_density_trap_profile_um = three_d_density_trap_profile_um[start_index:stop_index]
     harmonic_trap_energies = get_li_energy_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq)
     total_potential_energy = trapezoid(harmonic_trap_energies * three_d_density_trap_profile_um * trap_cross_section_um, x = harmonic_trap_positions_um)
     #1D Virial theorem; see Zhenjie Yan's PhD thesis
@@ -43,8 +48,10 @@ def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_tra
     return total_energy
 
 
-def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq):
-    total_energy = get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq)
+def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
+                                    autocut_mode = "statistics"):
+    total_energy = get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, 
+                                        autocut = autocut, autocut_mode = autocut_mode)
     total_counts = trapezoid(trap_cross_section_um * three_d_density_trap_profile_um, x = harmonic_trap_positions_um)
     return total_energy / total_counts
 

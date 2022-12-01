@@ -55,16 +55,22 @@ def test_get_box_fermi_energy_from_counts():
     assert (np.abs((energy - EXPECTED_ENERGY) / EXPECTED_ENERGY) < 1e-4)
 
 def test_get_hybrid_trap_average_energy():
-    EXPECTED_AVERAGE_ENERGY = 5182.68
+    EXPECTED_AVERAGE_ENERGY_MANUAL_CUT = 5182.678774053225
+    EXPECTED_AVERAGE_ENERGY_AUTOCUT = 5623.863607223448
     SAMPLE_RADIUS_UM = 70 
     SAMPLE_TRAP_FREQ = 23
     trap_cross_section_um = np.pi * np.square(SAMPLE_RADIUS_UM)
     sample_hybrid_trap_cut_data = np.load("resources/Sample_Box_Exp_Cut.npy")
     harmonic_positions, densities = sample_hybrid_trap_cut_data 
-    harmonic_positions = harmonic_positions[100:800]
-    densities = densities[100:800]
-    average_particle_energy = science_functions.get_hybrid_trap_average_energy(harmonic_positions, densities, trap_cross_section_um, SAMPLE_TRAP_FREQ)
-    assert (np.abs((average_particle_energy - EXPECTED_AVERAGE_ENERGY) / EXPECTED_AVERAGE_ENERGY) < 1e-4)
+    cut_harmonic_positions = harmonic_positions[100:800]
+    cut_densities = densities[100:800]
+    average_particle_energy_manual_cut = science_functions.get_hybrid_trap_average_energy(cut_harmonic_positions, cut_densities,
+                                                                 trap_cross_section_um, SAMPLE_TRAP_FREQ)
+    assert (np.isclose(average_particle_energy_manual_cut, EXPECTED_AVERAGE_ENERGY_MANUAL_CUT))
+    average_particle_energy_autocut = science_functions.get_hybrid_trap_average_energy(harmonic_positions, densities, 
+                                                                        trap_cross_section_um, SAMPLE_TRAP_FREQ, autocut = True, 
+                                                                        autocut_mode = "statistics")
+    assert (np.isclose(average_particle_energy_autocut, EXPECTED_AVERAGE_ENERGY_AUTOCUT))
 
 
 def test_hybrid_trap_autocut():
@@ -97,5 +103,4 @@ def test_get_field_from_li6_resonance():
     SAMPLE_INDICES = (1, 2)
     extracted_field = science_functions.get_field_from_li6_resonance(SAMPLE_RESONANCE_FREQ, SAMPLE_INDICES)
     assert(np.abs((extracted_field - EXPECTED_B_FIELD) / EXPECTED_B_FIELD) < 1e-5)
-    print(extracted_field)
     
