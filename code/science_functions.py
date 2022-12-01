@@ -36,6 +36,19 @@ def get_fermi_energy_hz_from_density(atom_density_m):
     return fermi_energy_hz
 
 
+def ideal_fermi_P0(n, E_F):
+    return 2 / 5 * n * E_F 
+
+def ideal_fermi_kappa0(n, E_F):
+    return 3 / (2 * n * E_F)
+
+
+#Note: Only valid for box potentials
+def ideal_fermi_E0_uniform(E_F):
+    return 3/5 * E_F
+
+
+
 def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
                                 autocut_mode = "statistics"):
     if autocut:
