@@ -95,8 +95,6 @@ def test_get_hybrid_trap_compressibility():
     harmonic_positions, densities = sample_hybrid_trap_cut_data
     harmonic_energies = science_functions.get_li_energy_hz_in_1D_trap(harmonic_positions * 1e-6, SAMPLE_TRAP_FREQ)
     positions, compressibilities = science_functions.get_hybrid_trap_compressibilities(harmonic_positions, densities, SAMPLE_TRAP_FREQ)
-    plt.plot(positions, compressibilities) 
-    plt.show()
     
 
 def test_get_li6_br_energy_MHz():

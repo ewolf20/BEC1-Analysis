@@ -105,8 +105,6 @@ def get_hybrid_trap_compressibilities(harmonic_trap_positions_um, three_d_densit
     SAVGOL_FILTER_POLYORDER = 2
     fermi_energies = get_fermi_energy_hz_from_density(three_d_density_trap_profile_um * 1e18)
     harmonic_energies = get_li_energy_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq)
-    plt.plot(harmonic_energies, fermi_energies)
-    plt.show()
     energy_bins = np.linspace(0, energy_cutoff_hz, ENERGY_BIN_NUMBER)
     delta_E_bin = energy_bins[1] - energy_bins[0]
     #Minus 1 adopts the convention that index i is assigned to a value satisfying bins[i] <= val < bins[i + 1]
@@ -137,6 +135,10 @@ def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_hz = li_energy_mks / (2 * np.pi * H_BAR_MKS)
     return li_energy_hz
 
+def get_li_displacement_um_from_1D_trap_energy(li_energy_hz, trap_freq_hz):
+    li_energy_mks = li_energy_hz * (2 * np.pi * H_BAR_MKS)
+    displacement_m = np.sqrt(2 * li_energy_mks / (LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz)))
+    return displacement_m * 1e6
 
 """
 Function for getting the energy of the ground state hyperfine manifold of lithium.
