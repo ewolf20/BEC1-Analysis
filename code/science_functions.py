@@ -1,10 +1,13 @@
 import numpy as np 
 import matplotlib.pyplot as plt
+from mpmath import polylog
 from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
+from scipy.special import zeta, gamma
 
 from . import statistics_functions
+
 
 
 #Taken from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
@@ -23,18 +26,18 @@ LI_F_PLUS = LI_I + 0.5
 BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 
 
-def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
-    box_volume_m = np.pi * np.square(box_radius_um) * box_length_um * 1e-18
-    atom_density_m = atom_counts / box_volume_m
-    return get_fermi_energy_hz_from_density(atom_density_m)
+#Implementation of polylog in term of Hurwitz zeta function, suitable for the fractional s we need. 
+#Source: https://en.wikipedia.org/wiki/Polylogarithm#Relationship_to_other_functions
+def fractional_s_polylog(s, z):
+    return gamma(1 - s) / (np.power(2 * np.pi, 1 - s)) * (
+        np.power(1j, 1 - s) * zeta(1 - s, 0.5 - 1j / (2 * np.pi) * np.log(-z)) + 
+        np.power(1j, s - 1) * zeta(1 - s, 0.5 + 1j / (2 * np.pi) * np.log(-z))
+    )
 
 
-def get_fermi_energy_hz_from_density(atom_density_m):
-    fermi_k_m = np.cbrt(6 * np.square(np.pi) * atom_density_m) 
-    fermi_energy_J = np.square(H_BAR_MKS) * np.square(fermi_k_m) / (2 * LI_6_MASS_KG)
-    fermi_energy_hz = fermi_energy_J / (2 * np.pi * H_BAR_MKS) 
-    return fermi_energy_hz
 
+def thermal_de_broglie_li_6_mks(kBT):
+    return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * LI_6_MASS_KG * kBT)
 
 def ideal_fermi_P0(n, E_F):
     return 2 / 5 * n * E_F 
@@ -47,6 +50,32 @@ def ideal_fermi_kappa0(n, E_F):
 def ideal_fermi_E0_uniform(E_F):
     return 3/5 * E_F
 
+#Derived from notes in Kardar, 'Statistical Physics of Particles', chapter 7
+def ideal_fermi_P_over_p0(z):
+    return 5.0 / 2.0 * 1.0 / (np.cbrt(9 * np.pi / 16)) * np.power(-fractional_s_polylog(3/2, -z), -5/3) * (-fractional_s_polylog(5/2, -z))
+
+
+def ideal_T_over_TF(z):
+    return 1.0 / (np.cbrt(9 * np.pi / 16) * np.power(-fractional_s_polylog(3/2, -z), 2/3))
+
+def get_z_from_T_over_TF(T_over_TF):
+    def wrapped_T_over_TF(betamu):
+        return ideal_T_over_TF(np.exp(betamu))
+    betamu = fsolve(wrapped_T_over_TF, 0)
+    return np.exp(betamu)
+
+
+def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
+    box_volume_m = np.pi * np.square(box_radius_um) * box_length_um * 1e-18
+    atom_density_m = atom_counts / box_volume_m
+    return get_fermi_energy_hz_from_density(atom_density_m)
+
+
+def get_fermi_energy_hz_from_density(atom_density_m):
+    fermi_k_m = np.cbrt(6 * np.square(np.pi) * atom_density_m) 
+    fermi_energy_J = np.square(H_BAR_MKS) * np.square(fermi_k_m) / (2 * LI_6_MASS_KG)
+    fermi_energy_hz = fermi_energy_J / (2 * np.pi * H_BAR_MKS) 
+    return fermi_energy_hz
 
 
 def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
