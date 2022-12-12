@@ -1,10 +1,10 @@
 import numpy as np 
 import matplotlib.pyplot as plt
-from mpmath import polylog
+import mpmath
 from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
-from scipy.special import zeta, gamma
+from scipy.special import zeta, gamma, factorial
 
 from . import statistics_functions
 
@@ -26,13 +26,23 @@ LI_F_PLUS = LI_I + 0.5
 BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 
 
-#Implementation of polylog in term of Hurwitz zeta function, suitable for the fractional s we need. 
-#Source: https://en.wikipedia.org/wiki/Polylogarithm#Relationship_to_other_functions
-def fractional_s_polylog(s, z):
-    return gamma(1 - s) / (np.power(2 * np.pi, 1 - s)) * (
-        np.power(1j, 1 - s) * zeta(1 - s, 0.5 - 1j / (2 * np.pi) * np.log(-z)) + 
-        np.power(1j, s - 1) * zeta(1 - s, 0.5 + 1j / (2 * np.pi) * np.log(-z))
-    )
+
+#Homebrewed implementation of the f_minus function, defined in Kardar, "Statistical Physics of Particles", chapter 7.
+#Observe that f_minus(s, z) = -polylog(s, -z). Observe also that this function takes the _log_ of z instead of the argument itself, 
+#so as to be better behaved for large values of beta mu.
+vectorized_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
+
+def kardar_f_minus_function(s, log_z):
+    SOMMERFELD_EXPANSION_ORDER = 5
+    SOMMERFELD_LOG_CUTOFF = 20
+    return np.where(log_z > SOMMERFELD_LOG_CUTOFF, _kardar_sommerfeld_f_minus(s, SOMMERFELD_EXPANSION_ORDER, log_z), np.real(-vectorized_polylog(s, -np.exp(log_z))))
+
+def _kardar_sommerfeld_f_minus(s, order, log_z):
+    indices = np.arange(0, 2 * (order + 1), 2).reshape(1, order + 1)
+    prefactor = np.power(log_z, s) / gamma(s + 1)
+    reshaped_log_z = np.expand_dims(log_z, axis = 1) 
+    summands = 2 * (1 - np.power(2.0, -indices + 1)) * zeta(indices) * gamma(s + 1) / gamma(s - indices + 1) * np.power(reshaped_log_z, -indices)
+    return prefactor * np.sum(summands, axis = -1)
 
 
 
@@ -51,18 +61,15 @@ def ideal_fermi_E0_uniform(E_F):
     return 3/5 * E_F
 
 #Derived from notes in Kardar, 'Statistical Physics of Particles', chapter 7
-def ideal_fermi_P_over_p0(z):
-    return 5.0 / 2.0 * 1.0 / (np.cbrt(9 * np.pi / 16)) * np.power(-fractional_s_polylog(3/2, -z), -5/3) * (-fractional_s_polylog(5/2, -z))
+def ideal_fermi_P_over_p0(betamu):
+    return 5.0 / 2.0 * 1.0 / (np.cbrt(9 * np.pi / 16)) * np.power(kardar_f_minus_function(3/2, betamu), -5/3) * (kardar_f_minus_function(5/2, betamu))
 
 
-def ideal_T_over_TF(z):
-    return 1.0 / (np.cbrt(9 * np.pi / 16) * np.power(-fractional_s_polylog(3/2, -z), 2/3))
+def ideal_T_over_TF(betamu):
+    return 1.0 / (np.cbrt(9 * np.pi / 16) * np.power(kardar_f_minus_function(3/2, betamu), 2/3))
 
-def get_z_from_T_over_TF(T_over_TF):
-    def wrapped_T_over_TF(betamu):
-        return ideal_T_over_TF(np.exp(betamu))
-    betamu = fsolve(wrapped_T_over_TF, 0)
-    return np.exp(betamu)
+def get_ideal_betamu_from_T_over_TF(T_over_TF):
+    return fsolve(lambda x: ideal_T_over_TF(x) - T_over_TF, np.zeros(np.shape(T_over_TF)))
 
 
 def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
