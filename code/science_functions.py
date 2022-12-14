@@ -6,7 +6,7 @@ from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
 from scipy.special import zeta, gamma, factorial
 
-from . import statistics_functions
+from . import statistics_functions, numerical_functions
 
 
 
@@ -33,17 +33,37 @@ BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 vectorized_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
 
 def kardar_f_minus_function(s, log_z):
-    SOMMERFELD_EXPANSION_ORDER = 5
-    SOMMERFELD_LOG_CUTOFF = 20
-    return np.where(log_z > SOMMERFELD_LOG_CUTOFF, _kardar_sommerfeld_f_minus(s, SOMMERFELD_EXPANSION_ORDER, log_z), np.real(-vectorized_polylog(s, -np.exp(log_z))))
+    SOMMERFELD_EXPANSION_ORDER = 6
+    SOMMERFELD_LOG_CUTOFF = 10
+    POWER_SERIES_EXPANSION_ORDER = 70
+    POWER_SERIES_LOG_CUTOFF = -0.1
+    condition = np.zeros(log_z.shape, dtype = int)
+    power_series_indices = (log_z < POWER_SERIES_LOG_CUTOFF)
+    sommerfeld_series_indices = (log_z > SOMMERFELD_LOG_CUTOFF)
+    other_indices = (np.logical_and(log_z >= POWER_SERIES_LOG_CUTOFF, log_z <= SOMMERFELD_LOG_CUTOFF))
+    condition[power_series_indices] = 0 
+    condition[other_indices] = 1
+    condition[sommerfeld_series_indices] = 2
+    return numerical_functions.smart_where(condition, log_z,
+    lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
+    lambda x: np.real(-vectorized_polylog(s, -np.exp(x))), 
+    lambda x: _kardar_sommerfeld_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
+    )
+
 
 def _kardar_sommerfeld_f_minus(s, order, log_z):
-    indices = np.arange(0, 2 * (order + 1), 2).reshape(1, order + 1)
+    indices = np.arange(0, 2 * (order + 1), 2, dtype = float).reshape(1, order + 1)
     prefactor = np.power(log_z, s) / gamma(s + 1)
     reshaped_log_z = np.expand_dims(log_z, axis = 1) 
     summands = 2 * (1 - np.power(2.0, -indices + 1)) * zeta(indices) * gamma(s + 1) / gamma(s - indices + 1) * np.power(reshaped_log_z, -indices)
     return prefactor * np.sum(summands, axis = -1)
 
+def _kardar_highT_f_minus(s, order, logz):
+    z = np.exp(logz) 
+    indices = np.arange(1, order + 1, dtype = float).reshape(1, order)
+    reshaped_z = np.expand_dims(z, axis = 1)
+    summands = -np.power(-reshaped_z, indices) / np.power(indices, s)
+    return np.sum(summands, axis = -1)
 
 
 def thermal_de_broglie_li_6_mks(kBT):
@@ -68,9 +88,16 @@ def ideal_fermi_P_over_p0(betamu):
 def ideal_T_over_TF(betamu):
     return 1.0 / (np.cbrt(9 * np.pi / 16) * np.power(kardar_f_minus_function(3/2, betamu), 2/3))
 
-def get_ideal_betamu_from_T_over_TF(T_over_TF):
-    return fsolve(lambda x: ideal_T_over_TF(x) - T_over_TF, np.zeros(np.shape(T_over_TF)))
+def _bruteforce_get_ideal_betamu_from_T_over_TF(T_over_TF):
+    return fsolve(lambda x: ideal_T_over_TF(x) - T_over_TF, 0)
 
+vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = np.vectorize(_bruteforce_get_ideal_betamu_from_T_over_TF)
+
+def get_ideal_betamu_from_T_over_TF(T_over_TF, flag = "direct"):
+    if(flag == "direct"):
+        return vectorized_bruteforce_get_ideal_betamu_from_T_over_TF(T_over_TF)
+    elif(flag == "tabulated"):
+        pass
 
 def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
     box_volume_m = np.pi * np.square(box_radius_um) * box_length_um * 1e-18
