@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 
 import matplotlib.pyplot as plt
 import mpmath 
@@ -16,11 +17,11 @@ from BEC1_Analysis.code import science_functions, loading_functions
 
 
 def test_kardar_f_minus_function():
-    LOWER_LOG_BOUND = -5
+    LOWER_LOG_BOUND = -10
     UPPER_LOG_BOUND = 100
     S_VALUE_1 = 3/2
     S_VALUE_2 = 5/2
-    log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 1000)
+    log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 10000)
     mp_math_values_1_list = [] 
     mp_math_values_2_list = []
     for log_z in log_z_values:
@@ -30,13 +31,13 @@ def test_kardar_f_minus_function():
     mp_math_values_2 = np.array(mp_math_values_2_list)
     homebrew_values_1 = science_functions.kardar_f_minus_function(S_VALUE_1, log_z_values)
     homebrew_values_2 = science_functions.kardar_f_minus_function(S_VALUE_2, log_z_values)
-    assert np.all(np.isclose(mp_math_values_1, homebrew_values_1, atol = 0.0, rtol = 1e-9))
-    assert np.all(np.isclose(mp_math_values_2, homebrew_values_2, atol = 0.0, rtol = 1e-9))
-
+    assert np.all(np.isclose(mp_math_values_1, homebrew_values_1, atol = 0.0, rtol = 1e-6))
+    assert np.all(np.isclose(mp_math_values_2, homebrew_values_2, atol = 0.0, rtol = 1e-6))
 
 
 def test_get_ideal_betamu_from_T_over_TF():
-    print(science_functions.get_ideal_betamu_from_T_over_TF(0.01)) 
+    array_to_use = np.random.uniform(low = 0.0, high = 10.0, size = 100)
+    print(science_functions.get_ideal_betamu_from_T_over_TF(0.0001))
 
 def test_two_level_system_population_rabi():
     TEST_DETUNING_A = 1
