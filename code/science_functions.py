@@ -30,7 +30,7 @@ BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 #Homebrewed implementation of the f_minus function, defined in Kardar, "Statistical Physics of Particles", chapter 7.
 #Observe that f_minus(s, z) = -polylog(s, -z). Observe also that this function takes the _log_ of z instead of the argument itself, 
 #so as to be better behaved for large values of beta mu.
-vectorized_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
+vectorized_mpmath_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
 
 def kardar_f_minus_function(s, log_z):
     SOMMERFELD_EXPANSION_ORDER = 6
@@ -46,7 +46,7 @@ def kardar_f_minus_function(s, log_z):
     condition[sommerfeld_series_indices] = 2
     return numerical_functions.smart_where(condition, log_z,
     lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
-    lambda x: np.real(-vectorized_polylog(s, -np.exp(x))), 
+    lambda x: np.real(-vectorized_mpmath_polylog(s, -np.exp(x))), 
     lambda x: _kardar_sommerfeld_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
     )
 
