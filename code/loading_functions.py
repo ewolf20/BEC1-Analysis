@@ -34,6 +34,12 @@ def load_run_parameters_from_json(parameters_path, make_raw_parameters_terse = F
     return sorted_parameters_list
 
 
+
+def load_experiment_parameters_from_folder(folder_path):
+    parameters_path = os.path.join(folder_path, "experiment_parameters.json")
+    with open(parameters_path, 'r') as json_file:
+        return json.load(json_file)
+
 def universal_clipboard_copy(text_to_copy):
     if(sys.platform.startswith("darwin")):
         #Copy command for MacOS 
