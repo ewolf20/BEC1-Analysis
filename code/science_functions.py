@@ -26,6 +26,9 @@ LI_F_PLUS = LI_I + 0.5
 BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 
 
+#Data from https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.110.135301; Ku figure updated for Feshbach correction 
+BERTSCH_PARAMETER = 0.370
+
 
 #Homebrewed implementation of the f_minus function, defined in Kardar, "Statistical Physics of Particles", chapter 7.
 #Observe that f_minus(s, z) = -polylog(s, -z). Observe also that this function takes the _log_ of z instead of the argument itself, 
@@ -210,6 +213,11 @@ def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)
     li_energy_hz = li_energy_mks / (2 * np.pi * H_BAR_MKS)
     return li_energy_hz
+
+def get_li_energy_gradient_hz_um_in_1D_trap(displacement_m, trap_freq_hz):
+    li_force_mks = LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * displacement_m
+    li_force_hz_per_um = li_force_mks / (2 * np.pi * H_BAR_MKS) * 1e-6
+    return li_force_hz_per_um
 
 def get_li_displacement_um_from_1D_trap_energy(li_energy_hz, trap_freq_hz):
     li_energy_mks = li_energy_hz * (2 * np.pi * H_BAR_MKS)
