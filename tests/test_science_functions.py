@@ -31,6 +31,9 @@ def test_kardar_f_minus_function():
     mp_math_values_2 = np.array(mp_math_values_2_list)
     homebrew_values_1 = science_functions.kardar_f_minus_function(S_VALUE_1, log_z_values)
     homebrew_values_2 = science_functions.kardar_f_minus_function(S_VALUE_2, log_z_values)
+    plt.plot(log_z_values, (homebrew_values_1 - mp_math_values_1) / mp_math_values_1) 
+    plt.plot(log_z_values, (homebrew_values_2 - mp_math_values_2) / mp_math_values_2) 
+    plt.show()
     assert np.all(np.isclose(mp_math_values_1, homebrew_values_1, atol = 0.0, rtol = 1e-6))
     assert np.all(np.isclose(mp_math_values_2, homebrew_values_2, atol = 0.0, rtol = 1e-6))
 

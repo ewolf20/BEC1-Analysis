@@ -6,7 +6,7 @@ from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
 from scipy.special import zeta, gamma, factorial
 
-from . import statistics_functions, numerical_functions
+from . import statistics_functions, numerical_functions, loading_functions
 
 
 
@@ -47,26 +47,53 @@ def kardar_f_minus_function(s, log_z):
     condition[power_series_indices] = 0 
     condition[other_indices] = 1
     condition[sommerfeld_series_indices] = 2
-    return numerical_functions.smart_where(condition, log_z,
-    lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
-    lambda x: np.real(-vectorized_mpmath_polylog(s, -np.exp(x))), 
-    lambda x: _kardar_sommerfeld_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
-    )
+    try:
+        return numerical_functions.smart_where(condition, log_z,
+        lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
+        lambda x: _kardar_intermediateT_f_minus(s, x), 
+        lambda x: _kardar_lowT_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
+        )
+    except NotImplementedError:
+        print("Shit")
+        return numerical_functions.smart_where(condition, log_z,
+        lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
+        lambda x: np.real(-vectorized_mpmath_polylog(s, -np.exp(x))),
+        lambda x: _kardar_lowT_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
+        )
 
 
-def _kardar_sommerfeld_f_minus(s, order, log_z):
+#Implementation from Sommerfeld expansion as given in Kardar.
+def _kardar_lowT_f_minus(s, order, log_z):
     indices = np.arange(0, 2 * (order + 1), 2, dtype = float).reshape(1, order + 1)
     prefactor = np.power(log_z, s) / gamma(s + 1)
     reshaped_log_z = np.expand_dims(log_z, axis = 1) 
     summands = 2 * (1 - np.power(2.0, -indices + 1)) * zeta(indices) * gamma(s + 1) / gamma(s - indices + 1) * np.power(reshaped_log_z, -indices)
     return prefactor * np.sum(summands, axis = -1)
 
+
+#Implementation from naive low-T expansion of polylog
 def _kardar_highT_f_minus(s, order, logz):
     z = np.exp(logz) 
     indices = np.arange(1, order + 1, dtype = float).reshape(1, order)
     reshaped_z = np.expand_dims(z, axis = 1)
     summands = -np.power(-reshaped_z, indices) / np.power(indices, s)
     return np.sum(summands, axis = -1)
+
+
+(polylog_analytic_continuation_centers, 
+polylog_analytic_continuation_coeffs_3_2, 
+polylog_analytic_continuation_coeffs_5_2) = loading_functions.load_polylog_analytic_continuation_parameters()
+
+def _kardar_intermediateT_f_minus(s, logz):
+    minus_z = -np.exp(logz)
+    centers = polylog_analytic_continuation_centers
+    if(s == 3/2):
+        coeffs = polylog_analytic_continuation_coeffs_3_2
+    elif(s == 5/2):
+        coeffs = polylog_analytic_continuation_coeffs_5_2
+    else:
+        raise NotImplementedError("The fast analytic continuation of the polylog is not supported for s != 3/2, 5/2.")
+    return -numerical_functions.stored_coeffs_polylog_taylor_series(minus_z, centers, coeffs)
 
 
 def thermal_de_broglie_li_6_mks(kBT):

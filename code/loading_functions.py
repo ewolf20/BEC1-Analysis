@@ -64,6 +64,18 @@ def load_unitary_EOS():
             }
             return eos_dict
 
+def load_polylog_analytic_continuation_parameters():
+    CENTERS_FILENAME = "Polylog_Taylor_Centers.npy"
+    COEFFS_3_2_FILENAME = "Polylog_Taylor_Coefficients_3_2.npy"
+    COEFFS_5_2_FILENAME = "Polylog_Taylor_Coefficients_5_2.npy"
+    with pkg_resources.path(r, CENTERS_FILENAME) as centers_path, \
+        pkg_resources.path(r, COEFFS_3_2_FILENAME) as coeffs_3_2_path, \
+        pkg_resources.path(r, COEFFS_5_2_FILENAME) as coeffs_5_2_path:
+        centers = np.load(centers_path)
+        coeffs_3_2 = np.load(coeffs_3_2_path) 
+        coeffs_5_2 = np.load(coeffs_5_2_path) 
+    return (centers, coeffs_3_2, coeffs_5_2)
+
 def universal_clipboard_copy(text_to_copy):
     if(sys.platform.startswith("darwin")):
         #Copy command for MacOS 
