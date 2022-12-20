@@ -1,10 +1,9 @@
 import numpy as np 
 import matplotlib.pyplot as plt
-import mpmath
 from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
-from scipy.special import zeta, gamma, factorial
+from scipy.special import zeta, gamma
 
 from . import statistics_functions, numerical_functions, loading_functions
 
@@ -33,7 +32,6 @@ BERTSCH_PARAMETER = 0.370
 #Homebrewed implementation of the f_minus function, defined in Kardar, "Statistical Physics of Particles", chapter 7.
 #Observe that f_minus(s, z) = -polylog(s, -z). Observe also that this function takes the _log_ of z instead of the argument itself, 
 #so as to be better behaved for large values of beta mu.
-vectorized_mpmath_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
 
 def kardar_f_minus_function(s, log_z):
     SOMMERFELD_EXPANSION_ORDER = 6
@@ -47,22 +45,14 @@ def kardar_f_minus_function(s, log_z):
     condition[power_series_indices] = 0 
     condition[other_indices] = 1
     condition[sommerfeld_series_indices] = 2
-    try:
-        return numerical_functions.smart_where(condition, log_z,
-        lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
-        lambda x: _kardar_intermediateT_f_minus(s, x), 
-        lambda x: _kardar_lowT_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
-        )
-    except NotImplementedError:
-        print("Shit")
-        return numerical_functions.smart_where(condition, log_z,
-        lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
-        lambda x: np.real(-vectorized_mpmath_polylog(s, -np.exp(x))),
-        lambda x: _kardar_lowT_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
-        )
+    return numerical_functions.smart_where(condition, log_z,
+    lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
+    lambda x: _kardar_intermediateT_f_minus(s, x), 
+    lambda x: _kardar_lowT_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
+    )
 
 
-#Implementation from Sommerfeld expansion as given in Kardar.
+#Implementation from large-z Sommerfeld expansion as given in Kardar.
 def _kardar_lowT_f_minus(s, order, log_z):
     indices = np.arange(0, 2 * (order + 1), 2, dtype = float).reshape(1, order + 1)
     prefactor = np.power(log_z, s) / gamma(s + 1)
@@ -71,7 +61,7 @@ def _kardar_lowT_f_minus(s, order, log_z):
     return prefactor * np.sum(summands, axis = -1)
 
 
-#Implementation from naive low-T expansion of polylog
+#Implementation from naive small-z expansion of polylog
 def _kardar_highT_f_minus(s, order, logz):
     z = np.exp(logz) 
     indices = np.arange(1, order + 1, dtype = float).reshape(1, order)
@@ -84,6 +74,7 @@ def _kardar_highT_f_minus(s, order, logz):
 polylog_analytic_continuation_coeffs_3_2, 
 polylog_analytic_continuation_coeffs_5_2) = loading_functions.load_polylog_analytic_continuation_parameters()
 
+"""Implementation using Taylor expansions, with stored coefficients, about various relevant points for intermediate z."""
 def _kardar_intermediateT_f_minus(s, logz):
     minus_z = -np.exp(logz)
     centers = polylog_analytic_continuation_centers
@@ -92,7 +83,7 @@ def _kardar_intermediateT_f_minus(s, logz):
     elif(s == 5/2):
         coeffs = polylog_analytic_continuation_coeffs_5_2
     else:
-        raise NotImplementedError("The fast analytic continuation of the polylog is not supported for s != 3/2, 5/2.")
+        raise NotImplementedError("The fast analytic continuation implementation of the polylog is not supported for s != 3/2, 5/2.")
     return -numerical_functions.stored_coeffs_polylog_taylor_series(minus_z, centers, coeffs)
 
 

@@ -13,8 +13,7 @@ sys.path.insert(0, path_to_analysis)
 
 RESOURCES_DIRECTORY_PATH = "./resources"
 
-from BEC1_Analysis.code import science_functions, loading_functions
-
+from BEC1_Analysis.code import science_functions
 
 def test_kardar_f_minus_function():
     LOWER_LOG_BOUND = -10
@@ -22,18 +21,11 @@ def test_kardar_f_minus_function():
     S_VALUE_1 = 3/2
     S_VALUE_2 = 5/2
     log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 10000)
-    mp_math_values_1_list = [] 
-    mp_math_values_2_list = []
-    for log_z in log_z_values:
-        mp_math_values_1_list.append(-mpmath.fp.polylog(S_VALUE_1, -np.exp(log_z)))
-        mp_math_values_2_list.append(-mpmath.fp.polylog(S_VALUE_2, -np.exp(log_z)))
-    mp_math_values_1 = np.array(mp_math_values_1_list) 
-    mp_math_values_2 = np.array(mp_math_values_2_list)
+    vectorized_mpmath_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
+    mp_math_values_1 = -vectorized_mpmath_polylog(S_VALUE_1, -np.exp(log_z_values))
+    mp_math_values_2 = -vectorized_mpmath_polylog(S_VALUE_2, -np.exp(log_z_values))
     homebrew_values_1 = science_functions.kardar_f_minus_function(S_VALUE_1, log_z_values)
     homebrew_values_2 = science_functions.kardar_f_minus_function(S_VALUE_2, log_z_values)
-    plt.plot(log_z_values, (homebrew_values_1 - mp_math_values_1) / mp_math_values_1) 
-    plt.plot(log_z_values, (homebrew_values_2 - mp_math_values_2) / mp_math_values_2) 
-    plt.show()
     assert np.all(np.isclose(mp_math_values_1, homebrew_values_1, atol = 0.0, rtol = 1e-6))
     assert np.all(np.isclose(mp_math_values_2, homebrew_values_2, atol = 0.0, rtol = 1e-6))
 
