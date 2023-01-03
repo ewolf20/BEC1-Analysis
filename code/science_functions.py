@@ -112,6 +112,29 @@ def ideal_T_over_TF(betamu):
 def _bruteforce_get_ideal_betamu_from_T_over_TF(T_over_TF):
     return fsolve(lambda x: ideal_T_over_TF(x) - T_over_TF, 0)
 
+#Derived by slight alteration of Equation 64 of Cowan
+def _low_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
+    COWAN_COEFFICIENTS = [1, -1/12, -1/80, 247/25920, -16291/777600] 
+    indices = 2 * np.arange(len(COWAN_COEFFICIENTS))
+    pi_T_over_TF = np.pi * T_over_TF 
+    reshaped_pi_T_over_TF = np.expand_dims(pi_T_over_TF, axis = -1) 
+    reshaped_coefficients = np.expand_dims(COWAN_COEFFICIENTS, tuple(np.arange(len(np.shape(pi_T_over_TF)))))
+    reshaped_indices = np.expand_dims(indices, tuple(np.arange(len(np.shape(pi_T_over_TF)))))
+    mu_over_EF = np.sum(reshaped_coefficients * np.power(reshaped_pi_T_over_TF, reshaped_indices), axis = -1)
+    return mu_over_EF / T_over_TF
+
+def _high_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
+    maxwell_term = T_over_TF * np.log(4.0 / (3.0 * np.sqrt(np.pi) * np.power(T_over_TF, 1.5)))
+    COWAN_COEFFICIENTS = [1.0 / 3.0 * np.sqrt(2 / np.pi), 
+                         -1.0 / (81 * np.pi) * (16 * np.sqrt(3) - 27), 
+                        4 / (243 * np.power(np.pi, 1.5)) * (15 * np.sqrt(2) - 16 * np.sqrt(6) + 18)]
+    T_powers = [-0.5, -2, -3.5]
+    reshaped_coefficients = np.expand_dims(COWAN_COEFFICIENTS, tuple(np.arange(len(np.shape(T_over_TF)))))
+    reshaped_T_over_TF = np.expand_dims(T_over_TF, axis = -1) 
+    reshaped_T_powers = np.expand_dims(T_powers, tuple(np.arange(len(np.shape(T_over_TF)))))
+    mu_over_EF = maxwell_term = np.sum(reshaped_coefficients * np.power(reshaped_T_over_TF, reshaped_T_powers), axis = -1)
+    return mu_over_EF / T_over_TF
+
 vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = np.vectorize(_bruteforce_get_ideal_betamu_from_T_over_TF)
 
 def get_ideal_betamu_from_T_over_TF(T_over_TF, flag = "direct"):

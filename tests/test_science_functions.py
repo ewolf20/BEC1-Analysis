@@ -32,7 +32,9 @@ def test_kardar_f_minus_function():
 
 def test_get_ideal_betamu_from_T_over_TF():
     array_to_use = np.random.uniform(low = 0.0, high = 10.0, size = 100)
-    print(science_functions.get_ideal_betamu_from_T_over_TF(0.0001))
+    print(science_functions._low_T_get_ideal_betamu_from_T_over_TF(0.01))
+    print(science_functions._high_T_get_ideal_betamu_from_T_over_TF(50))
+
 
 def test_two_level_system_population_rabi():
     TEST_DETUNING_A = 1
