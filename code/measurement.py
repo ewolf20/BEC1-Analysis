@@ -55,30 +55,39 @@ class Measurement():
         else:
             self.measurement_parameters = {}
         self.run_parameters_verbose = run_parameters_verbose
+        self.runs_dict = {}
         
 
     """Initializes the runs dict.
     
     Creates a dictionary {run_id:Run} of runs in the measurement. Each individual run is an object containing the run parameters and images."""
-    #TODO: Update so that the error is more descriptive when the wrong measurement type is specified
     def _initialize_runs_dict(self, use_saved_params = False, saved_params_filename = "measurement_run_params_dump.json"):
-        unique_run_ids_list = list(set([Measurement._parse_run_id_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f]))
-        datetimes_list = list([Measurement._parse_datetime_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f])
-        min_datetime = min(datetimes_list) 
-        max_datetime = max(datetimes_list)
-        sorted_run_ids_list = sorted(unique_run_ids_list)
-        if(not use_saved_params):
-            DATA_DUMP_PARAMS_FILENAME = "run_params_dump.json" 
-            path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, DATA_DUMP_PARAMS_FILENAME)
-            if(os.path.exists(path_to_dump_file_in_measurement_folder)):
-                run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
-                                                                        make_raw_parameters_terse = (not self.run_parameters_verbose))
-            else:
-                raise RuntimeError("""Drawing parameters directly from breadboard is deprecated. You may use ImageWatchdog.get_run_metadata()
-                                    to generate a run params json for legacy datasets.""")
-        else:
+        if(use_saved_params):
             run_parameters_list = loading_functions.load_run_parameters_from_json(saved_params_filename)
-        runs_dict = {}
+        else:
+            run_parameters_list = None
+        matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_in_measurement_folder(run_parameters_list = run_parameters_list)
+        for run_id_and_parameters in matched_run_ids_and_parameters_list:
+            self._add_run(run_id_and_parameters)
+
+
+    def _get_run_parameters_from_measurement_folder(self):
+        DATA_DUMP_PARAMS_FILENAME = "run_params_dump.json" 
+        path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, DATA_DUMP_PARAMS_FILENAME)
+        if(os.path.exists(path_to_dump_file_in_measurement_folder)):
+            run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
+                                                                    make_raw_parameters_terse = (not self.run_parameters_verbose))
+        else:
+            raise RuntimeError("""Drawing parameters directly from breadboard is deprecated. You may use ImageWatchdog.get_run_metadata()
+                                to generate a run params json for legacy datasets.""")
+        return run_parameters_list
+
+
+    def _get_run_ids_and_parameters_in_measurement_folder(self, run_parameters_list = None):
+        if not run_parameters_list:
+            run_parameters_list = self._get_run_parameters_from_measurement_folder()
+        unique_run_ids_list = list(set([Measurement._parse_run_id_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f]))
+        sorted_run_ids_list = sorted(unique_run_ids_list)
         matched_run_ids_and_parameters_list = []
         #O(n^2) naive search, but it's fine...
         for run_id in sorted_run_ids_list: 
@@ -88,23 +97,26 @@ class Measurement():
                     break
             else:
                 raise RuntimeError("Unable to find data for run id: " + str(run_id))
-        for run_id_and_parameters in matched_run_ids_and_parameters_list:
-            run_id, run_parameters = run_id_and_parameters
-            run_image_pathname_dict = {}
-            run_id_image_filenames = [f for f in os.listdir(self.measurement_directory_path) if str(run_id) in f]
-            for run_id_image_filename in run_id_image_filenames:
-                for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
-                    if image_name in run_id_image_filename:
-                        run_id_image_pathname = os.path.join(self.measurement_directory_path, run_id_image_filename)
-                        run_image_pathname_dict[image_name] = run_id_image_pathname 
-                        break
-                else:
-                    raise RuntimeError("Run image does not match specification. Is the imaging type correct?")
-            current_run = Run(run_id, run_image_pathname_dict, hold_images_in_memory= self.hold_images_in_memory, 
-                                parameters = run_parameters, image_format = self.image_format)
-            runs_dict[run_id] = current_run
-        self.runs_dict = runs_dict
+        return matched_run_ids_and_parameters_list
 
+    def _add_run(self, run_id_and_parameters):
+        run_id, run_parameters = run_id_and_parameters
+        run_image_pathname_dict = {}
+        run_id_image_filenames = [f for f in os.listdir(self.measurement_directory_path) if str(run_id) in f]
+        for run_id_image_filename in run_id_image_filenames:
+            for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
+                if image_name in run_id_image_filename:
+                    run_id_image_pathname = os.path.join(self.measurement_directory_path, run_id_image_filename)
+                    run_image_pathname_dict[image_name] = run_id_image_pathname 
+                    break
+            else:
+                raise RuntimeError("Run image does not match specification. Is the imaging type correct?")
+        generated_run = Run(run_id, run_image_pathname_dict, hold_images_in_memory= self.hold_images_in_memory, 
+                            parameters = run_parameters, image_format = self.image_format)
+        self.runs_dict[run_id] = generated_run
+
+    def _update_runs_dict(self):
+        pass
 
 
     """
