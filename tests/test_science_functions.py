@@ -31,9 +31,13 @@ def test_kardar_f_minus_function():
 
 
 def test_get_ideal_betamu_from_T_over_TF():
-    array_to_use = np.random.uniform(low = 0.0, high = 10.0, size = 100)
-    print(science_functions._low_T_get_ideal_betamu_from_T_over_TF(0.01))
-    print(science_functions._high_T_get_ideal_betamu_from_T_over_TF(50))
+    T_over_TF_values = np.logspace(-3, 3, 1000)
+    betamu_values_direct = science_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values)
+    reconstituted_T_over_TF_values_direct = science_functions.ideal_T_over_TF(betamu_values_direct)
+    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_direct, rtol = 1e-8, atol = 0.0))
+    betamu_values_tabulated = science_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values, flag = "tabulated")
+    reconstituted_T_over_TF_values_tabulated = science_functions.ideal_T_over_TF(betamu_values_tabulated) 
+    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_tabulated, rtol = 1e-8, atol = 0.0))
 
 
 def test_two_level_system_population_rabi():

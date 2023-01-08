@@ -76,6 +76,12 @@ def load_polylog_analytic_continuation_parameters():
         coeffs_5_2 = np.load(coeffs_5_2_path) 
     return (centers, coeffs_3_2, coeffs_5_2)
 
+
+def load_tabulated_ideal_betamu_vs_T_over_TF():
+    TABULATED_BETAMU_FILENAME = "Tabulated_Ideal_Betamu_vs_T_over_TF.npy"
+    with pkg_resources.path(r, TABULATED_BETAMU_FILENAME) as betamu_path:
+        return np.load(betamu_path)
+
 def universal_clipboard_copy(text_to_copy):
     if(sys.platform.startswith("darwin")):
         #Copy command for MacOS 
