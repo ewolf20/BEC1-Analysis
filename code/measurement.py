@@ -138,32 +138,6 @@ class Measurement():
                 dump_dict[run_id] = current_run.get_parameters() 
             dump_file.write(json.dumps(dump_dict))
 
-    
-    """
-    Labels runs as bad shots.
-    
-    Uses the function badshot_function to label runs as bad shots. badshot function has calling signature (runs_dict, **kwargs), 
-    with **kwargs intended for passing in self.measurement_parameters, and returns a list of run_ids which are bad shots.
-
-    If badshots_list is passed, instead labels the run_ids in badshots_array as bad shots."""
-    def label_badshots(self, badshot_function = None, badshots_list = None):
-        if(not badshots_list and badshot_function):
-            badshots_list = badshot_function(self.runs_dict, **self.measurement_parameters)
-        for run_id in self.runs_dict:
-            if run_id in badshots_list:
-                current_run = self.runs_dict[run_id]
-                current_run.is_badshot = True
-                current_run.parameters['badshot'] = True
-
-
-    def get_badshots_list(self):
-        badshots_list = []
-        for run_id in self.runs_dict:
-            current_run = self.runs_dict[run_id]
-            if current_run.is_badshot:
-                badshots_list.append(run_id) 
-        return badshots_list
-
 
 
     """
@@ -244,8 +218,42 @@ class Measurement():
         ax.imshow(my_with_atoms_image, cmap = 'gray')
         ax.add_patch(rect)
         plt.show()
-        
+
+
+    def get_parameter_value_from_runs(self, value_name, ignore_badshots = True):
+        return_list = []
+        for run_id in self.runs_dict:
+            current_run = self.runs_dict[run_id] 
+            if not ignore_badshots or not current_run.is_badshot:
+                return_list.append(current_run.parameters[value_name])
+        return return_list
+
     
+    """
+    Labels runs as bad shots.
+    
+    Uses the function badshot_function to label runs as bad shots. badshot function has calling signature (runs_dict, **kwargs), 
+    with **kwargs intended for passing in self.measurement_parameters, and returns a list of run_ids which are bad shots.
+
+    If badshots_list is passed, instead labels the run_ids in badshots_array as bad shots."""
+    def label_badshots(self, badshot_function = None, badshots_list = None):
+        if(not badshots_list and badshot_function):
+            badshots_list = badshot_function(self.runs_dict, **self.measurement_parameters)
+        for run_id in self.runs_dict:
+            if run_id in badshots_list:
+                current_run = self.runs_dict[run_id]
+                current_run.is_badshot = True
+                current_run.parameters['badshot'] = True
+
+
+    def get_badshots_list(self):
+        badshots_list = []
+        for run_id in self.runs_dict:
+            current_run = self.runs_dict[run_id]
+            if current_run.is_badshot:
+                badshots_list.append(run_id) 
+        return badshots_list
+
 
     @staticmethod
     def _parse_run_id_from_filename(image_filename):

@@ -66,6 +66,7 @@ class TestMeasurement:
         assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
 
 
+    @staticmethod
     def test_update_runs_dict():
         pass
 
@@ -89,6 +90,15 @@ class TestMeasurement:
         print(get_sha_hash_string(my_run_image.data.tobytes()))
         assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
         assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
+
+    @staticmethod
+    def test_get_parameter_value_from_runs():
+        VALUE_NAME_TO_CHECK = "id"
+        EXPECTED_VALUES = [805277]
+        my_measurement = TestMeasurement.initialize_measurement() 
+        my_measurement._initialize_runs_dict()
+        values = my_measurement.get_parameter_value_from_runs("id")
+        assert values == EXPECTED_VALUES
 
     @staticmethod
     def test_label_badshots():
