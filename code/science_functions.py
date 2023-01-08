@@ -1,10 +1,12 @@
 import numpy as np 
-import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
+from scipy.interpolate import interp1d
 from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
+from scipy.special import zeta, gamma
 
-from . import statistics_functions
+from . import statistics_functions, numerical_functions, loading_functions
+
 
 
 #Taken from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
@@ -23,17 +25,182 @@ LI_F_PLUS = LI_I + 0.5
 BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
 
 
+#Data from https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.110.135301; Ku figure updated for Feshbach correction 
+BERTSCH_PARAMETER = 0.370
+
+
+#THERMODYNAMICS FUNCTIONS
+
+#Homebrewed implementation of the f_minus function, defined in Kardar, "Statistical Physics of Particles", chapter 7.
+#Observe that f_minus(s, z) = -polylog(s, -z). Observe also that this function takes the _log_ of z instead of the argument itself, 
+#so as to be better behaved for large values of beta mu.
+
+def kardar_f_minus_function(s, log_z):
+    SOMMERFELD_EXPANSION_ORDER = 6
+    SOMMERFELD_LOG_CUTOFF = 10
+    POWER_SERIES_EXPANSION_ORDER = 70
+    POWER_SERIES_LOG_CUTOFF = -0.1
+    #Safety cast with minimal overhead for scalar log_z
+    input_scalar = np.isscalar(log_z)
+    if(input_scalar):
+        log_z = np.atleast_1d(log_z)
+    condition = np.zeros(log_z.shape, dtype = int)
+    power_series_indices = (log_z < POWER_SERIES_LOG_CUTOFF)
+    sommerfeld_series_indices = (log_z > SOMMERFELD_LOG_CUTOFF)
+    other_indices = (np.logical_and(log_z >= POWER_SERIES_LOG_CUTOFF, log_z <= SOMMERFELD_LOG_CUTOFF))
+    condition[power_series_indices] = 0 
+    condition[other_indices] = 1
+    condition[sommerfeld_series_indices] = 2
+    kardar_f_minus_values = numerical_functions.smart_where(condition, log_z,
+    lambda x: _kardar_highT_f_minus(s, POWER_SERIES_EXPANSION_ORDER, x),
+    lambda x: _kardar_intermediateT_f_minus(s, x), 
+    lambda x: _kardar_lowT_f_minus(s, SOMMERFELD_EXPANSION_ORDER, x)
+    )
+    #Undo safety cast
+    if(input_scalar):
+        return kardar_f_minus_values.item()
+    else:
+        return kardar_f_minus_values
+
+
+#Implementation from large-z Sommerfeld expansion as given in Kardar.
+def _kardar_lowT_f_minus(s, order, log_z):
+    indices = np.arange(0, 2 * (order + 1), 2, dtype = float).reshape(1, order + 1)
+    prefactor = np.power(log_z, s) / gamma(s + 1)
+    reshaped_log_z = np.expand_dims(log_z, axis = 1) 
+    summands = 2 * (1 - np.power(2.0, -indices + 1)) * zeta(indices) * gamma(s + 1) / gamma(s - indices + 1) * np.power(reshaped_log_z, -indices)
+    return prefactor * np.sum(summands, axis = -1)
+
+
+#Implementation from naive small-z expansion of polylog
+def _kardar_highT_f_minus(s, order, logz):
+    z = np.exp(logz) 
+    indices = np.arange(1, order + 1, dtype = float).reshape(1, order)
+    reshaped_z = np.expand_dims(z, axis = 1)
+    summands = -np.power(-reshaped_z, indices) / np.power(indices, s)
+    return np.sum(summands, axis = -1)
+
+
+(polylog_analytic_continuation_centers, 
+polylog_analytic_continuation_coeffs_3_2, 
+polylog_analytic_continuation_coeffs_5_2) = loading_functions.load_polylog_analytic_continuation_parameters()
+
+"""Implementation using Taylor expansions, with stored coefficients, about various relevant points for intermediate z."""
+def _kardar_intermediateT_f_minus(s, logz):
+    minus_z = -np.exp(logz)
+    centers = polylog_analytic_continuation_centers
+    if(s == 3/2):
+        coeffs = polylog_analytic_continuation_coeffs_3_2
+    elif(s == 5/2):
+        coeffs = polylog_analytic_continuation_coeffs_5_2
+    else:
+        raise NotImplementedError("The fast analytic continuation implementation of the polylog is not supported for s != 3/2, 5/2.")
+    return -numerical_functions.stored_coeffs_polylog_taylor_series(minus_z, centers, coeffs)
+
+
+def thermal_de_broglie_li_6_mks(kBT):
+    return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * LI_6_MASS_KG * kBT)
+
+def ideal_fermi_P0(n, E_F):
+    return 2 / 5 * n * E_F 
+
+def ideal_fermi_kappa0(n, E_F):
+    return 3 / (2 * n * E_F)
+
+
+#Note: Only valid for box potentials
+def ideal_fermi_E0_uniform(E_F):
+    return 3/5 * E_F
+
+#Derived from notes in Kardar, 'Statistical Physics of Particles', chapter 7
+def ideal_fermi_P_over_p0(betamu):
+    return 5.0 / 2.0 * 1.0 / (np.cbrt(9 * np.pi / 16)) * np.power(kardar_f_minus_function(3/2, betamu), -5/3) * (kardar_f_minus_function(5/2, betamu))
+
+
+def ideal_T_over_TF(betamu):
+    return 1.0 / (np.cbrt(9 * np.pi / 16) * np.power(kardar_f_minus_function(3/2, betamu), 2/3))
+
+def _bruteforce_get_ideal_betamu_from_T_over_TF(T_over_TF):
+    return fsolve(lambda x: ideal_T_over_TF(x) - T_over_TF, 0)
+
+#Derived by slight alteration of Equation 64 of Cowan 2019: https://doi.org/10.1007/s10909-019-02228-0
+def _low_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
+    COWAN_COEFFICIENTS = [1, -1/12, -1/80, 247/25920, -16291/777600] 
+    indices = 2 * np.arange(len(COWAN_COEFFICIENTS))
+    pi_T_over_TF = np.pi * T_over_TF 
+    reshaped_pi_T_over_TF = np.expand_dims(pi_T_over_TF, axis = -1) 
+    reshaped_coefficients = np.expand_dims(COWAN_COEFFICIENTS, tuple(np.arange(len(np.shape(pi_T_over_TF)))))
+    reshaped_indices = np.expand_dims(indices, tuple(np.arange(len(np.shape(pi_T_over_TF)))))
+    mu_over_EF = np.sum(reshaped_coefficients * np.power(reshaped_pi_T_over_TF, reshaped_indices), axis = -1)
+    return mu_over_EF / T_over_TF
+
+#From Equation 65 of Cowan 2019
+def _high_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
+    maxwell_term = T_over_TF * np.log(4.0 / (3.0 * np.sqrt(np.pi) * np.power(T_over_TF, 1.5)))
+    COWAN_COEFFICIENTS = [1.0 / 3.0 * np.sqrt(2 / np.pi), 
+                         -1.0 / (81 * np.pi) * (16 * np.sqrt(3) - 27), 
+                        4 / (243 * np.power(np.pi, 1.5)) * (15 * np.sqrt(2) - 16 * np.sqrt(6) + 18)]
+    T_powers = [-0.5, -2, -3.5]
+    reshaped_coefficients = np.expand_dims(COWAN_COEFFICIENTS, tuple(np.arange(len(np.shape(T_over_TF)))))
+    reshaped_T_over_TF = np.expand_dims(T_over_TF, axis = -1) 
+    reshaped_T_powers = np.expand_dims(T_powers, tuple(np.arange(len(np.shape(T_over_TF)))))
+    mu_over_EF = maxwell_term + np.sum(reshaped_coefficients * np.power(reshaped_T_over_TF, reshaped_T_powers), axis = -1)
+    return mu_over_EF / T_over_TF
+
+
+#Initialize globals to allow loading to be done once, and only if the relevant functions are used.
+vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = None
+tabulated_ideal_betamu_interpolant = None
+
+def get_ideal_betamu_from_T_over_TF(T_over_TF, flag = "direct"):
+    LOW_T_CUTOFF = 0.01
+    HIGH_T_CUTOFF = 5.0
+    if(flag == "direct"):
+        global vectorized_bruteforce_get_ideal_betamu_from_T_over_TF
+        if(not vectorized_bruteforce_get_ideal_betamu_from_T_over_TF):
+            vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = np.vectorize(_bruteforce_get_ideal_betamu_from_T_over_TF, otypes = [float])
+        input_scalar = np.isscalar(T_over_TF)
+        if(input_scalar):
+            T_over_TF = np.atleast_1d(T_over_TF)
+        condition = np.zeros(T_over_TF.shape, dtype = int)
+        low_T_indices = (T_over_TF < LOW_T_CUTOFF)
+        high_T_indices = (T_over_TF > HIGH_T_CUTOFF)
+        intermediate_T_indices = (np.logical_and(T_over_TF >= LOW_T_CUTOFF, T_over_TF <= HIGH_T_CUTOFF))
+        condition[low_T_indices] = 0 
+        condition[intermediate_T_indices] = 1
+        condition[high_T_indices] = 2
+        betamu_values = numerical_functions.smart_where(condition, T_over_TF,
+        _low_T_get_ideal_betamu_from_T_over_TF,
+        vectorized_bruteforce_get_ideal_betamu_from_T_over_TF, 
+        _high_T_get_ideal_betamu_from_T_over_TF
+        )
+        #Undo safety cast
+        if(input_scalar):
+            return betamu_values.item()
+        else:
+            return betamu_values
+    elif(flag == "tabulated"):
+        global tabulated_ideal_betamu_interpolant
+        if(not tabulated_ideal_betamu_interpolant):
+            tabulated_T_over_TF, tabulated_ideal_betamu = loading_functions.load_tabulated_ideal_betamu_vs_T_over_TF()
+            tabulated_ideal_betamu_interpolant = interp1d(tabulated_T_over_TF, tabulated_ideal_betamu, kind = "cubic")
+        return tabulated_ideal_betamu_interpolant(T_over_TF)
+
+def get_fermi_energy_hz_from_density(atom_density_m):
+    fermi_k_m = np.cbrt(6 * np.square(np.pi) * atom_density_m)
+    fermi_energy_J = np.square(H_BAR_MKS) * np.square(fermi_k_m) / (2 * LI_6_MASS_KG)
+    fermi_energy_hz = fermi_energy_J / (2 * np.pi * H_BAR_MKS) 
+    return fermi_energy_hz
+
+
+
+
+#FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
+
 def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
     box_volume_m = np.pi * np.square(box_radius_um) * box_length_um * 1e-18
     atom_density_m = atom_counts / box_volume_m
     return get_fermi_energy_hz_from_density(atom_density_m)
-
-
-def get_fermi_energy_hz_from_density(atom_density_m):
-    fermi_k_m = np.cbrt(6 * np.square(np.pi) * atom_density_m) 
-    fermi_energy_J = np.square(H_BAR_MKS) * np.square(fermi_k_m) / (2 * LI_6_MASS_KG)
-    fermi_energy_hz = fermi_energy_J / (2 * np.pi * H_BAR_MKS) 
-    return fermi_energy_hz
 
 
 def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
@@ -123,22 +290,29 @@ def get_hybrid_trap_compressibilities(harmonic_trap_positions_um, three_d_densit
     compressibilities = - savgol_filter(average_fermi_energies, SAVGOL_FILTER_WINDOW_LENGTH, SAVGOL_FILTER_POLYORDER, deriv = 1, delta = delta_E_bin)
     return (displacement_bins, compressibilities)
 
+def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
+    li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)
+    li_energy_hz = li_energy_mks / (2 * np.pi * H_BAR_MKS)
+    return li_energy_hz
+
+def get_li_energy_gradient_hz_um_in_1D_trap(displacement_m, trap_freq_hz):
+    li_force_mks = LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * displacement_m
+    li_force_hz_per_um = li_force_mks / (2 * np.pi * H_BAR_MKS) * 1e-6
+    return li_force_hz_per_um
+
+def get_li_displacement_um_from_1D_trap_energy(li_energy_hz, trap_freq_hz):
+    li_energy_mks = li_energy_hz * (2 * np.pi * H_BAR_MKS)
+    displacement_m = np.sqrt(2 * li_energy_mks / (LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz)))
+    return displacement_m * 1e6
+
+
+#FUNCTIONS FOR RF SPECTROSCOPY
 
 #By convention, uses kHz as the base unit.
 def two_level_system_population_rabi(t, omega_r, detuning):
     generalized_rabi = np.sqrt(np.square(omega_r) + np.square(detuning))
     population_excited = np.square(omega_r) / np.square(generalized_rabi) * np.square(np.sin(generalized_rabi / 2 * t))
     return np.array([1.0 - population_excited, population_excited])
-
-def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
-    li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)
-    li_energy_hz = li_energy_mks / (2 * np.pi * H_BAR_MKS)
-    return li_energy_hz
-
-def get_li_displacement_um_from_1D_trap_energy(li_energy_hz, trap_freq_hz):
-    li_energy_mks = li_energy_hz * (2 * np.pi * H_BAR_MKS)
-    displacement_m = np.sqrt(2 * li_energy_mks / (LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz)))
-    return displacement_m * 1e6
 
 """
 Function for getting the energy of the ground state hyperfine manifold of lithium.

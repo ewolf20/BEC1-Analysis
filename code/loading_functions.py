@@ -4,6 +4,9 @@ import os
 import subprocess
 import sys
 
+import numpy as np
+
+from .. import resources as r
 
 def load_satyendra():
     path_to_file = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +42,45 @@ def load_experiment_parameters_from_folder(folder_path):
     parameters_path = os.path.join(folder_path, "experiment_parameters.json")
     with open(parameters_path, 'r') as json_file:
         return json.load(json_file)
+
+
+def load_unitary_EOS():
+    UNITARY_EOS_FILENAME = "Experimental_Unitary_Fermi_Gas_EOS.csv"
+    with pkg_resources.path(r, UNITARY_EOS_FILENAME) as eos_path:
+        with open(eos_path, 'r') as eos_file:
+            eos_data = np.loadtxt(eos_file, delimiter =",", skiprows = 1, unpack = True)
+            (kappa_tilde, p_tilde, Cv_over_Nk, T_over_TF, E_over_E0, mu_over_EF, 
+            F_over_E0, S_over_NkB, betamu) = eos_data
+            eos_dict = {
+                "T/TF":T_over_TF, 
+                "E/E0":E_over_E0, 
+                "mu/EF":mu_over_EF, 
+                "F/E0":F_over_E0, 
+                "S/NkB":S_over_NkB, 
+                "Cv/Nk":Cv_over_Nk, 
+                "P_tilde":p_tilde, 
+                "kappa_tilde":kappa_tilde, 
+                "betamu":betamu
+            }
+            return eos_dict
+
+def load_polylog_analytic_continuation_parameters():
+    CENTERS_FILENAME = "Polylog_Taylor_Centers.npy"
+    COEFFS_3_2_FILENAME = "Polylog_Taylor_Coefficients_3_2.npy"
+    COEFFS_5_2_FILENAME = "Polylog_Taylor_Coefficients_5_2.npy"
+    with pkg_resources.path(r, CENTERS_FILENAME) as centers_path, \
+        pkg_resources.path(r, COEFFS_3_2_FILENAME) as coeffs_3_2_path, \
+        pkg_resources.path(r, COEFFS_5_2_FILENAME) as coeffs_5_2_path:
+        centers = np.load(centers_path)
+        coeffs_3_2 = np.load(coeffs_3_2_path) 
+        coeffs_5_2 = np.load(coeffs_5_2_path) 
+    return (centers, coeffs_3_2, coeffs_5_2)
+
+
+def load_tabulated_ideal_betamu_vs_T_over_TF():
+    TABULATED_BETAMU_FILENAME = "Tabulated_Ideal_Betamu_vs_T_over_TF.npy"
+    with pkg_resources.path(r, TABULATED_BETAMU_FILENAME) as betamu_path:
+        return np.load(betamu_path)
 
 def universal_clipboard_copy(text_to_copy):
     if(sys.platform.startswith("darwin")):

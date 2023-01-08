@@ -1,7 +1,9 @@
 import os
 import sys
+import time
 
 import matplotlib.pyplot as plt
+import mpmath 
 import numpy as np 
 
 
@@ -11,7 +13,32 @@ sys.path.insert(0, path_to_analysis)
 
 RESOURCES_DIRECTORY_PATH = "./resources"
 
-from BEC1_Analysis.code import science_functions, loading_functions
+from BEC1_Analysis.code import science_functions
+
+def test_kardar_f_minus_function():
+    LOWER_LOG_BOUND = -10
+    UPPER_LOG_BOUND = 100
+    S_VALUE_1 = 3/2
+    S_VALUE_2 = 5/2
+    log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 10000)
+    vectorized_mpmath_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
+    mp_math_values_1 = -vectorized_mpmath_polylog(S_VALUE_1, -np.exp(log_z_values))
+    mp_math_values_2 = -vectorized_mpmath_polylog(S_VALUE_2, -np.exp(log_z_values))
+    homebrew_values_1 = science_functions.kardar_f_minus_function(S_VALUE_1, log_z_values)
+    homebrew_values_2 = science_functions.kardar_f_minus_function(S_VALUE_2, log_z_values)
+    assert np.all(np.isclose(mp_math_values_1, homebrew_values_1, atol = 0.0, rtol = 1e-6))
+    assert np.all(np.isclose(mp_math_values_2, homebrew_values_2, atol = 0.0, rtol = 1e-6))
+
+
+def test_get_ideal_betamu_from_T_over_TF():
+    T_over_TF_values = np.logspace(-3, 3, 1000)
+    betamu_values_direct = science_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values)
+    reconstituted_T_over_TF_values_direct = science_functions.ideal_T_over_TF(betamu_values_direct)
+    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_direct, rtol = 1e-8, atol = 0.0))
+    betamu_values_tabulated = science_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values, flag = "tabulated")
+    reconstituted_T_over_TF_values_tabulated = science_functions.ideal_T_over_TF(betamu_values_tabulated) 
+    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_tabulated, rtol = 1e-8, atol = 0.0))
+
 
 def test_two_level_system_population_rabi():
     TEST_DETUNING_A = 1
