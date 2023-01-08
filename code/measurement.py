@@ -115,8 +115,14 @@ class Measurement():
                             parameters = run_parameters, image_format = self.image_format)
         self.runs_dict[run_id] = generated_run
 
+
+
     def _update_runs_dict(self):
-        pass
+        matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_in_measurement_folder()
+        for run_id_and_parameters in matched_run_ids_and_parameters_list:
+            run_id, _ = run_id_and_parameters
+            if not run_id in self.runs_dict:
+                self._add_run(run_id_and_parameters)
 
 
     """
@@ -262,10 +268,24 @@ class Run():
     from the list in MEASUREMENT_IMAGE_NAME_DICT which corresponds to the imaging_type of the overarching measurement. 
     image_format: The file extension of the image files
     parameters: The run parameters.
+    
+    Optimal params:
+
+    hold_images_in_memory: If true, the underlying images of the run are loaded into memory at run creation; if false, they are loaded when 
+        requested by the get_image. 
+
+    image_format: The format of the underlying image files. 
+
+    analysis_results: A dict containing the results of analyses on the runs. Generally this will be empty at creation, unless runs are being 
+        re-loaded from a previous measurement session.
     """
-    def __init__(self, run_id, image_pathnames_dict, parameters, hold_images_in_memory = True, image_format = ".fits"):
+    def __init__(self, run_id, image_pathnames_dict, parameters, hold_images_in_memory = True, image_format = ".fits", analysis_results = None):
         self.run_id = run_id
         self.parameters = parameters
+        if(not analysis_results):
+            self.analysis_results = analysis_results
+        else:
+            self.analysis_results = {}
         if('badshot' in self.parameters):
             self.is_badshot = self.parameters['badshot']
         else:

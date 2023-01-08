@@ -66,6 +66,10 @@ class TestMeasurement:
         assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
 
 
+    def test_update_runs_dict():
+        pass
+
+
     @staticmethod 
     def test_runs_dict_dump_and_load():
         RUN_PARAMS_SHA_CHECKSUM = '9693e102bc60e7a8944743c883e51d154a7527a705c07af6df6cc5f7fc96ecec'
