@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import warnings
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -284,14 +285,31 @@ class Measurement():
         return return_list
 
 
-    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True):
+    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True):
         return_list = []
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
             if not ignore_badshots or not current_run.is_badshot:
-                return_list.append(current_run.analysis_results[value_name])
+                result_value = current_run.analysis_results[value_name] 
+                if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
+                    return_list.append(current_run.analysis_results[value_name])
         return return_list
 
+
+    
+    """Convenience function which returns a pair of parameter values and analysis results. Convenient for plotting, and also convenient where 
+    some runs have errors in the analysis."""
+    def get_parameter_analysis_result_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True):
+        param_list = [] 
+        analysis_result_list = [] 
+        for run_id in self.runs_dict:
+            current_run = self.runs_dict[run_id] 
+            if not ignore_badshots or not current_run.is_badshot:
+                result_value = current_run.analysis_results[analysis_value_name]
+                if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
+                    param_list.append(current_run.parameters[parameter_name])
+                    analysis_result_list.append(result_value)
+        return (param_list, analysis_result_list)
 
     """
     Performs arbitrary user-specified analysis on the underlying runs dict. 
@@ -312,12 +330,17 @@ class Measurement():
     
     overwrite_existing: If False, values already present in the analysis_dict of a run will not be changed; if there is any novel 
     value name in result_varnames that is not a key in analysis_dict, that value will be added to analysis_dict.
+
+    catch_errors: Where true, the function will catch errors raised by analysis function, raising their messages as warnings and storing the 
+    analysis error indicator string as the value in the analysis_results dict.
     
     NOTE: Because the output of analysis_function can be arbitrary, it is the form of the argument result_varname that determines whether the 
     function is treated as having a return which is in single or tuple form. The former form is allowed for notational convenience, the latter 
     to accommodate e.g. numerically demanding analyses that inherently return two different results of individual interest."""
 
-    def analyze_runs(self, analysis_function, result_varnames, ignore_badshots = True, overwrite_existing = False):
+    ANALYSIS_ERROR_INDICATOR_STRING = "ERR"
+
+    def analyze_runs(self, analysis_function, result_varnames, ignore_badshots = True, overwrite_existing = False, catch_errors = False):
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
@@ -332,12 +355,22 @@ class Measurement():
                             break 
                     if not result_varnames_not_all_present:
                         continue
-                results = analysis_function(self, current_run)
-                if not results_in_tuple_form:
-                    results = (results,)
+                if catch_errors:
+                    try:
+                        results = analysis_function(self, current_run)
+                    except Exception as e:
+                        results = [Measurement.ANALYSIS_ERROR_INDICATOR_STRING] * len(result_varnames)
+                        warnings.warn(repr(e))
+                    else:
+                        if not results_in_tuple_form:
+                            results = (results,)
+                else:
+                    results = analysis_function(self, current_run)
+                    if not results_in_tuple_form:
+                        results = (results,)
                 for varname, result in zip(result_varnames, results):
-                    if overwrite_existing or not varname in current_run.analysis_results:
-                        current_run.analysis_results[varname] = result 
+                        if overwrite_existing or not varname in current_run.analysis_results:
+                            current_run.analysis_results[varname] = result 
     
     """
     Labels runs as bad shots using user-specified input.

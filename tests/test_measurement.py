@@ -100,7 +100,7 @@ class TestMeasurement:
     @staticmethod
     def test_get_parameter_value_from_runs():
         VALUE_NAME_TO_CHECK = "id"
-        EXPECTED_VALUES = [805277]
+        EXPECTED_VALUES = [TEST_IMAGE_RUN_ID]
         my_measurement = TestMeasurement.initialize_measurement() 
         my_measurement._initialize_runs_dict()
         values = my_measurement.get_parameter_value_from_runs("id")
@@ -120,6 +120,32 @@ class TestMeasurement:
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_AS_LIST
 
 
+    @staticmethod 
+    def test_get_parameter_analysis_result_pair_from_runs():
+        VALUE_NAME_TO_CHECK = "foo"
+        VALUE = 3
+        VALUE_AS_LIST = [VALUE]
+        EXPECTED_PARAMS = [TEST_IMAGE_RUN_ID]
+        my_measurement = TestMeasurement.initialize_measurement() 
+        my_measurement._initialize_runs_dict()
+        for run_id in my_measurement.runs_dict:
+            current_run = my_measurement.runs_dict[run_id] 
+            current_run.analysis_results[VALUE_NAME_TO_CHECK] = VALUE 
+        param_list, analysis_list = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo")
+        assert param_list == EXPECTED_PARAMS
+        assert analysis_list == VALUE_AS_LIST
+        for run_id in my_measurement.runs_dict:
+            current_run = my_measurement.runs_dict[run_id] 
+            current_run.analysis_results[VALUE_NAME_TO_CHECK] = Measurement.ANALYSIS_ERROR_INDICATOR_STRING
+        param_list, analysis_list = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", ignore_errors = True)
+        assert param_list == []
+        assert analysis_list == []
+        param_list, analysis_list = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", ignore_errors = False)
+        assert param_list == EXPECTED_PARAMS
+        assert analysis_list == [Measurement.ANALYSIS_ERROR_INDICATOR_STRING]
+
+
+
 
     @staticmethod 
     def test_analyze_runs():
@@ -136,6 +162,8 @@ class TestMeasurement:
             return (VALUE_2,)
         def analysis_func_1_scalar(my_measurement, my_run):
             return VALUE_1
+        def analysis_func_error(my_measurement, my_run):
+            raise RuntimeError("Intended error for measurement analysis testing.")
         my_measurement.analyze_runs(analysis_func_1, (VALUE_NAME_TO_CHECK,))
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
         my_measurement.analyze_runs(analysis_func_2, (VALUE_NAME_TO_CHECK,), overwrite_existing = False)
@@ -144,7 +172,15 @@ class TestMeasurement:
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_2_AS_LIST
         my_measurement.analyze_runs(analysis_func_1_scalar, VALUE_NAME_TO_CHECK, overwrite_existing = True)
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
-
+        ERR_NAME_TO_CHECK = "bar"
+        try:
+            my_measurement.analyze_runs(analysis_func_error, ERR_NAME_TO_CHECK, catch_errors = False)
+        except Exception as e:
+            pass
+        else:
+            raise ValueError("There was supposed to be an error here.")
+        my_measurement.analyze_runs(analysis_func_error, ERR_NAME_TO_CHECK, catch_errors = True)
+        assert my_measurement.get_analysis_value_from_runs(ERR_NAME_TO_CHECK, ignore_errors = False) == [Measurement.ANALYSIS_ERROR_INDICATOR_STRING]
 
     @staticmethod
     def test_label_badshots_custom():
