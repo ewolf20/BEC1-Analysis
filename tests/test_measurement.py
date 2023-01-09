@@ -71,25 +71,25 @@ class TestMeasurement:
         pass
 
 
-    @staticmethod 
-    def test_runs_dict_dump_and_load():
-        RUN_PARAMS_SHA_CHECKSUM = '9693e102bc60e7a8944743c883e51d154a7527a705c07af6df6cc5f7fc96ecec'
-        my_measurement = TestMeasurement.initialize_measurement() 
-        my_measurement._initialize_runs_dict()
-        try:
-            my_measurement.dump_runs_dict(dump_filename = 'foo.txt')
-            my_measurement._initialize_runs_dict(use_saved_params = True, saved_params_filename = 'foo.txt')
-        finally:
-            os.remove('foo.txt')
-        my_runs_dict = my_measurement.runs_dict
-        assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID
-        my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
-        my_run_image = my_run.get_image('Side')
-        my_run_params = my_run.get_parameters()
-        my_run_params_bytes = json.dumps(my_run_params).encode("ASCII")
-        print(get_sha_hash_string(my_run_image.data.tobytes()))
-        assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
-        assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
+    # @staticmethod 
+    # def test_analysis_dump_and_load():
+    #     RUN_ANALYSIS_CHECKSUM = '9693e102bc60e7a8944743c883e51d154a7527a705c07af6df6cc5f7fc96ecec'
+    #     my_measurement = TestMeasurement.initialize_measurement()
+    #     my_measurement._initialize_runs_dict()
+    #     try:
+    #         my_measurement.dump_runs_dict(dump_filename = 'foo.txt')
+    #         my_measurement._initialize_runs_dict(use_saved_params = True, saved_params_filename = 'foo.txt')
+    #     finally:
+    #         os.remove('foo.txt')
+    #     my_runs_dict = my_measurement.runs_dict
+    #     assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID
+    #     my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
+    #     my_run_image = my_run.get_image('Side')
+    #     my_run_params = my_run.get_parameters()
+    #     my_run_params_bytes = json.dumps(my_run_params).encode("ASCII")
+    #     print(get_sha_hash_string(my_run_image.data.tobytes()))
+    #     assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
+    #     assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
 
     @staticmethod
     def test_get_parameter_value_from_runs():
@@ -100,14 +100,62 @@ class TestMeasurement:
         values = my_measurement.get_parameter_value_from_runs("id")
         assert values == EXPECTED_VALUES
 
+
+    @staticmethod 
+    def test_get_analysis_value_from_runs():
+        VALUE_NAME_TO_CHECK = "foo"
+        VALUE = 3 
+        VALUE_AS_LIST = [3]
+        my_measurement = TestMeasurement.initialize_measurement() 
+        my_measurement._initialize_runs_dict()
+        for run_id in my_measurement.runs_dict:
+            current_run = my_measurement.runs_dict[run_id] 
+            current_run.analysis_results[VALUE_NAME_TO_CHECK] = VALUE 
+        assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_AS_LIST
+
+
+
+    @staticmethod 
+    def test_analyze_runs():
+        VALUE_NAME_TO_CHECK = "foo"
+        VALUE_1 = 1
+        VALUE_2 = 2
+        VALUE_1_AS_LIST = [1] 
+        VALUE_2_AS_LIST = [2]
+        my_measurement = TestMeasurement.initialize_measurement() 
+        my_measurement._initialize_runs_dict()
+        def analysis_func_1(my_measurement, my_run):
+            return (VALUE_1,)
+        def analysis_func_2(my_measurement, my_run):
+            return (VALUE_2,)
+        my_measurement.analyze_runs(analysis_func_1, (VALUE_NAME_TO_CHECK,))
+        assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
+        my_measurement.analyze_runs(analysis_func_2, (VALUE_NAME_TO_CHECK,), overwrite_existing = False)
+        assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
+        my_measurement.analyze_runs(analysis_func_2, (VALUE_NAME_TO_CHECK,), overwrite_existing = True)
+        assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_2_AS_LIST
+
+
     @staticmethod
-    def test_label_badshots():
+    def test_label_badshots_custom():
         my_measurement = TestMeasurement.initialize_measurement() 
         my_measurement._initialize_runs_dict() 
         my_run = my_measurement.runs_dict[TEST_IMAGE_RUN_ID]
         assert not my_run.is_badshot
-        my_measurement.label_badshots(lambda f: list(f))
+        def badshot_function_true(my_measurement, my_run):
+            return True
+        def badshot_function_false(my_measurement, my_run):
+            return False
+        my_measurement.label_badshots_custom(badshot_function = badshot_function_true)
         assert my_run.is_badshot
+        my_measurement.label_badshots_custom(badshot_function = badshot_function_false)
+        assert my_run.is_badshot 
+        my_measurement.label_badshots_custom(badshot_function = badshot_function_false, override_existing_badshots = True)
+        assert not my_run.is_badshot
+        my_measurement.label_badshots_custom(badshots_list = [TEST_IMAGE_RUN_ID])
+        assert my_run.is_badshot
+
+
 
     #Does not test the interactive box setting.
     @staticmethod

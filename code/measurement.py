@@ -34,9 +34,11 @@ class Measurement():
     measurement_parameters: dict {parname:value} of measurement-level params, e.g. a list of run ids which are flagged as bad shots or 
     the coordinates of a background box.
     run_parameters_verbose: Whether the runs store the entire set of experiment parameters, or just those being scanned.
+    badshot_function: A badshot function, to be used by 
     """
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False):
+                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
+                    saved_analysis_filename = "measurement_run_analysis_dump.json", badshot_function = None, analyses_list = None):
         if(not measurement_directory_path):
             measurement_directory_path = os.getcwd() 
         self.measurement_directory_path = measurement_directory_path 
@@ -55,23 +57,26 @@ class Measurement():
         else:
             self.measurement_parameters = {}
         self.run_parameters_verbose = run_parameters_verbose
+        self.badshot_function = badshot_function
+        self.badshot_checked_list = []
         self.runs_dict = {}
-        
+        self._initialize_runs_dict()
+        if analyses_list is None:
+            self.analyses_list = []
+
+    def set_badshot_function(self, badshot_function):
+        self.badshot_function = badshot_function
 
     """Initializes the runs dict.
     
     Creates a dictionary {run_id:Run} of runs in the measurement. Each individual run is an object containing the run parameters and images."""
-    def _initialize_runs_dict(self, use_saved_params = False, saved_params_filename = "measurement_run_params_dump.json"):
-        if(use_saved_params):
-            run_parameters_list = loading_functions.load_run_parameters_from_json(saved_params_filename)
-        else:
-            run_parameters_list = None
-        matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_in_measurement_folder(run_parameters_list = run_parameters_list)
+    def _initialize_runs_dict(self):
+        matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_from_measurement_folder()
         for run_id_and_parameters in matched_run_ids_and_parameters_list:
             self._add_run(run_id_and_parameters)
 
 
-    def _get_run_parameters_from_measurement_folder(self):
+    def _get_run_ids_and_parameters_from_measurement_folder(self):
         DATA_DUMP_PARAMS_FILENAME = "run_params_dump.json" 
         path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, DATA_DUMP_PARAMS_FILENAME)
         if(os.path.exists(path_to_dump_file_in_measurement_folder)):
@@ -80,12 +85,6 @@ class Measurement():
         else:
             raise RuntimeError("""Drawing parameters directly from breadboard is deprecated. You may use ImageWatchdog.get_run_metadata()
                                 to generate a run params json for legacy datasets.""")
-        return run_parameters_list
-
-
-    def _get_run_ids_and_parameters_in_measurement_folder(self, run_parameters_list = None):
-        if not run_parameters_list:
-            run_parameters_list = self._get_run_parameters_from_measurement_folder()
         unique_run_ids_list = list(set([Measurement._parse_run_id_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f]))
         sorted_run_ids_list = sorted(unique_run_ids_list)
         matched_run_ids_and_parameters_list = []
@@ -118,26 +117,41 @@ class Measurement():
 
 
     def _update_runs_dict(self):
-        matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_in_measurement_folder()
+        matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_from_measurement_folder()
         for run_id_and_parameters in matched_run_ids_and_parameters_list:
             run_id, _ = run_id_and_parameters
             if not run_id in self.runs_dict:
                 self._add_run(run_id_and_parameters)
+        current_run_ids_list = [f[0] for f in matched_run_ids_and_parameters_list]
+        saved_run_ids_list = [f for f in self.runs_dict]
+        for saved_run_id in saved_run_ids_list:
+            if not saved_run_id in current_run_ids_list:
+                self.runs_dict.pop(saved_run_id)
 
 
     """
-    Dumps the parameters of the runs dict to a .json file.
+    Dumps the parameters of the run analysis_results dicts to a .json file.
     
-    When called, save a dictionary {run_ID, params} of the parameters of each run in the current 
-    runs dict. Allows measurement-specific updates to the run parameters."""
-    def dump_runs_dict(self, dump_filename = "measurement_run_params_dump.json"):
-        with open(dump_filename, 'w') as dump_file:
+    When called, save a dictionary {run_ID, analysis_results} of the analysis results of each run in the current 
+    runs dict. Allows analyses to be recalled from previous sessions. 
+    
+    NOTE: This method relies on the objects in analysis_results being JSON serializable; this is a good assumption for most 
+    analysis results, but can fail for general input."""
+    def dump_run_analysis_dict(self, dump_pathname = "measurement_run_analysis_dump.json"):
+        with open(dump_pathname, 'w') as dump_file:
             dump_dict = {} 
             for run_id in self.runs_dict:
                 current_run = self.runs_dict[run_id] 
-                dump_dict[run_id] = current_run.get_parameters() 
-            dump_file.write(json.dumps(dump_dict))
+                dump_dict[run_id] = current_run.analysis_results
+            json.dump(dump_dict, dump_file)
 
+
+    def load_run_analysis_dict(self, dump_pathname = "measurement_run_analysis_dump.json"):
+        with open(dump_pathname, 'r') as dump_file:
+            dump_dict = json.load(dump_file)
+            for run_id in dump_dict:
+                current_run = self.runs_dict[run_id] 
+                current_run.analysis_results = dump_dict[run_id]
 
 
     """
@@ -228,22 +242,96 @@ class Measurement():
                 return_list.append(current_run.parameters[value_name])
         return return_list
 
+
+    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True):
+        return_list = []
+        for run_id in self.runs_dict:
+            current_run = self.runs_dict[run_id]
+            if not ignore_badshots or not current_run.is_badshot:
+                return_list.append(current_run.analysis_results[value_name])
+        return return_list
+
+
+    """
+    Performs arbitrary user-specified analysis on the underlying runs dict. 
+    
+    Given a function analysis_function which takes in the measurement and runs and returns 
+    some output, apply the function to all runs and store the results in the analysis_dicts of each run 
+    under the names specified in result_varnames.
+    
+    Parameters:
+    
+    analysis_function: A function with signature fun(measurement, run) that, given the overall measurement and 
+    the specific run of interest as input, outputs some arbitrary results in tuple form as (result_1, result_2, ...)
+    
+    result_varnames: A tuple (varname_1, varname_2, ...) of names under which the results from analysis_function should be stored.
+    
+    ignore_badshots: If True, analysis is not applied to runs which have been labeled as bad shots.
+    
+    overwrite_existing: If False, values already present in the analysis_dict of a run will not be changed; if there is any novel 
+    value name in result_varnames that is not a key in analysis_dict, that value will be added to analysis_dict."""
+
+    def analyze_runs(self, analysis_function, result_varnames, ignore_badshots = True, overwrite_existing = False):
+        for run_id in self.runs_dict:
+            current_run = self.runs_dict[run_id]
+            if not ignore_badshots or not current_run.is_badshot:
+                if(not overwrite_existing):
+                    result_varnames_not_all_present = False 
+                    for varname in result_varnames:
+                        if not varname in current_run.analysis_results:
+                            result_varnames_not_all_present = True
+                            break 
+                    if not result_varnames_not_all_present:
+                        continue
+                results = analysis_function(self, current_run)
+                for varname, result in zip(result_varnames, results):
+                    if overwrite_existing or not varname in current_run.analysis_results:
+                        current_run.analysis_results[varname] = result 
     
     """
-    Labels runs as bad shots.
-    
-    Uses the function badshot_function to label runs as bad shots. badshot function has calling signature (runs_dict, **kwargs), 
-    with **kwargs intended for passing in self.measurement_parameters, and returns a list of run_ids which are bad shots.
+    Labels runs as bad shots using user-specified input.
 
-    If badshots_list is passed, instead labels the run_ids in badshots_array as bad shots."""
-    def label_badshots(self, badshot_function = None, badshots_list = None):
-        if(not badshots_list and badshot_function):
-            badshots_list = badshot_function(self.runs_dict, **self.measurement_parameters)
+    Parameters:
+    
+    badshot_function: Function with calling signature (measurement, run), 
+    as with any analysis function, but assumed to return a boolean True or False, corresponding to whether the run is or is not 
+    a bad shot. 
+
+    badshots_list (optional): If passed, badshot_function is completely ignored; instead, the run_ids appearing in badshots_list are 
+    labeled as bad shots.
+
+    override_existing_badshots: If True, then runs which are _already_ labeled as bad shots but for which either badshot_function or badshots_list 
+    indicate that they are not bad shots will be re-labeled as good shots. 
+
+    use_badshot_checked_list: If True, run_ids are appended to a checklist once they have been checked for bad shot status, and will not be checked on subsequent 
+    invocations of the function which also have use_checklist = True. If False, runs are neither appended to this checklist for future invocations nor 
+    exempted from badshot checking on the current invocation.
+    """
+    def label_badshots_custom(self, badshot_function = None, badshots_list = None, override_existing_badshots = False, use_badshot_checked_list = False):
         for run_id in self.runs_dict:
-            if run_id in badshots_list:
-                current_run = self.runs_dict[run_id]
-                current_run.is_badshot = True
-                current_run.parameters['badshot'] = True
+            if use_badshot_checked_list:
+                if run_id in self.badshot_checked_list:
+                    continue 
+                else:
+                    self.badshot_checked_list.append(run_id)
+            current_run = self.runs_dict[run_id]
+            if override_existing_badshots:
+                #Explicit None comparison to eliminate edge case where badshots list is the empty list []
+                if not badshots_list is None:
+                    current_run.is_badshot = (run_id in badshots_list)
+                elif badshot_function:
+                    current_run.is_badshot = badshot_function(self, current_run) 
+            elif not current_run.is_badshot:
+                if not badshots_list is None:
+                    current_run.is_badshot = (run_id in badshots_list)
+                elif badshot_function:
+                    current_run.is_badshot = badshot_function(self, current_run)
+            current_run.parameters["badshot"] = current_run.is_badshot
+
+
+    def _label_badshots_default(self):
+        self.label_badshots_custom(badshot_function = self.badshot_function, use_badshot_checked_list = True)
+
 
 
     def get_badshots_list(self):
@@ -291,13 +379,14 @@ class Run():
         self.run_id = run_id
         self.parameters = parameters
         if(not analysis_results):
-            self.analysis_results = analysis_results
-        else:
             self.analysis_results = {}
-        if('badshot' in self.parameters):
-            self.is_badshot = self.parameters['badshot']
+        else:
+            self.analysis_results = analysis_results
+        if('badshot' in self.analysis_results):
+            self.is_badshot = self.analysis_results['badshot']
         else:
             self.is_badshot = False
+            self.analysis_results["badshot"] = False
         self.hold_images_in_memory = hold_images_in_memory
         self.image_dict = {}
         if not image_format in IMAGE_FORMATS_LIST:
