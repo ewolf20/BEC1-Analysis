@@ -2,8 +2,9 @@ import hashlib
 import json
 import os 
 import sys 
+import shutil
 
-import matplotlib.pyplot as plt 
+import numpy as np
 
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
@@ -71,25 +72,30 @@ class TestMeasurement:
         pass
 
 
-    # @staticmethod 
-    # def test_analysis_dump_and_load():
-    #     RUN_ANALYSIS_CHECKSUM = '9693e102bc60e7a8944743c883e51d154a7527a705c07af6df6cc5f7fc96ecec'
-    #     my_measurement = TestMeasurement.initialize_measurement()
-    #     my_measurement._initialize_runs_dict()
-    #     try:
-    #         my_measurement.dump_runs_dict(dump_filename = 'foo.txt')
-    #         my_measurement._initialize_runs_dict(use_saved_params = True, saved_params_filename = 'foo.txt')
-    #     finally:
-    #         os.remove('foo.txt')
-    #     my_runs_dict = my_measurement.runs_dict
-    #     assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID
-    #     my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
-    #     my_run_image = my_run.get_image('Side')
-    #     my_run_params = my_run.get_parameters()
-    #     my_run_params_bytes = json.dumps(my_run_params).encode("ASCII")
-    #     print(get_sha_hash_string(my_run_image.data.tobytes()))
-    #     assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
-    #     assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
+    @staticmethod 
+    def test_analysis_dump_and_load():
+        RUN_ANALYSIS_CHECKSUM = None
+        my_measurement = TestMeasurement.initialize_measurement()
+        def analysis_function_scalar_zero(my_measurement, my_run):
+            return 0.0
+        def analysis_function_scalar_one(my_measurement, my_run):
+            return 1.0
+        def analysis_function_array_zero(my_measurement, my_run):
+            return np.array([0.0])
+        my_measurement.analyze_runs(analysis_function_scalar_zero, "bar")
+        my_measurement.analyze_runs(analysis_function_array_zero, "baz")
+        try:
+            TEST_DUMP_FOLDERNAME = "Temp"
+            os.mkdir(TEST_DUMP_FOLDERNAME)
+            TEST_DUMP_FILENAME = "foo.json"
+            test_dump_pathname = os.path.join(TEST_DUMP_FOLDERNAME, TEST_DUMP_FILENAME)
+            my_measurement.dump_run_analysis_dict(dump_pathname = test_dump_pathname)
+            my_measurement.analyze_runs(analysis_function_scalar_one, "bar", overwrite_existing = True)
+            my_measurement.load_run_analysis_dict(dump_pathname = test_dump_pathname)
+        finally:
+            shutil.rmtree(TEST_DUMP_FOLDERNAME)
+        assert my_measurement.get_analysis_value_from_runs("bar") == [0.0]
+        assert my_measurement.get_analysis_value_from_runs("baz") == [np.array([0.0])]
 
     @staticmethod
     def test_get_parameter_value_from_runs():
@@ -128,12 +134,16 @@ class TestMeasurement:
             return (VALUE_1,)
         def analysis_func_2(my_measurement, my_run):
             return (VALUE_2,)
+        def analysis_func_1_scalar(my_measurement, my_run):
+            return VALUE_1
         my_measurement.analyze_runs(analysis_func_1, (VALUE_NAME_TO_CHECK,))
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
         my_measurement.analyze_runs(analysis_func_2, (VALUE_NAME_TO_CHECK,), overwrite_existing = False)
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
         my_measurement.analyze_runs(analysis_func_2, (VALUE_NAME_TO_CHECK,), overwrite_existing = True)
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_2_AS_LIST
+        my_measurement.analyze_runs(analysis_func_1_scalar, VALUE_NAME_TO_CHECK, overwrite_existing = True)
+        assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
 
 
     @staticmethod

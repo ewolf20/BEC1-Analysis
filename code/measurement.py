@@ -133,25 +133,66 @@ class Measurement():
     Dumps the parameters of the run analysis_results dicts to a .json file.
     
     When called, save a dictionary {run_ID, analysis_results} of the analysis results of each run in the current 
-    runs dict. Allows analyses to be recalled from previous sessions. 
+    runs dict as a json file. Allows analyses to be recalled from previous sessions. 
     
-    NOTE: This method relies on the objects in analysis_results being JSON serializable; this is a good assumption for most 
-    analysis results, but can fail for general input."""
+    NOTE: This method relies on the objects in analysis_results being JSON serializable, with a _single_ exception: because of 
+    their ubiquity, numpy arrays have been manually accommodated as well. To do this, a separate directory is created wherein the 
+    numpy arrays are saved as .npy files."""
+
     def dump_run_analysis_dict(self, dump_pathname = "measurement_run_analysis_dump.json"):
         with open(dump_pathname, 'w') as dump_file:
             dump_dict = {} 
             for run_id in self.runs_dict:
                 current_run = self.runs_dict[run_id] 
-                dump_dict[run_id] = current_run.analysis_results
+                dump_dict[run_id] = Measurement._digest_analysis_results(run_id, dump_pathname, current_run.analysis_results)
             json.dump(dump_dict, dump_file)
+
+    @staticmethod
+    def _digest_analysis_results(run_id, dump_pathname, analysis_results):
+        dump_foldername = os.path.dirname(dump_pathname)
+        dump_filename_sans_extension = os.path.basename(dump_pathname).split('.')[0]
+        numpy_storage_folder_name = dump_filename_sans_extension + "_auxiliary_numpy_storage"
+        numpy_storage_folder_path = os.path.join(dump_foldername, numpy_storage_folder_name)
+        return_dict = {}
+        for key in analysis_results:
+            analysis_object = analysis_results[key] 
+            if not isinstance(analysis_object, np.ndarray):
+                return_dict[key] = analysis_object 
+            else:
+                if not os.path.isdir(numpy_storage_folder_path):
+                    os.mkdir(numpy_storage_folder_path)
+                numpy_filename = "{0:d}_{1}.npy".format(run_id, key)
+                numpy_pathname = os.path.join(numpy_storage_folder_path, numpy_filename)
+                np.save(numpy_pathname, analysis_object)
+                return_dict_numpy_key = "{0}_Numpy_Pathname".format(key)
+                return_dict[return_dict_numpy_key] = numpy_pathname
+        return return_dict
+
+
+
 
 
     def load_run_analysis_dict(self, dump_pathname = "measurement_run_analysis_dump.json"):
         with open(dump_pathname, 'r') as dump_file:
             dump_dict = json.load(dump_file)
             for run_id in dump_dict:
-                current_run = self.runs_dict[run_id] 
-                current_run.analysis_results = dump_dict[run_id]
+                run_id_as_integer = int(run_id)
+                current_run = self.runs_dict[run_id_as_integer] 
+                current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[run_id])
+
+
+    @staticmethod 
+    def _undigest_analysis_results(loaded_json_analysis_results):
+        return_dict = {}
+        for key in loaded_json_analysis_results:
+            if not "_Numpy_Pathname" in key:
+                return_dict[key] = loaded_json_analysis_results[key] 
+            else:
+                original_analysis_results_key = key.split("_Numpy_Pathname")[0] 
+                numpy_pathname = loaded_json_analysis_results[key] 
+                numpy_array = np.load(numpy_pathname) 
+                return_dict[original_analysis_results_key] = numpy_array 
+        return return_dict
 
 
     """
@@ -262,16 +303,24 @@ class Measurement():
     Parameters:
     
     analysis_function: A function with signature fun(measurement, run) that, given the overall measurement and 
-    the specific run of interest as input, outputs some arbitrary results in tuple form as (result_1, result_2, ...)
+    the specific run of interest as input, outputs some arbitrary results either singly as result or in tuple form as (result_1, result_2, ...)
     
-    result_varnames: A tuple (varname_1, varname_2, ...) of names under which the results from analysis_function should be stored.
+    result_varnames: A string varname or a tuple (varname_1, varname_2, ...) of names under which the output of analysis_function should be 
+    stored. 
     
     ignore_badshots: If True, analysis is not applied to runs which have been labeled as bad shots.
     
     overwrite_existing: If False, values already present in the analysis_dict of a run will not be changed; if there is any novel 
-    value name in result_varnames that is not a key in analysis_dict, that value will be added to analysis_dict."""
+    value name in result_varnames that is not a key in analysis_dict, that value will be added to analysis_dict.
+    
+    NOTE: Because the output of analysis_function can be arbitrary, it is the form of the argument result_varname that determines whether the 
+    function is treated as having a return which is in single or tuple form. The former form is allowed for notational convenience, the latter 
+    to accommodate e.g. numerically demanding analyses that inherently return two different results of individual interest."""
 
     def analyze_runs(self, analysis_function, result_varnames, ignore_badshots = True, overwrite_existing = False):
+        results_in_tuple_form = isinstance(result_varnames, tuple)
+        if not results_in_tuple_form:
+            result_varnames = (result_varnames,)
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
             if not ignore_badshots or not current_run.is_badshot:
@@ -284,6 +333,8 @@ class Measurement():
                     if not result_varnames_not_all_present:
                         continue
                 results = analysis_function(self, current_run)
+                if not results_in_tuple_form:
+                    results = (results,)
                 for varname, result in zip(result_varnames, results):
                     if overwrite_existing or not varname in current_run.analysis_results:
                         current_run.analysis_results[varname] = result 
