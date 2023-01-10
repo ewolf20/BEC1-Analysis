@@ -294,8 +294,6 @@ class Measurement():
                 if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
                     return_list.append(current_run.analysis_results[value_name])
         return return_list
-
-
     
     """Convenience function which returns a pair of parameter values and analysis results. Convenient for plotting, and also convenient where 
     some runs have errors in the analysis."""
@@ -340,11 +338,14 @@ class Measurement():
 
     ANALYSIS_ERROR_INDICATOR_STRING = "ERR"
 
-    def analyze_runs(self, analysis_function, result_varnames, ignore_badshots = True, overwrite_existing = False, catch_errors = False):
+    def analyze_runs(self, analysis_function, result_varnames, ignore_badshots = True, overwrite_existing = False, catch_errors = False, 
+                    print_progress = False):
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
         for run_id in self.runs_dict:
+            if(print_progress):
+                print("Analyzing run {0:d}".format(run_id))
             current_run = self.runs_dict[run_id]
             if not ignore_badshots or not current_run.is_badshot:
                 if(not overwrite_existing):
@@ -372,6 +373,18 @@ class Measurement():
                         if overwrite_existing or not varname in current_run.analysis_results:
                             current_run.analysis_results[varname] = result 
     
+
+    def add_default_analysis(self, analysis_function, result_varnames):
+        self.analyses_list.append((analysis_function, result_varnames))
+
+
+    def _apply_default_analyses(self, ignore_badshots = True, overwrite_existing = False, catch_errors = False, print_progress = False):
+        for fun_and_varnames_tuple in self.analyses_list:
+            fun, varnames = fun_and_varnames_tuple
+            self.analyze_runs(fun, varnames, ignore_badshots = ignore_badshots, overwrite_existing=overwrite_existing, catch_errors=catch_errors, 
+                                    print_progress=print_progress)
+
+
     """
     Labels runs as bad shots using user-specified input.
 
@@ -387,13 +400,13 @@ class Measurement():
     override_existing_badshots: If True, then runs which are _already_ labeled as bad shots but for which either badshot_function or badshots_list 
     indicate that they are not bad shots will be re-labeled as good shots. 
 
-    use_badshot_checked_list: If True, run_ids are appended to a checklist once they have been checked for bad shot status, and will not be checked on subsequent 
-    invocations of the function which also have use_checklist = True. If False, runs are neither appended to this checklist for future invocations nor 
+    use_badshot_checked_list: If True and override_existing is false, run_ids are appended to a checklist once they have been checked for bad shot status,
+    and will not be checked on subsequent invocations of the function which also have use_checklist = True. If False, runs are neither appended to this checklist for future invocations nor 
     exempted from badshot checking on the current invocation.
     """
     def label_badshots_custom(self, badshot_function = None, badshots_list = None, override_existing_badshots = False, use_badshot_checked_list = False):
         for run_id in self.runs_dict:
-            if use_badshot_checked_list:
+            if not override_existing_badshots and use_badshot_checked_list:
                 if run_id in self.badshot_checked_list:
                     continue 
                 else:
@@ -413,8 +426,9 @@ class Measurement():
             current_run.parameters["badshot"] = current_run.is_badshot
 
 
-    def _label_badshots_default(self):
-        self.label_badshots_custom(badshot_function = self.badshot_function, use_badshot_checked_list = True)
+    def _label_badshots_default(self, override_existing_badshots = False):
+        self.label_badshots_custom(badshot_function = self.badshot_function, use_badshot_checked_list = (not override_existing_badshots), 
+                                override_existing_badshots=override_existing_badshots)
 
 
 
@@ -425,6 +439,19 @@ class Measurement():
             if current_run.is_badshot:
                 badshots_list.append(run_id) 
         return badshots_list
+
+
+    def update(self, update_runs = True, update_badshots = True, update_analyses = True, overwrite_existing_analysis = False, 
+                override_existing_badshots = False, ignore_badshots = True, catch_errors = True, print_progress = False):
+        if update_runs:
+            self._update_runs_dict()
+        if update_badshots:
+            self._label_badshots_default(override_existing_badshots=override_existing_badshots)
+        if update_analyses:
+            self._apply_default_analyses(ignore_badshots=ignore_badshots, catch_errors=catch_errors, print_progress=print_progress, 
+                                overwrite_existing = overwrite_existing_analysis)
+        
+        
 
 
     @staticmethod

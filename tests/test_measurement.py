@@ -185,7 +185,6 @@ class TestMeasurement:
     @staticmethod
     def test_label_badshots_custom():
         my_measurement = TestMeasurement.initialize_measurement() 
-        my_measurement._initialize_runs_dict() 
         my_run = my_measurement.runs_dict[TEST_IMAGE_RUN_ID]
         assert not my_run.is_badshot
         def badshot_function_true(my_measurement, my_run):
@@ -201,6 +200,26 @@ class TestMeasurement:
         my_measurement.label_badshots_custom(badshots_list = [TEST_IMAGE_RUN_ID])
         assert my_run.is_badshot
 
+
+
+    @staticmethod
+    def test_update():
+        my_measurement = TestMeasurement.initialize_measurement() 
+        my_measurement.runs_dict = {}
+        def badshot_function_false(my_measurement, my_run):
+            return False 
+        def my_analysis_function_zero(my_measurement, my_run):
+            return 0.0
+        my_measurement.set_badshot_function(badshot_function_false)
+        my_measurement.add_default_analysis(my_analysis_function_zero, 'foo')
+        my_measurement.update()
+        assert len(my_measurement.runs_dict) == 1
+        assert my_measurement.get_analysis_value_from_runs('foo') == [0.0] 
+        def badshot_function_true(my_measurement, my_run):
+            return True 
+        my_measurement.set_badshot_function(badshot_function_true)
+        my_measurement.update(override_existing_badshots = True) 
+        assert my_measurement.get_analysis_value_from_runs('foo') == [] 
 
 
     #Does not test the interactive box setting.
