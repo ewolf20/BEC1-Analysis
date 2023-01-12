@@ -164,6 +164,8 @@ class TestMeasurement:
             return VALUE_1
         def analysis_func_error(my_measurement, my_run):
             raise RuntimeError("Intended error for measurement analysis testing.")
+        def analysis_func_kwargs(my_measurement, my_run, input = ""):
+            return input
         my_measurement.analyze_runs(analysis_func_1, (VALUE_NAME_TO_CHECK,))
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
         my_measurement.analyze_runs(analysis_func_2, (VALUE_NAME_TO_CHECK,), overwrite_existing = False)
@@ -181,6 +183,8 @@ class TestMeasurement:
             raise ValueError("There was supposed to be an error here.")
         my_measurement.analyze_runs(analysis_func_error, ERR_NAME_TO_CHECK, catch_errors = True)
         assert my_measurement.get_analysis_value_from_runs(ERR_NAME_TO_CHECK, ignore_errors = False) == [Measurement.ANALYSIS_ERROR_INDICATOR_STRING]
+        my_measurement.analyze_runs(analysis_func_kwargs, "baz", fun_kwargs = {'input':'hi'})
+        assert my_measurement.get_analysis_value_from_runs("baz") == ['hi']
 
     @staticmethod
     def test_label_badshots_custom():

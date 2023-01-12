@@ -338,8 +338,10 @@ class Measurement():
 
     ANALYSIS_ERROR_INDICATOR_STRING = "ERR"
 
-    def analyze_runs(self, analysis_function, result_varnames, ignore_badshots = True, overwrite_existing = False, catch_errors = False, 
+    def analyze_runs(self, analysis_function, result_varnames, fun_kwargs = None, ignore_badshots = True, overwrite_existing = True, catch_errors = False, 
                     print_progress = False):
+        if fun_kwargs is None:
+            fun_kwargs = {}
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
@@ -358,7 +360,7 @@ class Measurement():
                         continue
                 if catch_errors:
                     try:
-                        results = analysis_function(self, current_run)
+                        results = analysis_function(self, current_run, **fun_kwargs)
                     except Exception as e:
                         results = [Measurement.ANALYSIS_ERROR_INDICATOR_STRING] * len(result_varnames)
                         warnings.warn(repr(e))
@@ -366,7 +368,7 @@ class Measurement():
                         if not results_in_tuple_form:
                             results = (results,)
                 else:
-                    results = analysis_function(self, current_run)
+                    results = analysis_function(self, current_run, **fun_kwargs)
                     if not results_in_tuple_form:
                         results = (results,)
                 for varname, result in zip(result_varnames, results):
@@ -374,15 +376,17 @@ class Measurement():
                             current_run.analysis_results[varname] = result 
     
 
-    def add_default_analysis(self, analysis_function, result_varnames):
-        self.analyses_list.append((analysis_function, result_varnames))
+    def add_default_analysis(self, analysis_function, result_varnames, fun_kwargs = None):
+        if fun_kwargs is None:
+            fun_kwargs = {}
+        self.analyses_list.append((analysis_function, result_varnames, fun_kwargs))
 
 
     def _apply_default_analyses(self, ignore_badshots = True, overwrite_existing = False, catch_errors = False, print_progress = False):
-        for fun_and_varnames_tuple in self.analyses_list:
-            fun, varnames = fun_and_varnames_tuple
-            self.analyze_runs(fun, varnames, ignore_badshots = ignore_badshots, overwrite_existing=overwrite_existing, catch_errors=catch_errors, 
-                                    print_progress=print_progress)
+        for fun_and_varnames_and_kwargs_tuple in self.analyses_list:
+            fun, varnames, fun_kwargs = fun_and_varnames_and_kwargs_tuple
+            self.analyze_runs(fun, varnames, fun_kwargs = fun_kwargs, ignore_badshots = ignore_badshots, overwrite_existing=overwrite_existing,
+                                catch_errors=catch_errors, print_progress=print_progress)
 
 
     """
