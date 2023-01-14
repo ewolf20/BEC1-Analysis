@@ -290,7 +290,7 @@ class Measurement():
     Ignore badshots: If True, does not return the parameter value for runs which are flagged as bad shots. 
     
     run_filter: As with analyze_runs, if passed, only returns parameter values for which the function run_filter returns True."""
-    def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None):
+    def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None, numpyfy = True):
         if run_filter is None:
             run_filter = lambda my_measurement, my_run: True
         return_list = []
@@ -299,10 +299,13 @@ class Measurement():
             should_return = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
             if should_return:
                 return_list.append(current_run.parameters[value_name])
-        return return_list
+        if not numpyfy:
+            return return_list
+        else:
+            return np.array(return_list)
 
 
-    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None):
+    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None, numpyfy = True):
         if run_filter is None:
             run_filter = lambda my_measurement, my_run: True
         return_list = []
@@ -313,12 +316,15 @@ class Measurement():
                 result_value = current_run.analysis_results[value_name] 
                 if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
                     return_list.append(current_run.analysis_results[value_name])
-        return return_list
+        if not numpyfy:
+            return return_list
+        else:
+            return np.array(return_list)
     
     """Convenience function which returns a pair of parameter values and analysis results. Convenient for plotting, and also convenient where 
     some runs have errors in the analysis."""
     def get_parameter_analysis_result_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
-                                                    run_filter = None):
+                                                    run_filter = None, numpyfy = True):
         if run_filter is None:
             run_filter = lambda my_measurement, my_run: True
         param_list = []
@@ -331,7 +337,10 @@ class Measurement():
                 if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
                     param_list.append(current_run.parameters[parameter_name])
                     analysis_result_list.append(result_value)
-        return (param_list, analysis_result_list)
+        if not numpyfy:
+            return (param_list, analysis_result_list)
+        else:
+            return (np.array(param_list), np.array(analysis_result_list))
 
     """
     Performs arbitrary user-specified analysis on the underlying runs dict. 

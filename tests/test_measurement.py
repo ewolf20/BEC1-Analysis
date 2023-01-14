@@ -103,68 +103,86 @@ class TestMeasurement:
     @staticmethod
     def test_get_parameter_value_from_runs():
         VALUE_NAME_TO_CHECK = "id"
-        EXPECTED_VALUES = [TEST_IMAGE_RUN_ID]
+        EXPECTED_VALUES = np.array([TEST_IMAGE_RUN_ID])
         my_measurement = TestMeasurement.initialize_measurement() 
         my_measurement._initialize_runs_dict()
         values = my_measurement.get_parameter_value_from_runs("id")
-        assert values == EXPECTED_VALUES
+        assert np.array_equal(values, EXPECTED_VALUES)
         #Test run filtering
         filtered_values_false = my_measurement.get_parameter_value_from_runs("id", run_filter = lambda my_measurement, my_run: False)
-        assert filtered_values_false == [] 
+        assert np.array_equal(filtered_values_false, np.array([]))
         filtered_values_true = my_measurement.get_parameter_value_from_runs("id", run_filter = lambda my_measurement, my_run: True)
-        assert filtered_values_true == EXPECTED_VALUES
+        assert np.array_equal(filtered_values_true, EXPECTED_VALUES)
+        #Test non-numpy output
+        filtered_values_true_list = my_measurement.get_parameter_value_from_runs("id", run_filter = lambda my_measurement, my_run: True, 
+                                                            numpyfy = False)
+        assert isinstance(filtered_values_true_list, list) 
+        assert filtered_values_true_list == [TEST_IMAGE_RUN_ID]
 
 
     @staticmethod 
     def test_get_analysis_value_from_runs():
         VALUE_NAME_TO_CHECK = "foo"
         VALUE = 3 
-        VALUE_AS_LIST = [3]
+        VALUE_AS_ARRAY = np.array([3])
         my_measurement = TestMeasurement.initialize_measurement() 
         my_measurement._initialize_runs_dict()
         for run_id in my_measurement.runs_dict:
             current_run = my_measurement.runs_dict[run_id] 
             current_run.analysis_results[VALUE_NAME_TO_CHECK] = VALUE 
-        assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_AS_LIST
+        assert np.array_equal(my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK), VALUE_AS_ARRAY)
         #Test run filtering
         filtered_values_false = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: False)
-        assert filtered_values_false == [] 
+        assert np.array_equal(filtered_values_false, np.array([]))
         filtered_values_true = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: True)
-        assert filtered_values_true == VALUE_AS_LIST
+        assert np.array_equal(filtered_values_true, VALUE_AS_ARRAY)
+        #Test non-numpy output 
+        filtered_values_true_list = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: True, 
+                                                                                numpyfy = False)
+        assert isinstance(filtered_values_true_list, list)
+        assert filtered_values_true_list == [VALUE]
 
 
     @staticmethod 
     def test_get_parameter_analysis_result_pair_from_runs():
         VALUE_NAME_TO_CHECK = "foo"
         VALUE = 3
-        VALUE_AS_LIST = [VALUE]
-        EXPECTED_PARAMS = [TEST_IMAGE_RUN_ID]
+        VALUE_AS_ARRAY = np.array([VALUE])
+        EXPECTED_PARAMS = np.array([TEST_IMAGE_RUN_ID])
         my_measurement = TestMeasurement.initialize_measurement() 
         my_measurement._initialize_runs_dict()
         for run_id in my_measurement.runs_dict:
             current_run = my_measurement.runs_dict[run_id] 
             current_run.analysis_results[VALUE_NAME_TO_CHECK] = VALUE 
-        param_list, analysis_list = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo")
-        assert param_list == EXPECTED_PARAMS
-        assert analysis_list == VALUE_AS_LIST
+        param_array, analysis_array = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo")
+        assert np.array_equal(param_array, EXPECTED_PARAMS)
+        assert np.array_equal(analysis_array, VALUE_AS_ARRAY)
         #Test error filtering
         for run_id in my_measurement.runs_dict:
             current_run = my_measurement.runs_dict[run_id] 
             current_run.analysis_results[VALUE_NAME_TO_CHECK] = Measurement.ANALYSIS_ERROR_INDICATOR_STRING
-        param_list, analysis_list = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", ignore_errors = True)
-        assert param_list == []
-        assert analysis_list == []
-        param_list, analysis_list = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", ignore_errors = False)
-        assert param_list == EXPECTED_PARAMS
-        assert analysis_list == [Measurement.ANALYSIS_ERROR_INDICATOR_STRING]
+        param_array, analysis_array = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", ignore_errors = True)
+        assert np.array_equal(param_array, np.array([]))
+        assert np.array_equal(analysis_array, np.array([]))
+        param_array, analysis_array = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", ignore_errors = False)
+        assert np.array_equal(param_array, EXPECTED_PARAMS)
+        assert np.array_equal(analysis_array, np.array([Measurement.ANALYSIS_ERROR_INDICATOR_STRING]))
         #Test run filtering
-        param_list_false, analysis_list_false = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", 
+        param_array_false, analysis_array_false = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", 
                                                                         run_filter = lambda my_measurement, my_run: False)
-        assert param_list_false == [] 
-        assert analysis_list_false == []
-        param_list_true, analysis_list_true = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", 
+        assert np.array_equal(param_array_false, np.array([]))
+        assert np.array_equal(analysis_array_false, np.array([]))
+        param_array_true, analysis_array_true = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", 
                                                                         run_filter = lambda my_measurement, my_run: True, ignore_errors = False)
-        assert param_list_true == EXPECTED_PARAMS
+        assert np.array_equal(param_array_true, EXPECTED_PARAMS)
+        assert np.array_equal(analysis_array_true, np.array([Measurement.ANALYSIS_ERROR_INDICATOR_STRING]))
+        #Test non-numpy returns 
+        param_list_true, analysis_list_true = my_measurement.get_parameter_analysis_result_pair_from_runs("id", "foo", 
+                                                                        run_filter = lambda my_measurement, my_run: True, ignore_errors = False, 
+                                                                        numpyfy = False)
+        assert isinstance(param_list_true, list) 
+        assert param_list_true == [TEST_IMAGE_RUN_ID] 
+        assert isinstance(analysis_list_true, list) 
         assert analysis_list_true == [Measurement.ANALYSIS_ERROR_INDICATOR_STRING]
 
 
@@ -249,12 +267,12 @@ class TestMeasurement:
         my_measurement.add_default_analysis(my_analysis_function_zero, 'foo')
         my_measurement.update()
         assert len(my_measurement.runs_dict) == 1
-        assert my_measurement.get_analysis_value_from_runs('foo') == [0.0] 
+        assert np.array_equal(my_measurement.get_analysis_value_from_runs('foo'), np.array([0.0]))
         def badshot_function_true(my_measurement, my_run):
             return True 
         my_measurement.set_badshot_function(badshot_function_true)
         my_measurement.update(override_existing_badshots = True) 
-        assert my_measurement.get_analysis_value_from_runs('foo') == [] 
+        assert np.array_equal(my_measurement.get_analysis_value_from_runs('foo'), [] )
 
 
     #Does not test the interactive box setting.
