@@ -280,21 +280,36 @@ class Measurement():
         ax.add_patch(rect)
         plt.show()
 
-
-    def get_parameter_value_from_runs(self, value_name, ignore_badshots = True):
+    """
+    Returns parameter values from each run as a list. 
+    
+    Given a value name value_name, returns a list with the value of that parameter for each run. 
+    
+    Params:
+    
+    Ignore badshots: If True, does not return the parameter value for runs which are flagged as bad shots. 
+    
+    run_filter: As with analyze_runs, if passed, only returns parameter values for which the function run_filter returns True."""
+    def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None):
+        if run_filter is None:
+            run_filter = lambda my_measurement, my_run: True
         return_list = []
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id] 
-            if not ignore_badshots or not current_run.is_badshot:
+            should_return = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
+            if should_return:
                 return_list.append(current_run.parameters[value_name])
         return return_list
 
 
-    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True):
+    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None):
+        if run_filter is None:
+            run_filter = lambda my_measurement, my_run: True
         return_list = []
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
-            if not ignore_badshots or not current_run.is_badshot:
+            should_return = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
+            if should_return:
                 result_value = current_run.analysis_results[value_name] 
                 if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
                     return_list.append(current_run.analysis_results[value_name])
@@ -302,12 +317,16 @@ class Measurement():
     
     """Convenience function which returns a pair of parameter values and analysis results. Convenient for plotting, and also convenient where 
     some runs have errors in the analysis."""
-    def get_parameter_analysis_result_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True):
-        param_list = [] 
-        analysis_result_list = [] 
+    def get_parameter_analysis_result_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
+                                                    run_filter = None):
+        if run_filter is None:
+            run_filter = lambda my_measurement, my_run: True
+        param_list = []
+        analysis_result_list = []
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id] 
-            if not ignore_badshots or not current_run.is_badshot:
+            should_return = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
+            if should_return:
                 result_value = current_run.analysis_results[analysis_value_name]
                 if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
                     param_list.append(current_run.parameters[parameter_name])
@@ -336,6 +355,9 @@ class Measurement():
 
     catch_errors: Where true, the function will catch errors raised by analysis function, raising their messages as warnings and storing the 
     analysis error indicator string as the value in the analysis_results dict.
+
+    run_filter: A function fun(my_measurement, my_run) which determines which runs to analyze; if passed, only those runs for which filter returns 
+    true are analyzed.
     
     NOTE: Because the output of analysis_function can be arbitrary, it is the form of the argument result_varname that determines whether the 
     function is treated as having a return which is in single or tuple form. The former form is allowed for notational convenience, the latter 
@@ -344,9 +366,11 @@ class Measurement():
     ANALYSIS_ERROR_INDICATOR_STRING = "ERR"
 
     def analyze_runs(self, analysis_function, result_varnames, fun_kwargs = None, ignore_badshots = True, overwrite_existing = True, catch_errors = False, 
-                    print_progress = False):
+                    run_filter = None, print_progress = False):
         if fun_kwargs is None:
             fun_kwargs = {}
+        if run_filter is None:
+            run_filter = lambda my_measurement, my_run: True
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
@@ -354,7 +378,8 @@ class Measurement():
             if(print_progress):
                 print("Analyzing run {0:d}".format(run_id))
             current_run = self.runs_dict[run_id]
-            if not ignore_badshots or not current_run.is_badshot:
+            should_analyze = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
+            if should_analyze:
                 if(not overwrite_existing):
                     result_varnames_not_all_present = False 
                     for varname in result_varnames:
@@ -381,16 +406,19 @@ class Measurement():
                             current_run.analysis_results[varname] = result 
     
 
-    def add_default_analysis(self, analysis_function, result_varnames, fun_kwargs = None):
+    def add_default_analysis(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
         if fun_kwargs is None:
             fun_kwargs = {}
-        self.analyses_list.append((analysis_function, result_varnames, fun_kwargs))
+        if run_filter is None:
+            run_filter = lambda my_measurement, my_run: True
+        self.analyses_list.append((analysis_function, result_varnames, fun_kwargs, run_filter))
 
 
     def _apply_default_analyses(self, ignore_badshots = True, overwrite_existing = False, catch_errors = False, print_progress = False):
-        for fun_and_varnames_and_kwargs_tuple in self.analyses_list:
-            fun, varnames, fun_kwargs = fun_and_varnames_and_kwargs_tuple
-            self.analyze_runs(fun, varnames, fun_kwargs = fun_kwargs, ignore_badshots = ignore_badshots, overwrite_existing=overwrite_existing,
+        for analysis_tuple in self.analyses_list:
+            fun, varnames, fun_kwargs, run_filter = analysis_tuple
+            self.analyze_runs(fun, varnames, fun_kwargs = fun_kwargs, run_filter = run_filter, 
+                                ignore_badshots = ignore_badshots, overwrite_existing=overwrite_existing,
                                 catch_errors=catch_errors, print_progress=print_progress)
 
 
