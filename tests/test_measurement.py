@@ -84,18 +84,21 @@ class TestMeasurement:
             return np.array([0.0])
         my_measurement.analyze_runs(analysis_function_scalar_zero, "bar")
         my_measurement.analyze_runs(analysis_function_array_zero, "baz")
+        my_measurement.measurement_analysis_results["horse"] = "noble animal"
         try:
             TEST_DUMP_FOLDERNAME = "Temp"
             os.mkdir(TEST_DUMP_FOLDERNAME)
             TEST_DUMP_FILENAME = "foo.json"
             test_dump_pathname = os.path.join(TEST_DUMP_FOLDERNAME, TEST_DUMP_FILENAME)
-            my_measurement.dump_run_analysis_dict(dump_pathname = test_dump_pathname)
+            my_measurement.dump_analysis(dump_pathname = test_dump_pathname)
             my_measurement.analyze_runs(analysis_function_scalar_one, "bar", overwrite_existing = True)
-            my_measurement.load_run_analysis_dict(dump_pathname = test_dump_pathname)
+            my_measurement.measurement_analysis_results["horse"] = "horse of course"
+            my_measurement.load_analysis(dump_pathname = test_dump_pathname)
         finally:
             shutil.rmtree(TEST_DUMP_FOLDERNAME)
         assert my_measurement.get_analysis_value_from_runs("bar") == [0.0]
         assert my_measurement.get_analysis_value_from_runs("baz") == [np.array([0.0])]
+        assert my_measurement.measurement_analysis_results["horse"] == "noble animal"
 
     @staticmethod
     def test_get_parameter_value_from_runs():

@@ -64,6 +64,7 @@ class Measurement():
         self._initialize_runs_dict()
         if analyses_list is None:
             self.analyses_list = []
+        self.measurement_analysis_results = {}
 
     def set_badshot_function(self, badshot_function):
         self.badshot_function = badshot_function
@@ -140,16 +141,17 @@ class Measurement():
     their ubiquity, numpy arrays have been manually accommodated as well. To do this, a separate directory is created wherein the 
     numpy arrays are saved as .npy files."""
 
-    def dump_run_analysis_dict(self, dump_pathname = "measurement_run_analysis_dump.json"):
+    def dump_analysis(self, dump_pathname = "analysis_dump.json"):
         with open(dump_pathname, 'w') as dump_file:
             dump_dict = {} 
+            dump_dict["Measurement"] = Measurement._digest_analysis_results("Measurement", dump_pathname, self.measurement_analysis_results)
             for run_id in self.runs_dict:
                 current_run = self.runs_dict[run_id] 
-                dump_dict[run_id] = Measurement._digest_analysis_results(run_id, dump_pathname, current_run.analysis_results)
+                dump_dict[str(run_id)] = Measurement._digest_analysis_results(str(run_id), dump_pathname, current_run.analysis_results)
             json.dump(dump_dict, dump_file)
 
     @staticmethod
-    def _digest_analysis_results(run_id, dump_pathname, analysis_results):
+    def _digest_analysis_results(analysis_label, dump_pathname, analysis_results):
         dump_foldername = os.path.dirname(dump_pathname)
         dump_filename_sans_extension = os.path.basename(dump_pathname).split('.')[0]
         numpy_storage_folder_name = dump_filename_sans_extension + "_auxiliary_numpy_storage"
@@ -162,7 +164,7 @@ class Measurement():
             else:
                 if not os.path.isdir(numpy_storage_folder_path):
                     os.mkdir(numpy_storage_folder_path)
-                numpy_filename = "{0:d}_{1}.npy".format(run_id, key)
+                numpy_filename = "{0}_{1}.npy".format(analysis_label, key)
                 numpy_pathname = os.path.join(numpy_storage_folder_path, numpy_filename)
                 np.save(numpy_pathname, analysis_object)
                 return_dict_numpy_key = "{0}_Numpy_Pathname".format(key)
@@ -173,13 +175,16 @@ class Measurement():
 
 
 
-    def load_run_analysis_dict(self, dump_pathname = "measurement_run_analysis_dump.json"):
+    def load_analysis(self, dump_pathname = "analysis_dump.json"):
         with open(dump_pathname, 'r') as dump_file:
             dump_dict = json.load(dump_file)
-            for run_id in dump_dict:
-                run_id_as_integer = int(run_id)
-                current_run = self.runs_dict[run_id_as_integer] 
-                current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[run_id])
+            for key in dump_dict:
+                if key == "Measurement":
+                    self.measurement_analysis_results = Measurement._undigest_analysis_results(dump_dict[key]) 
+                else:
+                    run_id_as_integer = int(key)
+                    current_run = self.runs_dict[run_id_as_integer] 
+                    current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[key])
 
 
     @staticmethod 
