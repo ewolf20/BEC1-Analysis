@@ -323,7 +323,7 @@ class Measurement():
     
     """Convenience function which returns a pair of parameter values and analysis results. Convenient for plotting, and also convenient where 
     some runs have errors in the analysis."""
-    def get_parameter_analysis_result_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
+    def get_parameter_analysis_value_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
                                                     run_filter = None, numpyfy = True):
         if run_filter is None:
             run_filter = lambda my_measurement, my_run: True
