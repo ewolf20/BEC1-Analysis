@@ -27,26 +27,26 @@ def main_after_inputs(measurement_directory_path, imaging_mode_string):
     frequency_multiplier = get_frequency_multiplier(my_measurement, imaging_mode_string)
     if imaging_mode_string == "TopAB":
         my_measurement.analyze_runs(analysis_functions.get_od_pixel_sums_top_double, ("counts_1", "counts_3"), print_progress = True)
-        frequencies_1, counts_1 = my_measurement.get_parameter_analysis_result_pair_from_runs("ImagFreq1", "counts_1")
-        frequencies_3, counts_3 = my_measurement.get_parameter_analysis_result_pair_from_runs("ImagFreq2", "counts_3")
+        frequencies_1, counts_1 = my_measurement.get_parameter_analysis_value_pair_from_runs("ImagFreq1", "counts_1")
+        frequencies_3, counts_3 = my_measurement.get_parameter_analysis_value_pair_from_runs("ImagFreq2", "counts_3")
         clipboard_string_topA = save_fit_and_plot_data(workfolder_pathname, frequencies_1, counts_1, "TopA", frequency_multiplier)
         clipboard_string_topB = save_fit_and_plot_data(workfolder_pathname, frequencies_3, counts_3, "TopB", frequency_multiplier)
         clipboard_string = clipboard_string_topA + clipboard_string_topB
     elif imaging_mode_string == "TopA":
         my_measurement.analyze_runs(analysis_functions.get_od_pixel_sum_top_A, "counts", print_progress = True)
-        frequencies, counts = my_measurement.get_parameter_analysis_result_pair_from_runs("ImagFreq1", "counts")
+        frequencies, counts = my_measurement.get_parameter_analysis_value_pair_from_runs("ImagFreq1", "counts")
         clipboard_string = save_fit_and_plot_data(workfolder_pathname, frequencies, counts, "TopA", frequency_multiplier)
     elif imaging_mode_string == "TopB":
         my_measurement.analyze_runs(analysis_functions.get_od_pixel_sum_top_B, "counts", print_progress = True)
-        frequencies, counts = my_measurement.get_parameter_analysis_result_pair_from_runs("ImagFreq2", "counts")
+        frequencies, counts = my_measurement.get_parameter_analysis_value_pair_from_runs("ImagFreq2", "counts")
         clipboard_string = save_fit_and_plot_data(workfolder_pathname, frequencies, counts, "TopB", frequency_multiplier)
     elif imaging_mode_string == "Side_hf":
         my_measurement.analyze_runs(analysis_functions.get_od_pixel_sum_side, "counts", print_progress = True)
-        frequencies, counts = my_measurement.get_parameter_analysis_result_pair_from_runs("ImagFreq0", "counts")
+        frequencies, counts = my_measurement.get_parameter_analysis_value_pair_from_runs("ImagFreq0", "counts")
         clipboard_string = save_fit_and_plot_data(workfolder_pathname, frequencies, counts, "Side", frequency_multiplier)
     elif imaging_mode_string == "Side_lf":
         my_measurement.analyze_runs(analysis_functions.get_od_pixel_sum_side, "counts", print_progress = True)
-        frequencies, counts = my_measurement.get_parameter_analysis_result_pair_from_runs("LFImgFreq", "counts")
+        frequencies, counts = my_measurement.get_parameter_analysis_value_pair_from_runs("LFImgFreq", "counts")
         clipboard_string = save_fit_and_plot_data(workfolder_pathname, frequencies, counts, "Side", frequency_multiplier)
     loading_functions.universal_clipboard_copy(clipboard_string)
 
