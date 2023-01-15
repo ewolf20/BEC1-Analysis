@@ -32,10 +32,8 @@ def main():
 
 # main() version without command line input, compatible with portal
 def main_after_inputs(measurement_directory_path, resonance_key, center_guess_MHz = None, rabi_freq_guess = None):
-    workfolder_pathname = initialize_workfolder(measurement_directory_path)
-    if(not os.path.isdir(workfolder_pathname)):
-        os.makedirs(workfolder_pathname)
     my_measurement = setup_measurement(measurement_directory_path)
+    workfolder_pathname = my_measurement.initialize_workfolder(descriptor = "RF_Spect")
     rf_frequencies_array, counts_A_array, counts_B_array, tau_value = get_rf_frequencies_and_counts(my_measurement, resonance_key)
     save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key, 
                             center_guess_MHz = center_guess_MHz, rabi_freq_guess = rabi_freq_guess)
@@ -163,22 +161,6 @@ def setup_measurement(measurement_directory_path):
             box_set = True
         run_to_use += 1
     return my_measurement
-
-def initialize_workfolder(measurement_directory_path):
-    PRIVATE_DIRECTORY_REPO_NAME = "Private_BEC1_Analysis"
-    path_to_private_directory_repo = os.path.join(path_to_repo_folder, PRIVATE_DIRECTORY_REPO_NAME)
-    current_datetime = datetime.datetime.now()
-    current_year = current_datetime.strftime("%Y")
-    current_year_month = current_datetime.strftime("%Y-%m")
-    current_year_month_day = current_datetime.strftime("%Y-%m-%d")
-    measurement_directory_folder_name = os.path.basename(os.path.normpath(measurement_directory_path))
-    workfolder_descriptor = "_RF_Spect_" + measurement_directory_folder_name
-    workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + workfolder_descriptor)
-    if(not os.path.isdir(workfolder_pathname)):
-        os.makedirs(workfolder_pathname)
-    with open(os.path.join(workfolder_pathname, "Source.txt"), 'w') as f:
-        f.write("Data source: " + measurement_directory_path)
-    return workfolder_pathname
 
 
 if __name__ == "__main__":

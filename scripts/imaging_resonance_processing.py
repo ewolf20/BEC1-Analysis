@@ -22,8 +22,8 @@ def main():
     main_after_inputs(measurement_directory_path, imaging_mode_string)
 
 def main_after_inputs(measurement_directory_path, imaging_mode_string):
-    workfolder_pathname = initialize_workfolder(measurement_directory_path)
     my_measurement = setup_measurement(measurement_directory_path, imaging_mode_string)
+    workfolder_pathname = my_measurement.initialize_workfolder(descriptor = "Imaging_Resonance")
     frequency_multiplier = get_frequency_multiplier(my_measurement, imaging_mode_string)
     if imaging_mode_string == "TopAB":
         my_measurement.analyze_runs(analysis_functions.get_od_pixel_sums_top_double, ("counts_1", "counts_3"), print_progress = True)
@@ -146,24 +146,6 @@ def imaging_mode_decoder(imaging_mode_string):
         return (TOP_B_RUN_IMAGE_NAME, TOP_MEASUREMENT_KEY)
     elif(imaging_mode_string == "TopAB"):
         return (TOP_A_RUN_IMAGE_NAME, TOP_MEASUREMENT_KEY)
-
-
-def initialize_workfolder(measurement_directory_path):
-    PRIVATE_DIRECTORY_REPO_NAME = "Private_BEC1_Analysis"
-    path_to_private_directory_repo = os.path.join(path_to_repo_folder, PRIVATE_DIRECTORY_REPO_NAME)
-    current_datetime = datetime.datetime.now()
-    current_year = current_datetime.strftime("%Y")
-    current_year_month = current_datetime.strftime("%Y-%m")
-    current_year_month_day = current_datetime.strftime("%Y-%m-%d")
-    measurement_directory_folder_name = os.path.basename(os.path.normpath(measurement_directory_path))
-    workfolder_descriptor = "_Imaging_Resonance_" + measurement_directory_folder_name
-    workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + workfolder_descriptor)
-    if(not os.path.isdir(workfolder_pathname)):
-        os.makedirs(workfolder_pathname)
-    with open(os.path.join(workfolder_pathname, "Source.txt"), 'w') as f:
-        f.write("Data source: " + measurement_directory_path)
-    return workfolder_pathname
-
 
 if __name__ == "__main__":
     main()
