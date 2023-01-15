@@ -167,11 +167,15 @@ def get_atom_counts_top_polrot(my_measurement, my_run, first_state_index = 1, se
 
 #HYBRID TRAP - BOX EXP
 
-def get_hybrid_trap_densities_along_harmonic_axis_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                                                    autocut = True,
+def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+                                                    autocut = True, imaging_mode = "polrot",
                                                     first_stored_density_name = None, second_stored_density_name = None):
-    atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
-                                                first_stored_density_name, second_stored_density_name)
+    if imaging_mode == "polrot":
+        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
+                                                    first_stored_density_name, second_stored_density_name)
+    elif imaging_mode == "abs":
+        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name)
+        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name)
     axicon_tilt_deg = my_measurement.experiment_parameters["axicon_tilt_deg"]
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     axicon_length_pix = my_measurement.experiment_parameters["hybrid_trap_typical_length_pix"]
@@ -191,11 +195,12 @@ def get_hybrid_trap_densities_along_harmonic_axis_polrot(my_measurement, my_run,
 
 
 def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                                    autocut = True,
+                                    autocut = True, imaging_mode = "polrot",
                                     first_stored_density_name = None, second_stored_density_name = None):
-    positions_first, densities_first, positions_second, densities_second = get_hybrid_trap_densities_along_harmonic_axis_polrot( 
+    positions_first, densities_first, positions_second, densities_second = get_hybrid_trap_densities_along_harmonic_axis( 
                                                                     my_measurement, my_run, first_state_index = first_state_index, 
                                                                     second_state_index = second_state_index, autocut = autocut, 
+                                                                    imaging_mode = imaging_mode,
                                                                     first_stored_density_name = first_stored_density_name, 
                                                                     second_stored_density_name = second_stored_density_name)
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
@@ -230,21 +235,30 @@ returned - though be warned that this may differ between runs!!!
 
 no_shake_density_name_(first, second): If not None, the function will assume that the atom density of the 
 (first/second) state with no box shaking is stored in measurement_analysis_results under the given name. 
-If None, the analysis will run without background subtraction."""
+If None, the analysis will run without background subtraction.
+
+#NOTE: The analysis does not autorun the get_no_shake_average_profiles function because, as currently structured, 
+this would involve a new call for every run to be analyzed. This could be worked around, but I consider it better 
+to explicitly evaluate the density names first"""
 def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                                         order = None, no_shake_density_name_first = None, 
                                         no_shake_density_name_second = None,
+                                        imaging_mode = "polrot",
                                         first_stored_density_name = None, second_stored_density_name = None):
     if no_shake_density_name_first is None:
         no_shake_density_first = 0.0
     else:
-        no_shake_density_first = my_measurement.measurement_parameters[no_shake_density_name_first]
+        no_shake_density_first = my_measurement.measurement_analysis_results[no_shake_density_name_first]
     if no_shake_density_name_second is None:
         no_shake_density_second = 0.0 
     else:
-        no_shake_density_second = my_measurement.measurement_parameters[no_shake_density_name_second] 
-    atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, 
-                                                second_state_index, first_stored_density_name, second_stored_density_name)
+        no_shake_density_second = my_measurement.measurement_analysis_results[no_shake_density_name_second] 
+    if imaging_mode == "polrot":
+        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, 
+                                                    second_state_index, first_stored_density_name, second_stored_density_name)
+    elif imaging_mode == "abs":
+        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name)
+        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name)
     bs_density_first = atom_density_first - no_shake_density_first 
     bs_density_second = atom_density_second - no_shake_density_second
     #Current convention has the integration direction as the last index, i.e. the x-axis. 
@@ -268,7 +282,8 @@ NOTE: It is _not_ appropriate to include functions here which involve only takin
 is better done by performing the analysis on all runs, then averaging over the results returned by get_analysis_value_from_runs."""
 
 
-def get_no_shake_average_profiles_polrot(my_measurement, first_state_index = 1, second_state_index = 3, 
+def get_no_shake_average_profiles(my_measurement, first_state_index = 1, second_state_index = 3,
+                                    imaging_mode = "polrot",
                                         first_stored_density_name = None, second_stored_density_name = None):
     no_shake_sum_first = 0.0 
     no_shake_sum_second = 0.0 
@@ -276,8 +291,12 @@ def get_no_shake_average_profiles_polrot(my_measurement, first_state_index = 1, 
     for run_id in my_measurement.runs_dict:
         current_run = my_measurement.runs_dict[run_id] 
         if not current_run.is_badshot and current_run.parameters["ShakingCycles"] == 0:
-            density_first, density_second = _load_densities_polrot(my_measurement, current_run, first_state_index, 
-                                                    second_state_index, first_stored_density_name, second_stored_density_name)
+            if imaging_mode == "polrot":
+                density_first, density_second = _load_densities_polrot(my_measurement, current_run, first_state_index, 
+                                                        second_state_index, first_stored_density_name, second_stored_density_name)
+            elif imaging_mode == "abs":
+                density_first = _load_density_top_A_abs(my_measurement, current_run, first_state_index, first_stored_density_name)
+                density_second = _load_density_top_B_abs(my_measurement, current_run, second_state_index, second_stored_density_name)
             no_shake_sum_first += density_first 
             no_shake_sum_second += density_second
             counter += 1 
