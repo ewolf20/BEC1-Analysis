@@ -195,7 +195,7 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, first_
 
 
 def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                                    autocut = True, imaging_mode = "polrot",
+                                    autocut = True, imaging_mode = "polrot", return_sub_energies = False,
                                     first_stored_density_name = None, second_stored_density_name = None):
     positions_first, densities_first, positions_second, densities_second = get_hybrid_trap_densities_along_harmonic_axis( 
                                                                     my_measurement, my_run, first_state_index = first_state_index, 
@@ -215,7 +215,10 @@ def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1
                                                                             trap_freq, autocut = False) 
     counts_second = trapezoid(trap_cross_section_um * densities_second, x = positions_second)
     overall_average_energy = (average_energy_first * counts_first + average_energy_second * counts_second) / (counts_first + counts_second)
-    return overall_average_energy
+    if return_sub_energies:
+        return (overall_average_energy, average_energy_first, average_energy_second) 
+    else:
+        return overall_average_energy
 
 
 #BOX TRAP
