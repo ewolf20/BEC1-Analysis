@@ -12,7 +12,7 @@ path_to_repo_folder = os.path.abspath(path_to_file + "/../../")
 sys.path.insert(0, path_to_repo_folder)
 
 from BEC1_Analysis.code.measurement import Measurement
-from BEC1_Analysis.code import image_processing_functions, data_fitting_functions, loading_functions
+from BEC1_Analysis.code import analysis_functions, data_fitting_functions, loading_functions
 
 ROI_COORDINATES = None
 NORM_BOX_COORDINATES = None 
@@ -35,7 +35,7 @@ def main_after_inputs(measurement_directory_path, resonance_key, center_guess_MH
     workfolder_pathname = initialize_workfolder(measurement_directory_path)
     if(not os.path.isdir(workfolder_pathname)):
         os.makedirs(workfolder_pathname)
-    my_measurement = setup_measurement(workfolder_pathname, measurement_directory_path)
+    my_measurement = setup_measurement(measurement_directory_path)
     rf_frequencies_array, counts_A_array, counts_B_array, tau_value = get_rf_frequencies_and_counts(my_measurement, resonance_key)
     save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key, 
                             center_guess_MHz = center_guess_MHz, rabi_freq_guess = rabi_freq_guess)
@@ -124,85 +124,33 @@ def get_guesses_input():
 
 
 def get_rf_frequencies_and_counts(my_measurement, resonance_key):
-    frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
-    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
-    rf_frequencies_list = []
-    counts_A_list = []
-    counts_B_list = []
-    for i, run_id in enumerate(my_measurement.runs_dict):
-        print(str(run_id))
-        current_run = my_measurement.runs_dict[run_id]
-        if i == 0:
-            tau_value = current_run.parameters["SpectPulseTime"]
-        else:
-            check_tau = current_run.parameters["SpectPulseTime"]
-            if check_tau != tau_value:
-                raise RuntimeError("The tau values should be constant over the RF spectroscopy sequence")
-        image_stack_A = current_run.get_image("TopA", memmap = True)
-        image_stack_B = current_run.get_image("TopB", memmap = True)
-        imaging_freq_A = current_run.parameters["ImagFreq1"] 
-        imaging_freq_B = current_run.parameters["ImagFreq2"] 
-        detuning_A, detuning_B = get_detunings_from_resonance_key(my_measurement, resonance_key, imaging_freq_A, imaging_freq_B)
-        atom_density_A = image_processing_functions.get_atom_density_absorption(image_stack_A, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                    norm_box_coordinates = my_measurement.measurement_parameters["norm_box"],
-                                                                    detuning = detuning_A)
-        atom_density_B = image_processing_functions.get_atom_density_absorption(image_stack_B, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                    norm_box_coordinates = my_measurement.measurement_parameters["norm_box"],
-                                                                    detuning = detuning_B)
-        counts_A = image_processing_functions.atom_count_pixel_sum(atom_density_A, pixel_area)
-        counts_B = image_processing_functions.atom_count_pixel_sum(atom_density_B, pixel_area)
-        counts_A_list.append(counts_A)
-        counts_B_list.append(counts_B)
-        rf_frequency = current_run.parameters["RF_Box_Center"]
-        rf_frequencies_list.append(rf_frequency)
-    rf_frequencies_array = np.array(rf_frequencies_list)
-    counts_A_array = np.array(counts_A_list) 
-    counts_B_array = np.array(counts_B_list)
-    return (rf_frequencies_array, counts_A_array, counts_B_array, tau_value)
+    pulse_times = my_measurement.get_parameter_value_from_runs("SpectPulseTime")
+    tau_value = pulse_times[0]
+    if not np.all(np.isclose(pulse_times, tau_value)):
+            raise RuntimeError("The tau values should be constant over the RF spectroscopy sequence")
+    state_index_A, state_index_B = get_state_indices_from_resonance_key(resonance_key)
+    my_measurement.analyze_runs(analysis_functions.get_atom_counts_top_AB_abs, ("counts_A", "counts_B"), fun_kwargs = {"first_state_index":state_index_A, 
+                                    "second_state_index":state_index_B}, print_progress = True)
+    # rf_frequencies, counts_A = my_measurement.get_parameter_analysis_result_pair_from_runs("RF_Box_Center", "counts_A")
+    rf_frequencies, counts_A = my_measurement.get_parameter_analysis_value_pair_from_runs("RF23_Box_Center", "counts_A")
+    counts_B = my_measurement.get_analysis_value_from_runs("counts_B")
+    return (rf_frequencies, counts_A, counts_B, tau_value)
 
-def get_detunings_from_resonance_key(my_measurement, resonance_key, freqA, freqB):
-    res_freq_state_1 = my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"]
-    res_freq_state_2 = my_measurement.experiment_parameters["state_2_unitarity_res_freq_MHz"]
-    res_freq_state_3 = my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]
-    frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+def get_state_indices_from_resonance_key(resonance_key):
     initial_final_key, imaging_key = resonance_key.split("_")
     initial_state_label, final_state_label = initial_final_key
-    if(initial_state_label == "1"):
-        initial_res_freq = res_freq_state_1
-    elif(initial_state_label == "2"):
-        initial_res_freq = res_freq_state_2 
-    elif(initial_state_label == "3"):
-        initial_res_freq = res_freq_state_3 
-    if(final_state_label == "1"):
-        final_res_freq = res_freq_state_1 
-    elif(final_state_label == "2"):
-        final_res_freq = res_freq_state_2 
-    elif(final_state_label == "3"):
-        final_res_freq = res_freq_state_3
     if(imaging_key == "AB"):
-        detuning_A = frequency_multiplier * (freqA - initial_res_freq)
-        detuning_B = frequency_multiplier * (freqB - final_res_freq)
+        image_A_state_index = int(initial_state_label)
+        image_B_state_index = int(final_state_label)
     elif(imaging_key == "BA"):
-        detuning_B = frequency_multiplier * (freqB - initial_res_freq)
-        detuning_A = frequency_multiplier * (freqA - final_res_freq)
-    return (detuning_A, detuning_B)    
+        image_B_state_index = int(initial_state_label)
+        image_A_state_index = int(final_state_label)
+    return (image_A_state_index, image_B_state_index)
 
 
-
-
-def setup_measurement(workfolder_pathname, measurement_directory_path):
+def setup_measurement(measurement_directory_path):
     my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = "top_double")
     print("Initializing")
-    saved_params_filename = os.path.join(workfolder_pathname, "rf_spect_runs_dump.json")
-    if(os.path.isfile(saved_params_filename)):
-        try:
-            my_measurement._initialize_runs_dict(use_saved_params = True, saved_params_filename = saved_params_filename)
-        except RuntimeError:
-            my_measurement._initialize_runs_dict(use_saved_params = False)
-            my_measurement.dump_runs_dict(dump_filename = saved_params_filename)
-    else:
-        my_measurement._initialize_runs_dict(use_saved_params = False) 
-        my_measurement.dump_runs_dict(dump_filename = saved_params_filename)
     run_to_use = 0
     box_set = False
     while (not box_set) and run_to_use < len(my_measurement.runs_dict):
