@@ -69,8 +69,11 @@ class TestMeasurement:
 
     @staticmethod
     def test_update_runs_dict():
-        pass
-
+        my_measurement = TestMeasurement.initialize_measurement()
+        my_measurement.runs_dict = {3:"hi"} 
+        my_measurement._update_runs_dict()
+        assert len(my_measurement.runs_dict) == 1 
+        assert TEST_IMAGE_RUN_ID in my_measurement.runs_dict
 
     @staticmethod 
     def test_analysis_dump_and_load():

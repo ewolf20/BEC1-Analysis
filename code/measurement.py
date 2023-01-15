@@ -201,6 +201,28 @@ class Measurement():
         return return_dict
 
 
+
+    def initialize_workfolder(self, descriptor = "Default", workfolder_pathname = None):
+        #If workfolder pathname not specified, measurement will create a workfolder inside a directory labeled 
+        #"Private_BEC1_Analysis" within the same directory that contains the directory for "BEC1_Analysis" 
+        if workfolder_pathname is None:
+            PRIVATE_DIRECTORY_REPO_NAME = "Private_BEC1_Analysis"
+            path_to_file = os.path.dirname(os.path.abspath(__file__))
+            path_to_repo_folder = os.path.abspath(path_to_file + "/../../")
+            path_to_private_directory_repo = os.path.join(path_to_repo_folder, PRIVATE_DIRECTORY_REPO_NAME)
+            current_datetime = datetime.datetime.now()
+            current_year = current_datetime.strftime("%Y")
+            current_year_month = current_datetime.strftime("%Y-%m")
+            current_year_month_day = current_datetime.strftime("%Y-%m-%d")
+            measurement_directory_folder_name = os.path.basename(os.path.normpath(self.measurement_directory_path))
+            workfolder_label = "_{0}_{1}".format(descriptor, measurement_directory_folder_name)
+            workfolder_pathname = os.path.join(path_to_private_directory_repo, current_year, current_year_month, current_year_month_day + workfolder_label)
+        if(not os.path.isdir(workfolder_pathname)):
+            os.makedirs(workfolder_pathname)
+        with open(os.path.join(workfolder_pathname, "Source.txt"), 'w') as f:
+            f.write("Data source: " + self.measurement_directory_path)
+        return workfolder_pathname
+
     """
     Set a rectangular box with user input.
     
