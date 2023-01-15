@@ -383,9 +383,13 @@ class Measurement():
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
+        if print_progress:
+            dict_len = len(self.runs_dict) 
+            counter = 0
         for run_id in self.runs_dict:
             if(print_progress):
-                print("Analyzing run {0:d}".format(run_id))
+                print("Analyzing run {0:d} ({1:.1%})".format(run_id, counter / dict_len))
+                counter += 1
             current_run = self.runs_dict[run_id]
             should_analyze = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
             if should_analyze:
