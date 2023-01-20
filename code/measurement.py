@@ -38,10 +38,10 @@ class Measurement():
     badshot_function: A badshot function, to be used by 
     """
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
+                    hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
                     saved_analysis_filename = "measurement_run_analysis_dump.json", badshot_function = None, analyses_list = None):
         if(not measurement_directory_path):
-            measurement_directory_path = os.getcwd() 
+            measurement_directory_path = os.getcwd()
         self.measurement_directory_path = measurement_directory_path 
         self.imaging_type = imaging_type
         self.image_format = image_format
@@ -65,6 +65,8 @@ class Measurement():
         if analyses_list is None:
             self.analyses_list = []
         self.measurement_analysis_results = {}
+        if use_saved_analysis:
+            self.load_analysis(saved_analysis_filename)
 
     def set_badshot_function(self, badshot_function):
         self.badshot_function = badshot_function
@@ -441,7 +443,7 @@ class Measurement():
                             current_run.analysis_results[varname] = result 
     
 
-    def add_default_analysis(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
+    def add_to_live_analyses(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
         if fun_kwargs is None:
             fun_kwargs = {}
         if run_filter is None:
@@ -449,7 +451,7 @@ class Measurement():
         self.analyses_list.append((analysis_function, result_varnames, fun_kwargs, run_filter))
 
 
-    def _apply_default_analyses(self, ignore_badshots = True, overwrite_existing = False, catch_errors = False, print_progress = False):
+    def _apply_live_analyses(self, ignore_badshots = True, overwrite_existing = False, catch_errors = False, print_progress = False):
         for analysis_tuple in self.analyses_list:
             fun, varnames, fun_kwargs, run_filter = analysis_tuple
             self.analyze_runs(fun, varnames, fun_kwargs = fun_kwargs, run_filter = run_filter, 
@@ -520,7 +522,7 @@ class Measurement():
         if update_badshots:
             self._label_badshots_default(override_existing_badshots=override_existing_badshots)
         if update_analyses:
-            self._apply_default_analyses(ignore_badshots=ignore_badshots, catch_errors=catch_errors, print_progress=print_progress, 
+            self._apply_live_analyses(ignore_badshots=ignore_badshots, catch_errors=catch_errors, print_progress=print_progress, 
                                 overwrite_existing = overwrite_existing_analysis)
         
         
