@@ -38,10 +38,10 @@ class Measurement():
     badshot_function: A badshot function, to be used by 
     """
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = True, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
+                    hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
                     saved_analysis_filename = "measurement_run_analysis_dump.json", badshot_function = None, analyses_list = None):
         if(not measurement_directory_path):
-            measurement_directory_path = os.getcwd() 
+            measurement_directory_path = os.getcwd()
         self.measurement_directory_path = measurement_directory_path 
         self.imaging_type = imaging_type
         self.image_format = image_format
@@ -65,6 +65,8 @@ class Measurement():
         if analyses_list is None:
             self.analyses_list = []
         self.measurement_analysis_results = {}
+        if use_saved_analysis:
+            self.load_analysis(saved_analysis_filename)
 
     def set_badshot_function(self, badshot_function):
         self.badshot_function = badshot_function
@@ -226,27 +228,36 @@ class Measurement():
     """
     Set a rectangular box with user input.
     
-    run_to_use: The run to use for setting the box position. Default 0, i.e. the first run 
-    in the runs_dict, but if this is a bad shot, can be changed."""
-    def set_box(self, label, run_to_use = 0, image_to_use = None, box_coordinates = None):
+    run_to_use: The run to use for setting the box position. If not passed, the interactive prompt cycles through runs 
+    until a box is selected on one.
+    
+    image_to_use: The name of the image to use for setting the box position. If not specified, the default image for the run is used.
+    """
+    def set_box(self, label, run_to_use = None, image_to_use = None, box_coordinates = None):
         if(not box_coordinates):
-            for i, key in enumerate(self.runs_dict):
-                if(i == run_to_use):
-                    my_run = self.runs_dict[key] 
-                    break
-            if(not image_to_use):
-                for key in my_run.image_dict:
-                    my_image_array = my_run.get_image(key)
-                    break
+            if run_to_use is None:
+                id_try_list = list(self.runs_dict) 
             else:
-                my_image_array = my_run.get_image(image_to_use)
-            my_with_atoms_image = get_absorption_image(my_image_array)
-            title = str(my_run.run_id)
-            x_1, x_2, y_1, y_2 = Measurement._draw_box(my_with_atoms_image, label, title)
-            x_min = int(min(x_1, x_2))
-            y_min = int(min(y_1, y_2))
-            x_max = int(max(x_1, x_2))
-            y_max = int(max(y_1, y_2))
+                id_try_list = [run_to_use]
+            for id_to_try in id_try_list:
+                my_run = self.runs_dict[id_to_try]
+                if(image_to_use):
+                    my_image_array = my_run.get_image(image_to_use)
+                else:
+                    my_image_array = my_run.get_default_image()
+                my_with_atoms_image = get_absorption_image(my_image_array)
+                title = str(id_to_try)
+                try:
+                    x_1, x_2, y_1, y_2 = Measurement._draw_box(my_with_atoms_image, label, title)
+                    assert not any([x_1 is None, x_2 is None, y_1 is None, y_2 is None])
+                except AssertionError:
+                    pass
+                else:  
+                    x_min = int(min(x_1, x_2))
+                    y_min = int(min(y_1, y_2))
+                    x_max = int(max(x_1, x_2))
+                    y_max = int(max(y_1, y_2))
+                    break
             self.measurement_parameters[label] = [x_min, y_min, x_max, y_max]
         else:
             self.measurement_parameters[label] = box_coordinates
@@ -254,12 +265,12 @@ class Measurement():
 
     """
     Alias to set_box('norm_box'), for convenience."""
-    def set_norm_box(self, run_to_use=0, image_to_use = None, box_coordinates = None):
+    def set_norm_box(self, run_to_use=None, image_to_use = None, box_coordinates = None):
         self.set_box('norm_box', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates)
 
     """
     Alias to set_box('ROI'), for convenience."""
-    def set_ROI(self, run_to_use = 0, image_to_use = None, box_coordinates = None):
+    def set_ROI(self, run_to_use = None, image_to_use = None, box_coordinates = None):
         self.set_box('ROI', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates)
 
     @staticmethod
@@ -441,7 +452,7 @@ class Measurement():
                             current_run.analysis_results[varname] = result 
     
 
-    def add_default_analysis(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
+    def add_to_live_analyses(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
         if fun_kwargs is None:
             fun_kwargs = {}
         if run_filter is None:
@@ -449,7 +460,7 @@ class Measurement():
         self.analyses_list.append((analysis_function, result_varnames, fun_kwargs, run_filter))
 
 
-    def _apply_default_analyses(self, ignore_badshots = True, overwrite_existing = False, catch_errors = False, print_progress = False):
+    def _apply_live_analyses(self, ignore_badshots = True, overwrite_existing = False, catch_errors = False, print_progress = False):
         for analysis_tuple in self.analyses_list:
             fun, varnames, fun_kwargs, run_filter = analysis_tuple
             self.analyze_runs(fun, varnames, fun_kwargs = fun_kwargs, run_filter = run_filter, 
@@ -520,7 +531,7 @@ class Measurement():
         if update_badshots:
             self._label_badshots_default(override_existing_badshots=override_existing_badshots)
         if update_analyses:
-            self._apply_default_analyses(ignore_badshots=ignore_badshots, catch_errors=catch_errors, print_progress=print_progress, 
+            self._apply_live_analyses(ignore_badshots=ignore_badshots, catch_errors=catch_errors, print_progress=print_progress, 
                                 overwrite_existing = overwrite_existing_analysis)
         
         

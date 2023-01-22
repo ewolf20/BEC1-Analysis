@@ -52,19 +52,10 @@ def main_after_inputs(measurement_directory_path, imaging_mode_string):
 
 def setup_measurement(measurement_directory_path, imaging_mode_string):
     run_image_to_use, imaging_type_key = imaging_mode_decoder(imaging_mode_string)
-    my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = imaging_type_key)
     print("Initializing")
-    run_to_use = 0
-    box_set = False
-    while (not box_set) and run_to_use < len(my_measurement.runs_dict):
-        try:
-            my_measurement.set_ROI(run_to_use = run_to_use, image_to_use = run_image_to_use)
-            my_measurement.set_norm_box(run_to_use = run_to_use, image_to_use = run_image_to_use)
-        except TypeError:
-            pass 
-        else:
-            box_set = True
-        run_to_use += 1
+    my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = imaging_type_key)
+    my_measurement.set_ROI(image_to_use = run_image_to_use)
+    my_measurement.set_norm_box(image_to_use = run_image_to_use)
     return my_measurement
 
 

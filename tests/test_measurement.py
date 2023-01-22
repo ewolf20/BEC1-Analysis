@@ -267,7 +267,7 @@ class TestMeasurement:
         def my_analysis_function_zero(my_measurement, my_run):
             return 0.0
         my_measurement.set_badshot_function(badshot_function_false)
-        my_measurement.add_default_analysis(my_analysis_function_zero, 'foo')
+        my_measurement.add_to_live_analyses(my_analysis_function_zero, 'foo')
         my_measurement.update()
         assert len(my_measurement.runs_dict) == 1
         assert np.array_equal(my_measurement.get_analysis_value_from_runs('foo'), np.array([0.0]))
