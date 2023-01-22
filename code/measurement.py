@@ -228,27 +228,36 @@ class Measurement():
     """
     Set a rectangular box with user input.
     
-    run_to_use: The run to use for setting the box position. Default 0, i.e. the first run 
-    in the runs_dict, but if this is a bad shot, can be changed."""
-    def set_box(self, label, run_to_use = 0, image_to_use = None, box_coordinates = None):
+    run_to_use: The run to use for setting the box position. If not passed, the interactive prompt cycles through runs 
+    until a box is selected on one.
+    
+    image_to_use: The name of the image to use for setting the box position. If not specified, the default image for the run is used.
+    """
+    def set_box(self, label, run_to_use = None, image_to_use = None, box_coordinates = None):
         if(not box_coordinates):
-            for i, key in enumerate(self.runs_dict):
-                if(i == run_to_use):
-                    my_run = self.runs_dict[key] 
-                    break
-            if(not image_to_use):
-                for key in my_run.image_dict:
-                    my_image_array = my_run.get_image(key)
-                    break
+            if run_to_use is None:
+                id_try_list = list(self.runs_dict) 
             else:
-                my_image_array = my_run.get_image(image_to_use)
-            my_with_atoms_image = get_absorption_image(my_image_array)
-            title = str(my_run.run_id)
-            x_1, x_2, y_1, y_2 = Measurement._draw_box(my_with_atoms_image, label, title)
-            x_min = int(min(x_1, x_2))
-            y_min = int(min(y_1, y_2))
-            x_max = int(max(x_1, x_2))
-            y_max = int(max(y_1, y_2))
+                id_try_list = [run_to_use]
+            for id_to_try in id_try_list:
+                my_run = self.runs_dict[id_to_try]
+                if(image_to_use):
+                    my_image_array = my_run.get_image(image_to_use)
+                else:
+                    my_image_array = my_run.get_default_image()
+                my_with_atoms_image = get_absorption_image(my_image_array)
+                title = str(id_to_try)
+                try:
+                    x_1, x_2, y_1, y_2 = Measurement._draw_box(my_with_atoms_image, label, title)
+                    assert not any([x_1 is None, x_2 is None, y_1 is None, y_2 is None])
+                except AssertionError:
+                    pass
+                else:  
+                    x_min = int(min(x_1, x_2))
+                    y_min = int(min(y_1, y_2))
+                    x_max = int(max(x_1, x_2))
+                    y_max = int(max(y_1, y_2))
+                    break
             self.measurement_parameters[label] = [x_min, y_min, x_max, y_max]
         else:
             self.measurement_parameters[label] = box_coordinates
@@ -256,12 +265,12 @@ class Measurement():
 
     """
     Alias to set_box('norm_box'), for convenience."""
-    def set_norm_box(self, run_to_use=0, image_to_use = None, box_coordinates = None):
+    def set_norm_box(self, run_to_use=None, image_to_use = None, box_coordinates = None):
         self.set_box('norm_box', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates)
 
     """
     Alias to set_box('ROI'), for convenience."""
-    def set_ROI(self, run_to_use = 0, image_to_use = None, box_coordinates = None):
+    def set_ROI(self, run_to_use = None, image_to_use = None, box_coordinates = None):
         self.set_box('ROI', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates)
 
     @staticmethod

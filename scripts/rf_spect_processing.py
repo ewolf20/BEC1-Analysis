@@ -129,8 +129,7 @@ def get_rf_frequencies_and_counts(my_measurement, resonance_key):
     state_index_A, state_index_B = get_state_indices_from_resonance_key(resonance_key)
     my_measurement.analyze_runs(analysis_functions.get_atom_counts_top_AB_abs, ("counts_A", "counts_B"), fun_kwargs = {"first_state_index":state_index_A, 
                                     "second_state_index":state_index_B}, print_progress = True)
-    # rf_frequencies, counts_A = my_measurement.get_parameter_analysis_result_pair_from_runs("RF_Box_Center", "counts_A")
-    rf_frequencies, counts_A = my_measurement.get_parameter_analysis_value_pair_from_runs("RF23_Box_Center", "counts_A")
+    rf_frequencies, counts_A = my_measurement.get_parameter_analysis_result_pair_from_runs("RF_Box_Center", "counts_A")
     counts_B = my_measurement.get_analysis_value_from_runs("counts_B")
     return (rf_frequencies, counts_A, counts_B, tau_value)
 
@@ -147,19 +146,10 @@ def get_state_indices_from_resonance_key(resonance_key):
 
 
 def setup_measurement(measurement_directory_path):
-    my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = "top_double")
     print("Initializing")
-    run_to_use = 0
-    box_set = False
-    while (not box_set) and run_to_use < len(my_measurement.runs_dict):
-        try:
-            my_measurement.set_ROI(box_coordinates = ROI_COORDINATES, run_to_use = run_to_use)
-            my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES, run_to_use = run_to_use)
-        except TypeError:
-            pass 
-        else:
-            box_set = True
-        run_to_use += 1
+    my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = "top_double")
+    my_measurement.set_ROI(box_coordinates = ROI_COORDINATES)
+    my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES)
     return my_measurement
 
 

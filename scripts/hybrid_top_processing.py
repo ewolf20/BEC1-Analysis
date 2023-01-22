@@ -126,19 +126,10 @@ def get_imaging_mode_input():
 
 
 def setup_measurement(measurement_directory_path):
-    my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = "top_double")
     print("Initializing")
-    run_to_use = 0
-    box_set = False
-    while (not box_set) and run_to_use < len(my_measurement.runs_dict):
-        try:
-            my_measurement.set_ROI(box_coordinates = ROI_COORDINATES, run_to_use = run_to_use)
-            my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES, run_to_use = run_to_use)
-        except TypeError:
-            pass 
-        else:
-            box_set = True
-        run_to_use += 1
+    my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = "top_double")
+    my_measurement.set_ROI(box_coordinates = ROI_COORDINATES)
+    my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES)
     return my_measurement
 
 if __name__ == "__main__":
