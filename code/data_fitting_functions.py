@@ -7,6 +7,7 @@ from scipy.special import betainc
 from scipy.signal import argrelextrema
 
 from .science_functions import two_level_system_population_rabi
+from .statistics_functions import filter_1d_residuals
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
                                     filter_outliers = False, report_inliers = False, monte_carlo_cov = False, monte_carlo_samples = 1000):
@@ -380,40 +381,11 @@ Returns the indices of the x-y data which are _INLIERS_, i.e. the complement of 
 points that can be identified as having a chance of less than alpha to occur."""
 def _filter_1d_outliers(x_values, y_values, fitting_func, popt, alpha = 1e-4):
     num_params = len(popt)
-    num_samples = len(y_values)
     fit_values = fitting_func(x_values, *popt)
     residuals = y_values - fit_values
-    sigma_sum = np.sum(np.square(residuals))
-    studentized_residuals = np.zeros(residuals.shape)
-    for i, residual in enumerate(residuals):
-        sigma_sum_sans_current = sigma_sum - np.square(residual)
-        sigma_squared_sans_current = (1.0 / (num_samples - num_params - 1)) * sigma_sum_sans_current 
-        sigma_sans_current = np.sqrt(sigma_squared_sans_current)
-        studentized_residual = residual / sigma_sans_current 
-        studentized_residuals[i] = studentized_residual
-    is_inlier_array = _studentized_residual_test(studentized_residuals, num_samples - num_params - 1, alpha)
-    inlier_indices = np.nonzero(is_inlier_array)[0]
-    return inlier_indices
+    return filter_1d_residuals(residuals, num_params)
 
-#Source for approach: https://en.wikipedia.org/wiki/Studentized_residual
-def _studentized_residual_test(t, degrees_of_freedom, alpha):
-    nu = degrees_of_freedom
-    abs_t = np.abs(t)
-    x = nu / (np.square(t) + nu)
-    #Formula source: https://en.wikipedia.org/wiki/Student%27s_t-distribution
-    #Scipy betainc is the _regularized_ incomplete beta function
-    probability_of_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
-    return probability_of_occurrence > alpha
 
-def _dynamic_np_slice(m, axis, start = None, stop = None):
-    if start is None:
-        start = 0 
-    if stop is None:
-        stop = m.shape[axis] 
-    slc = [slice(None)] * len(m.shape)
-    slc[axis] = slice(start, stop) 
-    slc = tuple(slc) 
-    return m[slc]
 
 """
 Helper function for using a Monte Carlo analysis to get the covariance matrix of 

@@ -210,3 +210,35 @@ def mean_location_test(data, mean_test_value, confidence_level = 0.95, axis = -1
     #Fraction of the t distribution lying at above the studentized mean difference
     probability_of_t_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
     return np.where(sample_mean < mean_test_value, False, probability_of_t_occurrence < alpha)
+
+
+
+"""
+Given a fitting function & parameter values and a set of x-y data (as np arrays)
+they purport to fit, filter outliers using Student's t-test at the specified confidence level.
+
+Returns the indices of the x-y data which are _INLIERS_, i.e. the complement of outliers,
+points that can be identified as having a chance of less than alpha to occur."""
+def filter_1d_residuals(residuals, degs_of_freedom, alpha = 1e-4):
+    num_samples = len(residuals)
+    sigma_sum = np.sum(np.square(residuals))
+    studentized_residuals = np.zeros(residuals.shape)
+    for i, residual in enumerate(residuals):
+        sigma_sum_sans_current = sigma_sum - np.square(residual)
+        sigma_squared_sans_current = (1.0 / (num_samples - degs_of_freedom - 1)) * sigma_sum_sans_current 
+        sigma_sans_current = np.sqrt(sigma_squared_sans_current)
+        studentized_residual = residual / sigma_sans_current 
+        studentized_residuals[i] = studentized_residual
+    is_inlier_array = _studentized_residual_test(studentized_residuals, num_samples - degs_of_freedom - 1, alpha)
+    inlier_indices = np.nonzero(is_inlier_array)[0]
+    return inlier_indices
+
+#Source for approach: https://en.wikipedia.org/wiki/Studentized_residual
+def _studentized_residual_test(t, degrees_of_freedom, alpha):
+    nu = degrees_of_freedom
+    abs_t = np.abs(t)
+    x = nu / (np.square(t) + nu)
+    #Formula source: https://en.wikipedia.org/wiki/Student%27s_t-distribution
+    #Scipy betainc is the _regularized_ incomplete beta function
+    probability_of_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
+    return probability_of_occurrence > alpha

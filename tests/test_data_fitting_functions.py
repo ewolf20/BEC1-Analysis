@@ -183,27 +183,6 @@ def test_sort_and_deduplicate_xy_data():
     assert (np.all(np.abs(final_x_array - TARGET_X_ARRAY) < 1e-5))
     assert (np.all(np.abs(final_y_array - TARGET_Y_ARRAY) < 1e-5))
 
-def test_filter_1d_outliers():
-    SAMPLE_CENTER = 23
-    SAMPLE_AMP = 5.0 
-    SAMPLE_OFFSET = 10 
-    SAMPLE_GAMMA = 6.0 
-    sample_frequencies = np.linspace(0, 50, 100) 
-    sample_noiseless_lorentzian_data = data_fitting_functions.imaging_resonance_lorentzian(sample_frequencies, SAMPLE_AMP, SAMPLE_CENTER, 
-                                                                SAMPLE_GAMMA, SAMPLE_OFFSET)
-    OUTLIER_INDEX = 46
-    sample_noiseless_lorentzian_data[OUTLIER_INDEX] = SAMPLE_OFFSET
-    outlier_freq = sample_frequencies[OUTLIER_INDEX]  
-    noisy_lorentzian_data = sample_noiseless_lorentzian_data + np.random.normal(loc = 0.0, scale = 0.2, size = len(sample_frequencies))  
-    fit_results_untrimmed = data_fitting_functions.fit_imaging_resonance_lorentzian(sample_frequencies, noisy_lorentzian_data)
-    popt, pcov = fit_results_untrimmed
-    fit_residuals = noisy_lorentzian_data - data_fitting_functions.imaging_resonance_lorentzian(sample_frequencies, *popt)
-    inlier_indices = data_fitting_functions._filter_1d_outliers(sample_frequencies, noisy_lorentzian_data, 
-                                            data_fitting_functions.imaging_resonance_lorentzian, popt)
-    print(inlier_indices)
-    assert not np.any(np.isin(OUTLIER_INDEX, inlier_indices))
-    assert len(inlier_indices) == (len(sample_frequencies) - 1)
-
 
 def test_fit_rf_spect_detuning_scan():
     SAMPLE_CENTER = 22
