@@ -426,9 +426,10 @@ class Measurement():
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
-        if print_progress:
-            dict_len = len(self.runs_dict) 
-            counter = 0
+        # if print_progress:
+        #     dict_len = len(self.runs_dict) 
+        #     counter = 0
+        run_id_to_analyze_list = []
         for run_id in self.runs_dict:
             if(print_progress):
                 print("Analyzing run {0:d} ({1:.1%})".format(run_id, counter / dict_len))
@@ -442,24 +443,31 @@ class Measurement():
                         if not varname in current_run.analysis_results:
                             result_varnames_not_all_present = True
                             break 
-                    if not result_varnames_not_all_present:
-                        continue
-                if catch_errors:
-                    try:
-                        results = analysis_function(self, current_run, **fun_kwargs)
-                    except Exception as e:
-                        results = [Measurement.ANALYSIS_ERROR_INDICATOR_STRING] * len(result_varnames)
-                        warnings.warn(repr(e))
-                    else:
-                        if not results_in_tuple_form:
-                            results = (results,)
+                    if result_varnames_not_all_present:
+                        run_id_to_analyze_list.append(run_id)
                 else:
+                    run_id_to_analyze_list.append(run_id)
+        if print_progress:
+            analysis_len = len(run_id_to_analyze_list)
+            counter = 0
+        for run_id in run_id_to_analyze_list:
+            current_run = self.runs_dict[run_id]
+            if catch_errors:
+                try:
                     results = analysis_function(self, current_run, **fun_kwargs)
+                except Exception as e:
+                    results = [Measurement.ANALYSIS_ERROR_INDICATOR_STRING] * len(result_varnames)
+                    warnings.warn(repr(e))
+                else:
                     if not results_in_tuple_form:
                         results = (results,)
-                for varname, result in zip(result_varnames, results):
-                        if overwrite_existing or not varname in current_run.analysis_results:
-                            current_run.analysis_results[varname] = result 
+            else:
+                results = analysis_function(self, current_run, **fun_kwargs)
+                if not results_in_tuple_form:
+                    results = (results,)
+            for varname, result in zip(result_varnames, results):
+                    if overwrite_existing or not varname in current_run.analysis_results:
+                        current_run.analysis_results[varname] = result 
     
 
     def add_to_live_analyses(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
