@@ -225,6 +225,17 @@ def test_hybrid_trap_center_finder():
     assert (np.abs(y_center_guess - EXPECTED_Y_CENTER) < 5)
 
 
+
+def test_fit_one_dimensional_condensate():
+    positions, integrated_data = np.load(os.path.join("resources", "RR_Integrated_Data_{0:d}.npy".format(i)))
+    fit_results_condensate, fit_results_thermal = data_fitting_functions.fit_one_dimensional_condensate(integrated_data)
+    condensate_popt, condensate_pcov = fit_results_condensate 
+    thermal_popt, thermal_pcov = fit_results_thermal 
+    center, condensate_width, condensate_amp = condensate_popt 
+    _, thermal_width, thermal_amp = thermal_popt 
+    popt = (center, condensate_width, condensate_amp, thermal_width, thermal_amp)
+
+
 def test_monte_carlo_covariance_helper():
     NUM_SAMPLES = 10000
     DATA_LENGTH = 100

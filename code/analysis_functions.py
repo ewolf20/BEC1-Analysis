@@ -275,6 +275,14 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
     return (amp_first, amp_second)
 
 
+
+#RAPID RAMP
+
+"""
+Get the rapid ramp condensate fraction via a "correct", fit based approach that fits the condensate and 
+thermals in a multi-step manner akin to that described in https://doi.org/10.1063/1.3125051"""
+
+
 #MEASUREMENT-WIDE FUNCTIONS
 """
 Certain analyses must be run on an entire measurement, and are sufficiently common as to warrant 

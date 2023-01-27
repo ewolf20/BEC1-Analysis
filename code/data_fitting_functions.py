@@ -348,6 +348,87 @@ def _find_center_helper(x_data, y_data):
             minimal_function_value = optimized_function_value
     return best_center_guess
 
+
+"""
+Fit a rapid ramp condensate using the multi-step approach described in https://doi.org/10.1063/1.3125051
+"""
+
+def fit_one_dimensional_condensate(one_dimensional_data, initial_center_guess = None, initial_condensate_width_guess = None, 
+                                initial_gaussian_width_guess = None, initial_condensate_amp_guess = None, initial_thermal_amp_guess = None):
+    positions = np.arange(len(one_dimensional_data))
+    (initial_center_guess, initial_condensate_width_guess, initial_gaussian_width_guess, 
+    initial_condensate_amp_guess, initial_thermal_amp_guess
+    ) = _fit_rr_condensate_populate_guesses(
+                                        one_dimensional_data, initial_center_guess, initial_condensate_width_guess, initial_gaussian_width_guess, 
+                                        initial_condensate_amp_guess, initial_thermal_amp_guess
+                                                                                                    )
+    p_init_bimodal = [
+        initial_center_guess, 
+        initial_condensate_width_guess, 
+        initial_condensate_amp_guess,
+        initial_gaussian_width_guess, 
+        initial_thermal_amp_guess
+    ]
+    bimodal_popt, bimodal_pcov = curve_fit(condensate_bimodal_function, positions, one_dimensional_data, p0 = p_init_bimodal)
+    bimodal_center, bimodal_cwidth, bimodal_camp, bimodal_gwidth, bimodal_tamp = bimodal_popt 
+    bimodal_center_index = int(np.round(bimodal_center))
+    bimodal_cwidth = np.abs(bimodal_cwidth) 
+    SAFETY_MARGIN = 1.2
+    condensate_window_width = int(np.round(SAFETY_MARGIN * bimodal_cwidth))
+    condensate_position_slice = positions[bimodal_center_index - condensate_window_width:bimodal_center_index + condensate_window_width]
+    condensate_excluded_position_slice = positions[~np.isin(positions, condensate_position_slice)]
+    condensate_excluded_data_slice = one_dimensional_data[condensate_excluded_position_slice]
+    p_init_thermal = [
+        bimodal_center, 
+        bimodal_gwidth, 
+        bimodal_tamp
+    ]
+    thermal_popt, thermal_pcov = curve_fit(thermal_bose_function, condensate_excluded_position_slice, condensate_excluded_data_slice, p0 = p_init_thermal)
+    p_init_condensate = [
+        bimodal_center, 
+        bimodal_cwidth, 
+        bimodal_camp
+    ]
+    condensate_thermal_subtracted_data_slice = one_dimensional_data[condensate_position_slice] - thermal_bose_function(condensate_position_slice, *thermal_popt)
+    condensate_popt, condensate_pcov = curve_fit(one_d_condensate_function, condensate_position_slice, 
+                                    condensate_thermal_subtracted_data_slice, p0 = p_init_condensate)
+    return ((condensate_popt, condensate_pcov), (thermal_popt, thermal_pcov))
+
+def _fit_rr_condensate_populate_guesses(one_dimensional_data, initial_center_guess, initial_condensate_width_guess, initial_gaussian_width_guess, 
+        initial_condensate_amp_guess, initial_thermal_amp_guess):
+    data_width = len(one_dimensional_data)
+    if initial_center_guess is None:
+        initial_center_guess = np.argmax(one_dimensional_data)
+    if initial_condensate_width_guess is None:
+        #Hard coded best attempt...
+        initial_condensate_width_guess = data_width // 10
+    if initial_gaussian_width_guess is None:
+        #Again, hard coded guess
+        initial_gaussian_width_guess = data_width // 3
+    if initial_thermal_amp_guess is None:
+        initial_thermal_amp_guess = one_dimensional_data[initial_center_guess + initial_condensate_width_guess]
+    if initial_condensate_amp_guess is None:
+        initial_condensate_amp_guess = max(one_dimensional_data) - initial_thermal_amp_guess
+    return (initial_center_guess, initial_condensate_width_guess, initial_gaussian_width_guess, 
+            initial_condensate_amp_guess, initial_thermal_amp_guess)
+
+
+
+
+
+def one_d_condensate_function(x, center, condensate_width, condensate_amp):
+    return condensate_amp * np.square(np.maximum(0, 1 - np.square((x - center) / condensate_width)))
+
+def thermal_bose_function(x, center, gaussian_width, gaussian_amp):
+    gaussian_factor = np.exp(-np.square(x - center) / (2 * np.square(gaussian_width)))
+    return gaussian_amp / (1 + 1/4 + 1/9) * (gaussian_factor + 1/4 * np.square(gaussian_factor) + 1/9 * np.power(gaussian_factor, 3))
+
+
+def condensate_bimodal_function(x, center, condensate_width, condensate_amp, gaussian_width, gaussian_amp):
+    return one_d_condensate_function(x, center, condensate_width, condensate_amp) + thermal_bose_function(x, center, gaussian_width, gaussian_amp)
+
+
+
 def _sort_and_deduplicate_xy_data(x_values, y_values):
     sorted_x_values, sorted_y_values = zip(*sorted(zip(x_values, y_values), key = lambda f: f[0]))
     sorted_x_values = np.array(sorted_x_values) 
