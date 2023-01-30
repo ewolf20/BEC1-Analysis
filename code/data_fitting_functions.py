@@ -419,10 +419,16 @@ def _fit_rr_condensate_populate_guesses(one_dimensional_data, initial_center_gue
 def one_d_condensate_function(x, center, condensate_width, condensate_amp):
     return condensate_amp * np.square(np.maximum(0, 1 - np.square((x - center) / condensate_width)))
 
+def one_d_condensate_integral(center, condensate_width, condensate_amp):
+    return 16 / 15 * condensate_amp * condensate_width
+
 def thermal_bose_function(x, center, gaussian_width, gaussian_amp):
     gaussian_factor = np.exp(-np.square(x - center) / (2 * np.square(gaussian_width)))
     return gaussian_amp / (1 + 1/4 + 1/9) * (gaussian_factor + 1/4 * np.square(gaussian_factor) + 1/9 * np.power(gaussian_factor, 3))
 
+#Ditto the above for the thermal bose function
+def thermal_bose_integral(center, gaussian_width, gaussian_amp):
+    return np.sqrt(2 * np.pi) * gaussian_amp * gaussian_width * (1 + np.power(2, -2.5) + np.power(3, -2.5))
 
 def condensate_bimodal_function(x, center, condensate_width, condensate_amp, gaussian_width, gaussian_amp):
     return one_d_condensate_function(x, center, condensate_width, condensate_amp) + thermal_bose_function(x, center, gaussian_width, gaussian_amp)

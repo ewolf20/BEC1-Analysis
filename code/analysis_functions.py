@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.integrate import trapezoid 
+from scipy import ndimage
 
 from . import data_fitting_functions, image_processing_functions, science_functions
 
@@ -281,6 +282,73 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
 """
 Get the rapid ramp condensate fraction via a "correct", fit based approach that fits the condensate and 
 thermals in a multi-step manner akin to that described in https://doi.org/10.1063/1.3125051"""
+
+def get_rr_condensate_fractions_fit(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
+                                    first_stored_density_name = None, second_stored_density_name = None):
+    if imaging_mode == "polrot":
+        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
+                                                    first_stored_density_name, second_stored_density_name)
+    elif imaging_mode == "abs":
+        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name)
+        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name)
+    #Rotate images 
+    rr_angle = my_measurement.experiment_parameters["rr_tilt_deg"]
+    atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
+    atom_density_second = ndimage.rotate(atom_density_second, rr_angle, reshape = False)
+    #Atom densities are integrated along x axis by default... 
+    integrated_atom_density_first = np.sum(atom_density_first, axis = -1)
+    integrated_atom_density_second = np.sum(atom_density_second, axis = -1)
+    condensate_results_first, thermal_results_first = data_fitting_functions.fit_one_dimensional_condensate(integrated_atom_density_first)
+    condensate_results_second, thermal_results_second = data_fitting_functions.fit_one_dimensional_condensate(integrated_atom_density_second)
+    condensate_counts_first = data_fitting_functions.one_d_condensate_integral(*condensate_results_first)
+    thermal_counts_first = data_fitting_functions.thermal_bose_integral(*thermal_results_first)
+    condensate_counts_second = data_fitting_functions.one_d_condensate_integral(*condensate_results_second)
+    thermal_counts_second = data_fitting_functions.thermal_bose_integral(*thermal_results_second)
+    condensate_fraction_first = condensate_counts_first / (condensate_counts_first + thermal_counts_first)
+    condensate_fraction_second = condensate_counts_second / (condensate_counts_second + thermal_counts_second)
+    return (condensate_fraction_first, condensate_fraction_second)
+
+
+"""
+Get the condensate fraction via a 'kludge': Define a box inside of which the condensate is found, subtract the average density of a region 
+just outside that box, sum up the atom counts inside, and then"""
+def get_rr_condensate_fractions_kludge(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
+                                    first_stored_density_name = None, second_stored_density_name = None):
+    if imaging_mode == "polrot":
+        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
+                                                    first_stored_density_name, second_stored_density_name)
+    elif imaging_mode == "abs":
+        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name)
+        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name)
+    #Rotate images 
+    rr_angle = my_measurement.experiment_parameters["rr_tilt_deg"]
+    atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
+    atom_density_second = ndimage.rotate(atom_density_second, rr_angle, reshape = False)
+    #Naive summing approach with background subtraction outside of the box
+    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
+    total_counts_first = image_processing_functions.atom_count_pixel_sum(atom_density_first, pixel_area)
+    total_counts_second = image_processing_functions.atom_count_pixel_sum(atom_density_second, pixel_area)
+    rr_roi = my_measurement.experiment_parameters["rr_roi"]
+    rr_xmin, rr_ymin, rr_xmax, rr_ymax = rr_roi 
+    rr_density_first = image_processing_functions.subcrop(atom_density_first, rr_roi, my_measurement.measurement_parameters["ROI"])
+    rr_density_second = image_processing_functions.subcrop(atom_density_second, rr_roi, my_measurement.measurement_parameters["ROI"])
+    #Create a new box immediately adjacent to, but below, the rr_roi box
+    subtract_xmin = rr_xmin
+    subtract_xmax = rr_xmax
+    subtract_ymax = rr_ymin - 1 
+    subtract_ymin = rr_ymin - 1 - (rr_ymax - rr_ymin) 
+    subtract_box = (subtract_xmin, subtract_ymin, subtract_xmax, subtract_ymax)
+    subtract_density_first = image_processing_functions.subcrop(atom_density_first, subtract_box, my_measurement.measurement_parameters["ROI"])
+    subtract_density_second = image_processing_functions.subcrop(atom_density_second, subtract_box, my_measurement.measurement_parameters["ROI"])
+    subtract_average_first = np.average(subtract_density_first) 
+    subtract_average_second = np.average(subtract_density_second)
+    bs_rr_density_first = rr_density_first - subtract_average_first
+    bs_rr_density_second = rr_density_second - subtract_average_second
+    rr_counts_first = image_processing_functions.atom_count_pixel_sum(bs_rr_density_first, pixel_area) 
+    rr_counts_second = image_processing_functions.atom_count_pixel_sum(bs_rr_density_second, pixel_area)
+    rr_fraction_first = rr_counts_first / total_counts_first 
+    rr_fraction_second = rr_counts_second / total_counts_second 
+    return (rr_fraction_first, rr_fraction_second)
 
 
 #MEASUREMENT-WIDE FUNCTIONS

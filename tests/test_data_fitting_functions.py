@@ -235,7 +235,6 @@ def test_fit_one_dimensional_condensate():
     _, thermal_width, thermal_amp = thermal_popt 
     popt = (center, condensate_width, condensate_amp, thermal_width, thermal_amp)
 
-
 def test_monte_carlo_covariance_helper():
     NUM_SAMPLES = 10000
     DATA_LENGTH = 100
