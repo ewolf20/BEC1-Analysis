@@ -133,7 +133,7 @@ class Measurement():
                     self._add_run(run_id_and_parameters)
                 except RuntimeError as e:
                     current_time = datetime.datetime.now()
-                    run_time = datetime.strptime(DATETIME_FORMAT_STRING, parameters[PARAMETERS_RUN_TIME_NAME])
+                    run_time = datetime.strptime(parameters[PARAMETERS_RUN_TIME_NAME], DATETIME_FORMAT_STRING)
                     if not np.abs((current_time - run_time).total_seconds()) < RUN_MISMATCH_PATIENCE_TIME_SECS:
                         raise e
         current_run_ids_list = [f[0] for f in matched_run_ids_and_parameters_list]
