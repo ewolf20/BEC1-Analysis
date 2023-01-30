@@ -115,7 +115,7 @@ class Measurement():
                     break
             else:
                 raise RuntimeError("Run image does not match specification. Is the imaging type correct?")
-        if not len(run_image_pathname_dict) == MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
+        if not len(run_image_pathname_dict) == len(MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]):
             raise RuntimeError("A run image appears to be missing...")
         generated_run = Run(run_id, run_image_pathname_dict, hold_images_in_memory= self.hold_images_in_memory, 
                             parameters = run_parameters, image_format = self.image_format)
