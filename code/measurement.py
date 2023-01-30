@@ -19,6 +19,7 @@ IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
 MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['TopA', 'TopB'],
                                 'side_low_mag':['Side'], 'side_high_mag':['Side']}
 DATETIME_FORMAT_STRING = "%Y-%m-%d--%H-%M-%S"
+PARAMETERS_RUN_TIME_NAME = "runtime"
 FILENAME_DELIMITER_CHAR = "_"
 
 class Measurement():
@@ -114,6 +115,8 @@ class Measurement():
                     break
             else:
                 raise RuntimeError("Run image does not match specification. Is the imaging type correct?")
+        if not len(run_image_pathname_dict) == len(MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]):
+            raise RuntimeError("A run image appears to be missing...")
         generated_run = Run(run_id, run_image_pathname_dict, hold_images_in_memory= self.hold_images_in_memory, 
                             parameters = run_parameters, image_format = self.image_format)
         self.runs_dict[run_id] = generated_run
@@ -121,11 +124,18 @@ class Measurement():
 
 
     def _update_runs_dict(self):
+        RUN_MISMATCH_PATIENCE_TIME_SECS = 10
         matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_from_measurement_folder()
         for run_id_and_parameters in matched_run_ids_and_parameters_list:
-            run_id, _ = run_id_and_parameters
+            run_id, parameters = run_id_and_parameters
             if not run_id in self.runs_dict:
-                self._add_run(run_id_and_parameters)
+                try:
+                    self._add_run(run_id_and_parameters)
+                except RuntimeError as e:
+                    current_time = datetime.datetime.now()
+                    run_time = datetime.strptime(DATETIME_FORMAT_STRING, parameters[PARAMETERS_RUN_TIME_NAME])
+                    if not np.abs((current_time - run_time).total_seconds()) < RUN_MISMATCH_PATIENCE_TIME_SECS:
+                        raise e
         current_run_ids_list = [f[0] for f in matched_run_ids_and_parameters_list]
         saved_run_ids_list = [f for f in self.runs_dict]
         for saved_run_id in saved_run_ids_list:
