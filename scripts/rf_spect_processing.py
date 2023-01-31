@@ -129,7 +129,7 @@ def get_rf_frequencies_and_counts(my_measurement, resonance_key):
     state_index_A, state_index_B = get_state_indices_from_resonance_key(resonance_key)
     my_measurement.analyze_runs(analysis_functions.get_atom_counts_top_AB_abs, ("counts_A", "counts_B"), fun_kwargs = {"first_state_index":state_index_A, 
                                     "second_state_index":state_index_B}, print_progress = True)
-    rf_frequencies, counts_A = my_measurement.get_parameter_analysis_result_pair_from_runs("RF_Box_Center", "counts_A")
+    rf_frequencies, counts_A = my_measurement.get_parameter_analysis_value_pair_from_runs("RF_Box_Center", "counts_A")
     counts_B = my_measurement.get_analysis_value_from_runs("counts_B")
     return (rf_frequencies, counts_A, counts_B, tau_value)
 
