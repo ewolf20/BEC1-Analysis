@@ -133,7 +133,7 @@ class Measurement():
                     self._add_run(run_id_and_parameters)
                 except RuntimeError as e:
                     current_time = datetime.datetime.now()
-                    run_time = datetime.strptime(DATETIME_FORMAT_STRING, parameters[PARAMETERS_RUN_TIME_NAME])
+                    run_time = datetime.datetime.strptime(DATETIME_FORMAT_STRING, parameters[PARAMETERS_RUN_TIME_NAME])
                     if not np.abs((current_time - run_time).total_seconds()) < RUN_MISMATCH_PATIENCE_TIME_SECS:
                         raise e
         current_run_ids_list = [f[0] for f in matched_run_ids_and_parameters_list]
@@ -426,14 +426,8 @@ class Measurement():
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
-        # if print_progress:
-        #     dict_len = len(self.runs_dict) 
-        #     counter = 0
         run_id_to_analyze_list = []
         for run_id in self.runs_dict:
-            if(print_progress):
-                print("Analyzing run {0:d} ({1:.1%})".format(run_id, counter / dict_len))
-                counter += 1
             current_run = self.runs_dict[run_id]
             should_analyze = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
             if should_analyze:
@@ -451,6 +445,9 @@ class Measurement():
             analysis_len = len(run_id_to_analyze_list)
             counter = 0
         for run_id in run_id_to_analyze_list:
+            if(print_progress):
+                print("Analyzing run {0:d} ({1:.1%})".format(run_id, counter / analysis_len))
+                counter += 1
             current_run = self.runs_dict[run_id]
             if catch_errors:
                 try:

@@ -300,10 +300,14 @@ def get_rr_condensate_fractions_fit(my_measurement, my_run, imaging_mode = "abs"
     integrated_atom_density_second = np.sum(atom_density_second, axis = -1)
     condensate_results_first, thermal_results_first = data_fitting_functions.fit_one_dimensional_condensate(integrated_atom_density_first)
     condensate_results_second, thermal_results_second = data_fitting_functions.fit_one_dimensional_condensate(integrated_atom_density_second)
-    condensate_counts_first = data_fitting_functions.one_d_condensate_integral(*condensate_results_first)
-    thermal_counts_first = data_fitting_functions.thermal_bose_integral(*thermal_results_first)
-    condensate_counts_second = data_fitting_functions.one_d_condensate_integral(*condensate_results_second)
-    thermal_counts_second = data_fitting_functions.thermal_bose_integral(*thermal_results_second)
+    condensate_popt_first, _ = condensate_results_first 
+    condensate_popt_second, _ = condensate_results_second 
+    thermal_popt_first, _ = thermal_results_first 
+    thermal_popt_second, _ = thermal_results_second 
+    condensate_counts_first = data_fitting_functions.one_d_condensate_integral(*condensate_popt_first)
+    thermal_counts_first = data_fitting_functions.thermal_bose_integral(*thermal_popt_first)
+    condensate_counts_second = data_fitting_functions.one_d_condensate_integral(*condensate_popt_second)
+    thermal_counts_second = data_fitting_functions.thermal_bose_integral(*thermal_popt_second)
     condensate_fraction_first = condensate_counts_first / (condensate_counts_first + thermal_counts_first)
     condensate_fraction_second = condensate_counts_second / (condensate_counts_second + thermal_counts_second)
     return (condensate_fraction_first, condensate_fraction_second)
@@ -312,7 +316,7 @@ def get_rr_condensate_fractions_fit(my_measurement, my_run, imaging_mode = "abs"
 """
 Get the condensate fraction via a 'kludge': Define a box inside of which the condensate is found, subtract the average density of a region 
 just outside that box, sum up the atom counts inside, and then"""
-def get_rr_condensate_fractions_kludge(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
+def get_rr_condensate_fractions_box(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
                                     first_stored_density_name = None, second_stored_density_name = None):
     if imaging_mode == "polrot":
         atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
@@ -328,7 +332,7 @@ def get_rr_condensate_fractions_kludge(my_measurement, my_run, imaging_mode = "a
     pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
     total_counts_first = image_processing_functions.atom_count_pixel_sum(atom_density_first, pixel_area)
     total_counts_second = image_processing_functions.atom_count_pixel_sum(atom_density_second, pixel_area)
-    rr_roi = my_measurement.experiment_parameters["rr_roi"]
+    rr_roi = my_measurement.measurement_parameters["rr_condensate_roi"]
     rr_xmin, rr_ymin, rr_xmax, rr_ymax = rr_roi 
     rr_density_first = image_processing_functions.subcrop(atom_density_first, rr_roi, my_measurement.measurement_parameters["ROI"])
     rr_density_second = image_processing_functions.subcrop(atom_density_second, rr_roi, my_measurement.measurement_parameters["ROI"])
