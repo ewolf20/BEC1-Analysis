@@ -37,6 +37,18 @@ def get_sha_hash_string(my_bytes):
     m.update(my_bytes) 
     return m.hexdigest()
 
+def test_subcrop():
+    overall_image_array = np.arange(25).reshape((5, 5))
+    first_crop_coordinates = [1, 1, 4, 4]
+    first_crop_xmin, first_crop_ymin, first_crop_xmax, first_crop_ymax = first_crop_coordinates
+    first_crop_array = overall_image_array[first_crop_ymin:first_crop_ymax, first_crop_xmin:first_crop_xmax]
+    second_crop_coordinates = [2, 1, 4, 3]
+    second_crop_xmin, second_crop_ymin, second_crop_xmax, second_crop_ymax = second_crop_coordinates
+    second_crop_expected_array = overall_image_array[second_crop_ymin:second_crop_ymax, second_crop_xmin:second_crop_xmax]
+    subcrop_array = image_processing_functions.subcrop(first_crop_array, second_crop_coordinates, first_crop_coordinates)
+    assert np.array_equal(subcrop_array, second_crop_expected_array)
+
+
 def test_get_absorption_image():
     ROI = [270, 0, 480, 180]
     norm_box = [300, 250, 400, 300]

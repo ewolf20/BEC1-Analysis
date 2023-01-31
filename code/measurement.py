@@ -133,7 +133,7 @@ class Measurement():
                     self._add_run(run_id_and_parameters)
                 except RuntimeError as e:
                     current_time = datetime.datetime.now()
-                    run_time = datetime.strptime(parameters[PARAMETERS_RUN_TIME_NAME], DATETIME_FORMAT_STRING)
+                    run_time = datetime.datetime.strptime(DATETIME_FORMAT_STRING, parameters[PARAMETERS_RUN_TIME_NAME])
                     if not np.abs((current_time - run_time).total_seconds()) < RUN_MISMATCH_PATIENCE_TIME_SECS:
                         raise e
         current_run_ids_list = [f[0] for f in matched_run_ids_and_parameters_list]
@@ -426,13 +426,8 @@ class Measurement():
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
-        if print_progress:
-            dict_len = len(self.runs_dict) 
-            counter = 0
+        run_id_to_analyze_list = []
         for run_id in self.runs_dict:
-            if(print_progress):
-                print("Analyzing run {0:d} ({1:.1%})".format(run_id, counter / dict_len))
-                counter += 1
             current_run = self.runs_dict[run_id]
             should_analyze = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
             if should_analyze:
@@ -442,24 +437,34 @@ class Measurement():
                         if not varname in current_run.analysis_results:
                             result_varnames_not_all_present = True
                             break 
-                    if not result_varnames_not_all_present:
-                        continue
-                if catch_errors:
-                    try:
-                        results = analysis_function(self, current_run, **fun_kwargs)
-                    except Exception as e:
-                        results = [Measurement.ANALYSIS_ERROR_INDICATOR_STRING] * len(result_varnames)
-                        warnings.warn(repr(e))
-                    else:
-                        if not results_in_tuple_form:
-                            results = (results,)
+                    if result_varnames_not_all_present:
+                        run_id_to_analyze_list.append(run_id)
                 else:
+                    run_id_to_analyze_list.append(run_id)
+        if print_progress:
+            analysis_len = len(run_id_to_analyze_list)
+            counter = 0
+        for run_id in run_id_to_analyze_list:
+            if(print_progress):
+                print("Analyzing run {0:d} ({1:.1%})".format(run_id, counter / analysis_len))
+                counter += 1
+            current_run = self.runs_dict[run_id]
+            if catch_errors:
+                try:
                     results = analysis_function(self, current_run, **fun_kwargs)
+                except Exception as e:
+                    results = [Measurement.ANALYSIS_ERROR_INDICATOR_STRING] * len(result_varnames)
+                    warnings.warn(repr(e))
+                else:
                     if not results_in_tuple_form:
                         results = (results,)
-                for varname, result in zip(result_varnames, results):
-                        if overwrite_existing or not varname in current_run.analysis_results:
-                            current_run.analysis_results[varname] = result 
+            else:
+                results = analysis_function(self, current_run, **fun_kwargs)
+                if not results_in_tuple_form:
+                    results = (results,)
+            for varname, result in zip(result_varnames, results):
+                    if overwrite_existing or not varname in current_run.analysis_results:
+                        current_run.analysis_results[varname] = result 
     
 
     def add_to_live_analyses(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):

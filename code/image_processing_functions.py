@@ -10,6 +10,25 @@ from .c_code._polrot_code import lib as polrot_image_lib
 from . import data_fitting_functions
 
 
+
+"""
+Convenience function for sub-cropping boxes.
+
+Given an array image_array which represents a crop of a larger overall image into coordinates 
+specified by overall-box, and a crop_box which specifies a crop of the 
+overall image, in the original coordinates, contained entirely within image_array, 
+return that crop of the image.
+
+Note: As below, crop_box and overall_box use coordinates in the form [xmin, ymin, xmax, ymax]"""
+def subcrop(image_array, crop_box, overall_box):
+    overall_xmin, overall_ymin, overall_xmax, overall_ymax = overall_box 
+    crop_xmin, crop_ymin, crop_xmax, crop_ymax = crop_box 
+    new_crop_xmin = crop_xmin - overall_xmin 
+    new_crop_ymin = crop_ymin - overall_ymin 
+    new_crop_xmax = crop_xmax - overall_xmin 
+    new_crop_ymax = crop_ymax - overall_ymin 
+    return image_array[new_crop_ymin:new_crop_ymax, new_crop_xmin:new_crop_xmax]
+
 """
 Returns an absorption image, i.e. the ratio of the light counts at a given pixel with and without 
 atoms, corrected by the dark image counts. If norm_box_coordinates is specified, uses those coordinates

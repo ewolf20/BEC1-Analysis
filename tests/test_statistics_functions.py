@@ -79,3 +79,16 @@ def test_mean_location_test():
     ARRAY_DIMENSION_LENGTH = 10
     random_normals_array = np.matmul(random_normals.reshape(random_normals_length, 1), np.linspace(0, 1, ARRAY_DIMENSION_LENGTH).reshape(1, ARRAY_DIMENSION_LENGTH))
     assert np.all(statistics_functions.mean_location_test(random_normals_array + 1.0, 0, axis = 0)) 
+
+
+
+
+def test_filter_1d_outliers():
+    randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    OUTLIER_INDEX = 46
+    OFFSET = 5
+    DEGS_FREEDOM = 1
+    randoms[OUTLIER_INDEX] = 5
+    inlier_indices = statistics_functions.filter_1d_residuals(randoms, DEGS_FREEDOM)
+    assert len(inlier_indices) == (len(randoms) - 1)
+    assert not np.any(OUTLIER_INDEX == inlier_indices)
