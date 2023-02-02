@@ -3,20 +3,14 @@ import json
 import os 
 import subprocess
 import sys
+import time
 
 import numpy as np
 
 from .. import resources as r
 
-def load_satyendra():
-    path_to_file = os.path.dirname(os.path.abspath(__file__))
-    path_to_satyendra = path_to_file + "/../../"
-    sys.path.insert(0, path_to_satyendra)
-
-
 def load_run_parameters_from_json(parameters_path, make_raw_parameters_terse = False):
-    with open(parameters_path, 'r') as json_file:
-        parameters_dict = json.load(json_file)
+    parameters_dict = _load_json_with_retries(parameters_path)
     unsorted_parameters_list = [] 
     for key in parameters_dict:
         run_id = int(key)
@@ -37,6 +31,22 @@ def load_run_parameters_from_json(parameters_path, make_raw_parameters_terse = F
     return sorted_parameters_list
 
 
+#Hack method to load json files that may be being written to by other 
+#threads/processes
+def _load_json_with_retries(pathname):
+    counter = 0
+    SLEEP_TIME = 0.33
+    PATIENCE = 3
+    while True:
+        try:
+            with open(pathname, 'r') as json_file:
+                return json.load(json_file)
+        except json.JSONDecodeError as e:
+            counter += 1
+            if counter < PATIENCE:
+                time.sleep(SLEEP_TIME)
+            else:
+                raise e
 
 def load_experiment_parameters_from_folder(folder_path):
     parameters_path = os.path.join(folder_path, "experiment_parameters.json")

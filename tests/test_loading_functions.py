@@ -16,12 +16,6 @@ def get_sha_hash_string(my_bytes):
     m.update(my_bytes) 
     return m.hexdigest()
 
-def test_load_satyendra():
-    loading_functions.load_satyendra() 
-    import satyendra
-    pass 
-
-
 def test_load_experiment_parameters_from_folder():
     PARAMETERS_FOLDER_PATH = "resources"
     EXPECTED_DICT = {"Values":{}, "Update_Times":{}}
