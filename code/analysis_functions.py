@@ -280,10 +280,8 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
 #RAPID RAMP
 
 """
-Get the rapid ramp condensate fraction via a "correct", fit based approach that fits the condensate and 
-thermals in a multi-step manner akin to that described in https://doi.org/10.1063/1.3125051"""
-
-def get_rr_condensate_fractions_fit(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
+Get the integrated density along the rapid ramp harmonic axis."""
+def get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
                                     first_stored_density_name = None, second_stored_density_name = None):
     if imaging_mode == "polrot":
         atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
@@ -295,9 +293,22 @@ def get_rr_condensate_fractions_fit(my_measurement, my_run, imaging_mode = "abs"
     rr_angle = my_measurement.experiment_parameters["rr_tilt_deg"]
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
     atom_density_second = ndimage.rotate(atom_density_second, rr_angle, reshape = False)
-    #Atom densities are integrated along x axis by default... 
+    #The non-harmonic axis is the x axis in our experiments...
     integrated_atom_density_first = np.sum(atom_density_first, axis = -1)
     integrated_atom_density_second = np.sum(atom_density_second, axis = -1)
+    return (integrated_atom_density_first, integrated_atom_density_second)
+    
+
+"""
+Get the rapid ramp condensate fraction via a "correct", fit based approach that fits the condensate and 
+thermals in a multi-step manner akin to that described in https://doi.org/10.1063/1.3125051"""
+
+def get_rr_condensate_fractions_fit(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
+                                    first_stored_density_name = None, second_stored_density_name = None):
+    integrated_atom_density_first, integrated_atom_density_second = get_rapid_ramp_densities_along_harmonic_axis(
+        my_measurement, my_run, imaging_mode = imaging_mode, first_state_index = first_state_index, second_state_index = second_state_index, 
+        first_stored_density_name=first_stored_density_name, second_stored_density_name=second_stored_density_name
+    )
     condensate_results_first, thermal_results_first = data_fitting_functions.fit_one_dimensional_condensate(integrated_atom_density_first)
     condensate_results_second, thermal_results_second = data_fitting_functions.fit_one_dimensional_condensate(integrated_atom_density_second)
     condensate_popt_first, _ = condensate_results_first 
