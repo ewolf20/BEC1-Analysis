@@ -16,7 +16,8 @@ IMAGE_FORMATS_LIST = ['.fits']
 IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
 MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['TopA', 'TopB'],
                                 'side_low_mag':['Side'], 'side_high_mag':['Side']}
-DATETIME_FORMAT_STRING = "%Y-%m-%d--%H-%M-%S"
+FILENAME_DATETIME_FORMAT_STRING = "%Y-%m-%d--%H-%M-%S"
+PARAMETERS_DATETIME_FORMAT_STRING = "%Y-%m-%dT%H:%M:%SZ"
 PARAMETERS_RUN_TIME_NAME = "runtime"
 FILENAME_DELIMITER_CHAR = "_"
 
@@ -131,7 +132,7 @@ class Measurement():
                     self._add_run(run_id_and_parameters)
                 except RuntimeError as e:
                     current_time = datetime.datetime.now()
-                    run_time = datetime.datetime.strptime(parameters[PARAMETERS_RUN_TIME_NAME], DATETIME_FORMAT_STRING)
+                    run_time = datetime.datetime.strptime(parameters[PARAMETERS_RUN_TIME_NAME], PARAMETERS_DATETIME_FORMAT_STRING)
                     if not np.abs((current_time - run_time).total_seconds()) < RUN_MISMATCH_PATIENCE_TIME_SECS:
                         raise e
         current_run_ids_list = [f[0] for f in matched_run_ids_and_parameters_list]
@@ -559,7 +560,7 @@ class Measurement():
     @staticmethod
     def _parse_datetime_from_filename(filename):
         datetime_string = filename.split(FILENAME_DELIMITER_CHAR)[1]
-        return datetime.datetime.strptime(datetime_string, DATETIME_FORMAT_STRING)
+        return datetime.datetime.strptime(datetime_string, FILENAME_DATETIME_FORMAT_STRING)
         
 class Run():
     """Initialization method
