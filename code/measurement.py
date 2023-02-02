@@ -12,8 +12,6 @@ from astropy.io import fits
 from .image_processing_functions import get_absorption_image
 from . import loading_functions 
 
-loading_functions.load_satyendra()
-
 IMAGE_FORMATS_LIST = ['.fits']
 IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
 MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['TopA', 'TopB'],
