@@ -42,6 +42,7 @@ def _load_json_with_retries(pathname):
             with open(pathname, 'r') as json_file:
                 return json.load(json_file)
         except json.JSONDecodeError as e:
+            print("Got error")
             counter += 1
             if counter < PATIENCE:
                 time.sleep(SLEEP_TIME)
