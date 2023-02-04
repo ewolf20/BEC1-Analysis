@@ -498,8 +498,8 @@ class Measurement():
     indicate that they are not bad shots will be re-labeled as good shots. 
 
     use_badshot_checked_list: If True and override_existing is false, run_ids are appended to a checklist once they have been checked for bad shot status,
-    and will not be checked on subsequent invocations of the function which also have use_checklist = True. If False, runs are neither appended to this checklist for future invocations nor 
-    exempted from badshot checking on the current invocation.
+    and will not be checked on subsequent invocations of the function which also have use_checklist = True. If False, runs are neither appended to
+    this checklist for future invocations nor exempted from badshot checking on the current invocation.
     """
     def label_badshots_custom(self, badshot_function = None, badshots_list = None, override_existing_badshots = False, use_badshot_checked_list = False):
         for run_id in self.runs_dict:
