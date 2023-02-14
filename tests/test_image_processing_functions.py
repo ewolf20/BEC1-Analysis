@@ -106,12 +106,15 @@ def test_get_atom_density_absorption():
     atom_number_image_full = image_processing_functions.get_atom_density_absorption(test_image_array)
     atom_number_image_full_detuned = image_processing_functions.get_atom_density_absorption(test_image_array, detuning = 3)
     atom_number_image_full_sat = image_processing_functions.get_atom_density_absorption(test_image_array, flag = 'sat_beer-lambert', saturation_counts = 1000000)
+    atom_number_image_full_geo_adjusted = image_processing_functions.get_atom_density_absorption(test_image_array, cross_section_imaging_geometry_factor = 0.5)
     atom_count = image_processing_functions.atom_count_pixel_sum(atom_number_image_full, 27.52, sum_region = ROI)
     atom_count_detuned = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_detuned, 27.52, sum_region = ROI) 
     atom_count_sat = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_sat, 27.52, sum_region = ROI)
+    atom_count_geo_adjusted = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_geo_adjusted, 27.52, sum_region = ROI)
     assert np.abs(atom_count - EXPECTED_SUM) < 0.01 
     assert np.abs(atom_count_detuned - EXPECTED_DETUNED_SUM) < 0.01 
     assert np.abs(atom_count_sat - EXPECTED_SAT_SUM) < 0.01
+    assert np.abs(atom_count_geo_adjusted - 2 *EXPECTED_SUM) < 0.01
 
 
 POLROT_DETUNING_1A = 5
@@ -178,6 +181,12 @@ def test_get_atom_density_from_polrot_images():
     saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
     assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4)
     assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-4)
+    reconstructed_geo_adjusted_density_1, reconstructed_geo_adjusted_density_2 = image_processing_functions.get_atom_density_from_polrot_images(
+                                                                            fake_image_A, fake_image_B, POLROT_DETUNING_1A, POLROT_DETUNING_1B, 
+                                                                            POLROT_DETUNING_2A, POLROT_DETUNING_2B, phase_sign = -1.0, 
+                                                                            cross_section_imaging_geometry_factor = 0.5)
+    assert np.all(np.abs(2 * saved_density_1 - reconstructed_geo_adjusted_density_1) < 1e-4)
+    assert np.all(np.abs(2 * saved_density_2 - reconstructed_geo_adjusted_density_2) < 1e-4)  
 
 
 def test_generate_polrot_lookup_table():
