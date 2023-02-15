@@ -40,9 +40,11 @@ def get_atom_density_side_li_lf(my_measurement, my_run):
     frequency_multiplier = my_measurement.experiment_parameters["li_lf_freq_multiplier"]
     nominal_resonance_frequency = my_measurement.experiment_parameters["li_lf_res_freq"]
     nominal_frequency = my_run.parameters["LFImgFreq"]
+    side_cross_section_geometry_factor = my_measurement.experiment_parameters["li_side_sigma_multiplier"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
+                                                            cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
     return atom_density_image
 
 def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None):
@@ -51,6 +53,7 @@ def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None):
     
     my_run_image_array = my_run.get_image('Side', memmap = True) 
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+    side_cross_section_geometry_factor = my_measurement.experiment_parameters["li_side_sigma_multiplier"]
     if state_index == 1:
         nominal_resonance_frequency = my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"]
     elif state_index == 2:
@@ -60,7 +63,8 @@ def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None):
     nominal_frequency = my_run.parameters["ImagFreq0"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning,
+                                                            cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
     return atom_density_image
 
 def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1):
@@ -70,10 +74,12 @@ def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1):
     nominal_resonance_frequency = nominal_resonance_frequencies_list[state_index - 1]
     nominal_frequency = my_run.parameters["ImagFreq1"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+    top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
     my_run_image_array = my_run.get_image('TopA', memmap = True) 
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
+                                                            cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
     return atom_density_image
 
 def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3):
@@ -83,10 +89,12 @@ def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3):
     nominal_resonance_frequency = nominal_resonance_frequencies_list[state_index - 1]
     nominal_frequency = my_run.parameters["ImagFreq2"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+    top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
     my_run_image_array = my_run.get_image('TopB', memmap = True) 
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
+                                                            cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
     return atom_density_image
 
 
@@ -101,12 +109,13 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     nominal_frequency_A = my_run.parameters["ImagFreq1"]
     nominal_frequency_B = my_run.parameters["ImagFreq2"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+    top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
     detuning_1A = frequency_multiplier * (nominal_frequency_A - first_state_resonance_frequency)
     detuning_1B = frequency_multiplier * (nominal_frequency_B - first_state_resonance_frequency)
-    detuning_2A = frequency_multiplier * (nominal_frequency_A - second_state_resonance_frequency) 
+    detuning_2A = frequency_multiplier * (nominal_frequency_A - second_state_resonance_frequency)
     detuning_2B = frequency_multiplier * (nominal_frequency_B - second_state_resonance_frequency)
     polrot_phase_sign = my_measurement.experiment_parameters["polrot_phase_sign"]
-    image_array_A = my_run.get_image('TopA', memmap = True) 
+    image_array_A = my_run.get_image('TopA', memmap = True)
     image_array_B = my_run.get_image('TopB', memmap = True)
     abs_image_A = image_processing_functions.get_absorption_image(image_array_A, 
                                                                 ROI = my_measurement.measurement_parameters["ROI"], 
@@ -114,11 +123,9 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     abs_image_B = image_processing_functions.get_absorption_image(image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
                                                     norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])
     atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B,
-                                                                detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign)
+                                                                detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign, 
+                                                                cross_section_imaging_geometry_factor = top_cross_section_geometry_factor)
     return (atom_density_first, atom_density_second)
-
-
-
 
 #ATOM COUNTS
 
