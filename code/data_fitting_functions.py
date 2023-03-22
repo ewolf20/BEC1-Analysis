@@ -3,7 +3,7 @@ import warnings
 import numpy as np 
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
-from scipy.special import betainc
+from scipy.special import erf
 from scipy.signal import argrelextrema
 
 from .science_functions import two_level_system_population_rabi
@@ -433,6 +433,89 @@ def thermal_bose_integral(center, gaussian_width, gaussian_amp):
 def condensate_bimodal_function(x, center, condensate_width, condensate_amp, gaussian_width, gaussian_amp):
     return one_d_condensate_function(x, center, condensate_width, condensate_amp) + thermal_bose_function(x, center, gaussian_width, gaussian_amp)
 
+
+
+#Box fitting
+
+def fit_error_function_rectangle(positions, values,
+                        amp_guess = None, width_guess = None, center_guess = None, edge_width_guess = None,
+                        fit_width = True):
+    max_value = np.max(values) 
+    if amp_guess is None:
+        amp_guess = max_value 
+    positions_above_half_max = positions[values > 0.5 * max_value] 
+    positions_above_half_max_len = len(positions_above_half_max)
+    if center_guess is None:
+        center_guess = positions_above_half_max[positions_above_half_max_len // 2]
+    if edge_width_guess is None:
+        positions_delta = np.diff(positions)[0] 
+        edge_width_guess = positions_delta
+    if fit_width:
+        if width_guess is None:
+            width_guess = positions_above_half_max[-1] - positions_above_half_max[0] 
+        p_init = [
+            amp_guess, 
+            width_guess, 
+            center_guess, 
+            edge_width_guess
+        ]
+        return curve_fit(error_function_rectangle, positions, values, p0 = p_init)
+    else:
+        if width_guess is None:
+            raise ValueError("If not fitting the width, it must be specified.")
+        def error_function_rectangle_fixed_width(x, amp, center, edge_width):
+            return error_function_rectangle(x, amp, width_guess, center, edge_width)
+        p_init = [
+            amp_guess, 
+            center_guess,
+            edge_width_guess
+        ]
+        return curve_fit(error_function_rectangle_fixed_width, positions, values, p0 = p_init)
+
+def error_function_rectangle(x, amp, width, center, edge_width):
+    rect_on = center - width / 2.0 
+    rect_off = center + width / 2.0 
+    return amp / 2.0 * (erf((x - rect_on) / edge_width) - erf((x - rect_off) / edge_width))
+
+
+
+def fit_semicircle(positions, values, 
+                    amp_guess = None, center_guess = None, radius_guess = None, 
+                    fit_radius = True):
+    max_value = np.max(values)
+    if amp_guess is None:
+        amp_guess = max_value
+    positions_above_05 = positions[values > 0.05 * max_value]
+    len_positions_above_05 = len(positions_above_05)
+    if center_guess is None:
+        center_guess = positions_above_05[len_positions_above_05 // 2]
+    if fit_radius:
+        if radius_guess is None:
+            radius_guess = 0.5 * (positions_above_05[-1] - positions_above_05[0])
+        p_init = [
+            amp_guess, 
+            center_guess, 
+            radius_guess
+        ]
+        return curve_fit(semicircle, positions, values, p0 = p_init)
+    else:
+        if radius_guess is None:
+            raise ValueError("If the radius is not fitted, it must be specified.")
+        def semicircle_fixed_radius(positions, amp, center):
+            return semicircle(positions, amp, center, radius_guess)
+        p_init = [
+            amp_guess, 
+            center_guess
+        ]
+        return curve_fit(semicircle_fixed_radius, positions, values, p0 = p_init)
+
+def semicircle(positions, amp, center, radius):
+    past_radius_indices = np.abs((positions - center) / radius) >= 1
+    within_radius_indices = np.logical_not(past_radius_indices)
+    return_array = np.zeros(len(positions))
+    return_array[past_radius_indices] = 0.0 
+    return_array[within_radius_indices] = amp * np.sqrt(1 - np.square((positions[within_radius_indices] - center) / radius))
+    return return_array
 
 
 def _sort_and_deduplicate_xy_data(x_values, y_values):

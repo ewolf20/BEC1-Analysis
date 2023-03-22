@@ -266,7 +266,7 @@ If None, the analysis will run without background subtraction.
 #NOTE: The analysis does not autorun the get_no_shake_average_profiles function because, as currently structured, 
 this would involve a new call for every run to be analyzed. This could be worked around, but I consider it better 
 to explicitly evaluate the density names first"""
-def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                                         order = None, no_shake_density_name_first = None, 
                                         no_shake_density_name_second = None,
                                         imaging_mode = "polrot",
@@ -304,6 +304,17 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
         return (amp_first, phase_first, amp_second, phase_second)
 
 
+def box_autocut(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+                        first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
+                        top_cutpos = 0.5, side_cutpos = 0.01, widths_free = False):
+    BOX_TRAP_B_FIELD_CONDITION = "unitarity"
+    if imaging_mode == "polrot":
+        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, 
+                                                    second_state_index, first_stored_density_name, second_stored_density_name,
+                                                    BOX_TRAP_B_FIELD_CONDITION)
+    elif imaging_mode == "abs":
+        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
 
 #RAPID RAMP
 
