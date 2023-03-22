@@ -123,7 +123,7 @@ class Measurement():
 
 
     def _update_runs_dict(self):
-        RUN_MISMATCH_PATIENCE_TIME_SECS = 10
+        RUN_MISMATCH_PATIENCE_TIME_SECS = 20
         matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_from_measurement_folder()
         for run_id_and_parameters in matched_run_ids_and_parameters_list:
             run_id, parameters = run_id_and_parameters
@@ -194,8 +194,9 @@ class Measurement():
                     self.measurement_analysis_results = Measurement._undigest_analysis_results(dump_dict[key]) 
                 else:
                     run_id_as_integer = int(key)
-                    current_run = self.runs_dict[run_id_as_integer] 
-                    current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[key])
+                    if run_id_as_integer in self.runs_dict:
+                        current_run = self.runs_dict[run_id_as_integer] 
+                        current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[key])
 
 
     @staticmethod 
