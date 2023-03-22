@@ -270,6 +270,7 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
                                         order = None, no_shake_density_name_first = None, 
                                         no_shake_density_name_second = None,
                                         imaging_mode = "polrot",
+                                        return_phases = False,
                                         first_stored_density_name = None, second_stored_density_name = None):
     BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     if no_shake_density_name_first is None:
@@ -297,7 +298,10 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
     frequency_first, amp_first, phase_first = fft_results_first 
     fft_results_second = data_fitting_functions.get_fft_peak(x_delta, integrated_density_second, order = order)
     frequency_second, amp_second, phase_second = fft_results_second 
-    return (amp_first, amp_second)
+    if not return_phases:
+        return (amp_first, amp_second)
+    else:
+        return (amp_first, phase_first, amp_second, phase_second)
 
 
 
