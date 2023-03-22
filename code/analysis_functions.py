@@ -40,9 +40,11 @@ def get_atom_density_side_li_lf(my_measurement, my_run):
     frequency_multiplier = my_measurement.experiment_parameters["li_lf_freq_multiplier"]
     nominal_resonance_frequency = my_measurement.experiment_parameters["li_lf_res_freq"]
     nominal_frequency = my_run.parameters["LFImgFreq"]
+    side_cross_section_geometry_factor = my_measurement.experiment_parameters["li_side_sigma_multiplier"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
+                                                            cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
     return atom_density_image
 
 def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None):
@@ -51,6 +53,7 @@ def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None):
     
     my_run_image_array = my_run.get_image('Side', memmap = True) 
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
+    side_cross_section_geometry_factor = my_measurement.experiment_parameters["li_side_sigma_multiplier"]
     if state_index == 1:
         nominal_resonance_frequency = my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"]
     elif state_index == 2:
@@ -60,53 +63,71 @@ def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None):
     nominal_frequency = my_run.parameters["ImagFreq0"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning,
+                                                            cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
     return atom_density_image
 
-def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1):
+def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_condition = "unitarity"):
+    #Find the true detuning from the resonance in absolute frequency space,
+    #taking into account shifts in AOM frequency and hf frequency offset lock setpoint
     nominal_resonance_frequencies_list = [my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"], 
                                         my_measurement.experiment_parameters["state_2_unitarity_res_freq_MHz"], 
                                         my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]] 
     nominal_resonance_frequency = nominal_resonance_frequencies_list[state_index - 1]
     nominal_frequency = my_run.parameters["ImagFreq1"]
+    hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
-    detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
+    detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency) + hf_lock_frequency_adjustment
+
+
+    #Adjust for imaging geometry-dependent cross section
+    top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
+
+
+    #Process
     my_run_image_array = my_run.get_image('TopA', memmap = True) 
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
+                                                            cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
     return atom_density_image
 
-def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3):
+def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_condition = "unitarity"):
     nominal_resonance_frequencies_list = [my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"], 
                                         my_measurement.experiment_parameters["state_2_unitarity_res_freq_MHz"], 
                                         my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]] 
     nominal_resonance_frequency = nominal_resonance_frequencies_list[state_index - 1]
     nominal_frequency = my_run.parameters["ImagFreq2"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
-    detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
+    hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
+    top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
+    detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency) + hf_lock_frequency_adjustment
     my_run_image_array = my_run.get_image('TopB', memmap = True) 
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
+                                                            cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
     return atom_density_image
 
 
-def get_atom_densities_top_abs(my_measurement, my_run, state_index_A = 1, state_index_B = 3):
-    return (get_atom_density_top_A_abs(my_measurement, my_run, state_index = state_index_A), get_atom_density_top_B_abs(my_measurement, my_run, state_index = state_index_B))
+def get_atom_densities_top_abs(my_measurement, my_run, state_index_A = 1, state_index_B = 3, b_field_condition = "unitarity"):
+    return (get_atom_density_top_A_abs(my_measurement, my_run, state_index = state_index_A, b_field_condition=b_field_condition),
+     get_atom_density_top_B_abs(my_measurement, my_run, state_index = state_index_B, b_field_condition = b_field_condition))
 
 
 
-def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3):
+def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity"):
     first_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, first_state_index)
     second_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, second_state_index)
     nominal_frequency_A = my_run.parameters["ImagFreq1"]
     nominal_frequency_B = my_run.parameters["ImagFreq2"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
-    detuning_1A = frequency_multiplier * (nominal_frequency_A - first_state_resonance_frequency)
-    detuning_1B = frequency_multiplier * (nominal_frequency_B - first_state_resonance_frequency)
-    detuning_2A = frequency_multiplier * (nominal_frequency_A - second_state_resonance_frequency) 
-    detuning_2B = frequency_multiplier * (nominal_frequency_B - second_state_resonance_frequency)
+    hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
+    detuning_1A = frequency_multiplier * (nominal_frequency_A - first_state_resonance_frequency) + hf_lock_frequency_adjustment
+    detuning_1B = frequency_multiplier * (nominal_frequency_B - first_state_resonance_frequency) + hf_lock_frequency_adjustment
+    detuning_2A = frequency_multiplier * (nominal_frequency_A - second_state_resonance_frequency) + hf_lock_frequency_adjustment
+    detuning_2B = frequency_multiplier * (nominal_frequency_B - second_state_resonance_frequency) + hf_lock_frequency_adjustment
+    top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
     polrot_phase_sign = my_measurement.experiment_parameters["polrot_phase_sign"]
-    image_array_A = my_run.get_image('TopA', memmap = True) 
+    image_array_A = my_run.get_image('TopA', memmap = True)
     image_array_B = my_run.get_image('TopB', memmap = True)
     abs_image_A = image_processing_functions.get_absorption_image(image_array_A, 
                                                                 ROI = my_measurement.measurement_parameters["ROI"], 
@@ -114,11 +135,9 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     abs_image_B = image_processing_functions.get_absorption_image(image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
                                                     norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])
     atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B,
-                                                                detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign)
+                                                                detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign, 
+                                                                cross_section_imaging_geometry_factor = top_cross_section_geometry_factor)
     return (atom_density_first, atom_density_second)
-
-
-
 
 #ATOM COUNTS
 
@@ -140,25 +159,27 @@ def get_atom_count_side_li_hf(my_measurement, my_run, state_index = 1, stored_de
     return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area)
 
 
-def get_atom_count_top_A_abs(my_measurement, my_run, state_index = 1, stored_density_name = None):
-    atom_density = _load_density_top_A_abs(my_measurement, my_run, state_index, stored_density_name)
+def get_atom_count_top_A_abs(my_measurement, my_run, state_index = 1, stored_density_name = None, b_field_condition = "unitarity"):
+    atom_density = _load_density_top_A_abs(my_measurement, my_run, state_index, stored_density_name, b_field_condition)
     pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
     return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area) 
 
-def get_atom_count_top_B_abs(my_measurement, my_run, state_index = 3, stored_density_name = None):
-    atom_density = _load_density_top_B_abs(my_measurement, my_run, state_index, stored_density_name)
+def get_atom_count_top_B_abs(my_measurement, my_run, state_index = 3, stored_density_name = None, b_field_condition = "unitarity"):
+    atom_density = _load_density_top_B_abs(my_measurement, my_run, state_index, stored_density_name, b_field_condition)
     pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
     return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area)
 
 def get_atom_counts_top_AB_abs(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                                first_stored_density_name = None, second_stored_density_name = None):
-    return (get_atom_count_top_A_abs(my_measurement, my_run, state_index = first_state_index, stored_density_name=first_stored_density_name), 
-            get_atom_count_top_B_abs(my_measurement, my_run, state_index = second_state_index, stored_density_name=second_stored_density_name))
+                                first_stored_density_name = None, second_stored_density_name = None, b_field_condition = "unitarity"):
+    return (get_atom_count_top_A_abs(my_measurement, my_run, state_index = first_state_index, stored_density_name=first_stored_density_name, 
+                                    b_field_condition = b_field_condition), 
+            get_atom_count_top_B_abs(my_measurement, my_run, state_index = second_state_index, stored_density_name=second_stored_density_name,
+                                    b_field_condition = b_field_condition))
 
 def get_atom_counts_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, first_stored_density_name = None, 
-                                second_stored_density_name = None):
+                                second_stored_density_name = None, b_field_condition = "unitarity"):
     atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
-                                                first_stored_density_name, second_stored_density_name)
+                                                first_stored_density_name, second_stored_density_name, b_field_condition)
     pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
     atom_count_first = image_processing_functions.atom_count_pixel_sum(atom_density_first, pixel_area)
     atom_count_second = image_processing_functions.atom_count_pixel_sum(atom_density_second, pixel_area)
@@ -171,12 +192,13 @@ def get_atom_counts_top_polrot(my_measurement, my_run, first_state_index = 1, se
 def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                                                     autocut = True, imaging_mode = "polrot",
                                                     first_stored_density_name = None, second_stored_density_name = None):
+    HYBRID_TRAP_B_FIELD_CONDITION = "unitarity"
     if imaging_mode == "polrot":
         atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
-                                                    first_stored_density_name, second_stored_density_name)
+                                                    first_stored_density_name, second_stored_density_name, HYBRID_TRAP_B_FIELD_CONDITION)
     elif imaging_mode == "abs":
-        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name)
-        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name)
+        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, HYBRID_TRAP_B_FIELD_CONDITION)
+        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, HYBRID_TRAP_B_FIELD_CONDITION)
     axicon_tilt_deg = my_measurement.experiment_parameters["axicon_tilt_deg"]
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     axicon_length_pix = my_measurement.experiment_parameters["hybrid_trap_typical_length_pix"]
@@ -249,6 +271,7 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
                                         no_shake_density_name_second = None,
                                         imaging_mode = "polrot",
                                         first_stored_density_name = None, second_stored_density_name = None):
+    BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     if no_shake_density_name_first is None:
         no_shake_density_first = 0.0
     else:
@@ -259,10 +282,11 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
         no_shake_density_second = my_measurement.measurement_analysis_results[no_shake_density_name_second] 
     if imaging_mode == "polrot":
         atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, 
-                                                    second_state_index, first_stored_density_name, second_stored_density_name)
+                                                    second_state_index, first_stored_density_name, second_stored_density_name,
+                                                    BOX_TRAP_B_FIELD_CONDITION)
     elif imaging_mode == "abs":
-        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name)
-        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name)
+        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
     bs_density_first = atom_density_first - no_shake_density_first 
     bs_density_second = atom_density_second - no_shake_density_second
     #Current convention has the integration direction as the last index, i.e. the x-axis. 
@@ -283,12 +307,13 @@ def get_box_shake_fourier_amplitudes_polrot(my_measurement, my_run, first_state_
 Get the integrated density along the rapid ramp harmonic axis."""
 def get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
                                     first_stored_density_name = None, second_stored_density_name = None):
+    RR_B_FIELD_CONDITION = "rapid_ramp"
     if imaging_mode == "polrot":
         atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
-                                                    first_stored_density_name, second_stored_density_name)
+                                                    first_stored_density_name, second_stored_density_name, RR_B_FIELD_CONDITION)
     elif imaging_mode == "abs":
-        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name)
-        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name)
+        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, RR_B_FIELD_CONDITION)
+        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, RR_B_FIELD_CONDITION)
     #Rotate images 
     rr_angle = my_measurement.experiment_parameters["rr_tilt_deg"]
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
@@ -379,6 +404,7 @@ is better done by performing the analysis on all runs, then averaging over the r
 def get_no_shake_average_profiles(my_measurement, first_state_index = 1, second_state_index = 3,
                                     imaging_mode = "polrot",
                                         first_stored_density_name = None, second_stored_density_name = None):
+    BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     no_shake_sum_first = 0.0 
     no_shake_sum_second = 0.0 
     counter = 0 
@@ -387,10 +413,11 @@ def get_no_shake_average_profiles(my_measurement, first_state_index = 1, second_
         if not current_run.is_badshot and current_run.parameters["ShakingCycles"] == 0:
             if imaging_mode == "polrot":
                 density_first, density_second = _load_densities_polrot(my_measurement, current_run, first_state_index, 
-                                                        second_state_index, first_stored_density_name, second_stored_density_name)
+                                                        second_state_index, first_stored_density_name, second_stored_density_name,
+                                                        BOX_TRAP_B_FIELD_CONDITION)
             elif imaging_mode == "abs":
-                density_first = _load_density_top_A_abs(my_measurement, current_run, first_state_index, first_stored_density_name)
-                density_second = _load_density_top_B_abs(my_measurement, current_run, second_state_index, second_stored_density_name)
+                density_first = _load_density_top_A_abs(my_measurement, current_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+                density_second = _load_density_top_B_abs(my_measurement, current_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
             no_shake_sum_first += density_first 
             no_shake_sum_second += density_second
             counter += 1 
@@ -412,26 +439,35 @@ def _get_resonance_frequency_from_state_index(my_measurement, state_index):
     else:
         raise ValueError("Invalid state index")
 
+def _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition):
+    if b_field_condition == "unitarity":
+        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_unitarity_resonance_value"]
+    elif b_field_condition == "rapid_ramp":
+        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_rr_resonance_value"]
+    lock_frequency_multiplier = my_measurement.experiment_parameters["hf_lock_frequency_multiplier"]
+    lock_setpoint = my_measurement.experiment_parameters["hf_lock_setpoint"]
+    return lock_frequency_multiplier * (lock_setpoint - lock_value_for_nominal_resonance)
+
 def _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, first_stored_density_name, 
-                            second_stored_density_name):
+                            second_stored_density_name, b_field_condition):
     if first_stored_density_name is None or second_stored_density_name is None:
         atom_density_first, atom_density_second = get_atom_densities_top_polrot(my_measurement, my_run, first_state_index=first_state_index, 
-                                                    second_state_index=second_state_index)
+                                                    second_state_index=second_state_index, b_field_condition=b_field_condition)
     else:
         atom_density_first = my_run.analysis_results[first_stored_density_name]
         atom_density_second = my_run.analysis_results[second_stored_density_name]
     return (atom_density_first, atom_density_second)
 
-def _load_density_top_A_abs(my_measurement, my_run, state_index, stored_density_name):
+def _load_density_top_A_abs(my_measurement, my_run, state_index, stored_density_name, b_field_condition):
     if stored_density_name is None:
-        atom_density = get_atom_density_top_A_abs(my_measurement, my_run, state_index = state_index)
+        atom_density = get_atom_density_top_A_abs(my_measurement, my_run, state_index = state_index, b_field_condition=b_field_condition)
     else:
         atom_density = my_run.analysis_results[stored_density_name]
     return atom_density
 
-def _load_density_top_B_abs(my_measurement, my_run, state_index, stored_density_name):
+def _load_density_top_B_abs(my_measurement, my_run, state_index, stored_density_name, b_field_condition):
     if stored_density_name is None:
-        atom_density = get_atom_density_top_B_abs(my_measurement, my_run, state_index = state_index)
+        atom_density = get_atom_density_top_B_abs(my_measurement, my_run, state_index = state_index, b_field_condition=b_field_condition)
     else:
         atom_density = my_run.analysis_results[stored_density_name]
     return atom_density

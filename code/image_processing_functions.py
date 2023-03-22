@@ -148,39 +148,44 @@ def atom_count_pixel_sum(atom_density_image, pixel_area, sum_region = None):
 
 """
 Convert an OD absorption image to an array of 2D atom densities, in units of um^{-2}. Wrapper around individual methods which handle saturation etc.
-Warning: All inverse-time units are in units of MHz by convention. All length units are in um."""
+Warning: All inverse-time units are in units of MHz by convention. All length units are in um.
+
+Remark: res_cross_section is _the_ resonant cross section for the transition - i.e. that of a cycling transition driven with the correct polarization, 
+i.e. 6 * pi * lambda_bar^2. cross_section_multiplier is provided for accommodating deviations from this thanks to imaging geometry."""
 
 def get_atom_density_absorption(image_stack, ROI = None, norm_box_coordinates = None, abs_clean_strategy = 'default_clipped', od_clean_strategy = 'default_clipped',
-                                flag = 'beer-lambert', detuning = 0, linewidth = None, res_cross_section = None, species = '6Li', saturation_counts = None):
+                                flag = 'beer-lambert', detuning = 0, linewidth = None, res_cross_section = None, species = '6Li', saturation_counts = None, 
+                                cross_section_imaging_geometry_factor = 1.0):
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
+    geometry_adjusted_cross_section = res_cross_section * cross_section_imaging_geometry_factor
     od_image = get_absorption_od_image(image_stack, ROI = ROI, norm_box_coordinates=norm_box_coordinates, 
                                         abs_clean_strategy=abs_clean_strategy, od_clean_strategy=od_clean_strategy)
     if(flag == 'beer-lambert'):
-        return get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, res_cross_section)
+        return get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, geometry_adjusted_cross_section)
     elif(flag == 'sat_beer-lambert'):
-        return get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning, linewidth, res_cross_section, saturation_counts, 
+        return get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning, linewidth, geometry_adjusted_cross_section, saturation_counts, 
                                                             ROI = ROI, norm_box_coordinates = norm_box_coordinates)
     else:
         raise ValueError("Flag not recognized. Valid options are 'beer-lambert', 'sat_beer-lambert', and 'doppler_beer-lambert'")
 
 
 
-def get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, res_cross_section):
-    effective_cross_section = res_cross_section / (1 + np.square(2 * detuning / linewidth)) 
+def get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, on_resonance_cross_section):
+    effective_cross_section = on_resonance_cross_section / (1 + np.square(2 * detuning / linewidth)) 
     atom_density_um2 = od_image / effective_cross_section 
     return atom_density_um2
 
 
-def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning, linewidth, res_cross_section,
+def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning, linewidth, on_resonance_cross_section,
                                                 saturation_counts, ROI = None, norm_box_coordinates = None):
-    beer_lambert_term = ((1 + np.square(2 * detuning / linewidth)) / res_cross_section ) * od_image
+    beer_lambert_term = ((1 + np.square(2 * detuning / linewidth)) / on_resonance_cross_section ) * od_image
     with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates=norm_box_coordinates)
     with_atoms_dark_subtracted, without_atoms_dark_subtracted = _roi_crop_helper(image_stack, ROI = ROI)
     without_atoms_dark_subtracted = without_atoms_dark_subtracted * with_without_light_ratio
-    saturation_term = (1.0 / res_cross_section) * (without_atoms_dark_subtracted - with_atoms_dark_subtracted) / saturation_counts
+    saturation_term = (1.0 / on_resonance_cross_section) * (without_atoms_dark_subtracted - with_atoms_dark_subtracted) / saturation_counts
     return beer_lambert_term + saturation_term
 
 """
@@ -289,12 +294,14 @@ def _lookup_pixel_polrot_densities(densities_1_lookup, densities_2_lookup, abs_A
 
 
 def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
-                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None, phase_sign = 1.0, 
+                                        res_cross_section = None, cross_section_imaging_geometry_factor = 1.0, 
+                                        intensities_A = None, intensities_B = None, intensities_sat = None, phase_sign = 1.0, 
                                         species = '6Li'):
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
+    geometry_adjusted_cross_section = res_cross_section * cross_section_imaging_geometry_factor
     if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
         raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
     if(np.abs(phase_sign) != 1.0):
@@ -309,7 +316,7 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
     cpus_to_use = cpu_count // 2
     map_iterator = zip(abs_image_A.flatten(), abs_image_B.flatten(), generator_factory(detuning_1A), 
                         generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
-                        generator_factory(linewidth), generator_factory(res_cross_section), intensities_A.flatten(), 
+                        generator_factory(linewidth), generator_factory(geometry_adjusted_cross_section), intensities_A.flatten(), 
                         intensities_B.flatten(), intensities_sat.flatten(), generator_factory(phase_sign))
     with Pool(cpus_to_use) as p:
         for atom_density_1, atom_density_2 in p.starmap(parallelizable_polrot_density_function, map_iterator):
@@ -324,26 +331,28 @@ def generator_factory(value):
         yield value
 
 def parallelizable_polrot_density_function(absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    res_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
+                                    on_resonance_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
         solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                 intensity_A, intensity_B, intensity_sat, phase_sign)
         def current_function(od_naught_vector, *args):
             return wrapped_c_polrot_image_function(od_naught_vector, *args) - np.array([absorption_A, absorption_B])
         root = fsolve(current_function, [0, 0], args = solver_extra_args)
         od_naught_1, od_naught_2 = root 
-        atom_density_1 = od_naught_1 / res_cross_section 
-        atom_density_2 = od_naught_2 / res_cross_section 
+        atom_density_1 = od_naught_1 / on_resonance_cross_section 
+        atom_density_2 = od_naught_2 / on_resonance_cross_section 
         return (atom_density_1, atom_density_2) 
 
 
 #Inverse function for simulating polrot images from atom density. Mostly for testing/debugging purposes.
 def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
-                                        res_cross_section = None, intensities_A = None, intensities_B = None, intensities_sat = None,
+                                        res_cross_section = None, cross_section_imaging_geometry_factor = 1.0,
+                                        intensities_A = None, intensities_B = None, intensities_sat = None,
                                         phase_sign = 1.0, species = '6Li'):
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
+    geometry_adjusted_cross_section = res_cross_section * cross_section_imaging_geometry_factor
     if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
         raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
     image_A_list = []
@@ -356,7 +365,7 @@ def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, d
     cpus_to_use = cpu_count // 2
     map_iterator = zip(densities_1.flatten(), densities_2.flatten(), generator_factory(detuning_1A), 
                         generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
-                        generator_factory(linewidth), generator_factory(res_cross_section), intensities_A.flatten(), 
+                        generator_factory(linewidth), generator_factory(geometry_adjusted_cross_section), intensities_A.flatten(), 
                         intensities_B.flatten(), intensities_sat.flatten(), generator_factory(phase_sign))
     with Pool(cpus_to_use) as p:
         for absorption_A, absorption_B in p.starmap(parallelizable_density_polrot_function, map_iterator):
@@ -367,11 +376,11 @@ def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, d
     return (image_A_array, image_B_array)
 
 def parallelizable_density_polrot_function(atom_density_1, atom_density_2, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    res_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
+                                    on_resonance_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
         extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                 intensity_A, intensity_B, intensity_sat, phase_sign)
-        od_naught_1 = atom_density_1 * res_cross_section
-        od_naught_2 = atom_density_2 * res_cross_section
+        od_naught_1 = atom_density_1 * on_resonance_cross_section
+        od_naught_2 = atom_density_2 * on_resonance_cross_section
         od_naught_vector = [od_naught_1, od_naught_2] 
         return wrapped_c_polrot_image_function(od_naught_vector, *extra_args)
 
