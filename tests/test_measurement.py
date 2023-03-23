@@ -46,27 +46,6 @@ class TestMeasurement:
         my_measurement = TestMeasurement.initialize_measurement() 
         assert True
 
-    @staticmethod 
-    def test_initialize_runs_dict():
-        my_measurement = TestMeasurement.initialize_measurement() 
-        my_measurement._initialize_runs_dict()
-        my_runs_dict = my_measurement.runs_dict
-        assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID
-        my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
-        my_run_image = my_run.get_image('Side')
-        my_run_params = my_run.get_parameters()
-        my_run_params_bytes = json.dumps(my_run_params).encode("ASCII")
-        assert check_sha_hash(my_run_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
-        assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
-        my_measurement_params_from_dump = Measurement(measurement_directory_path = TEST_MEASUREMENT_DIRECTORY_PATH, imaging_type = "side_low_mag")
-        my_measurement_params_from_dump._initialize_runs_dict()
-        assert list(my_runs_dict)[0] == TEST_IMAGE_RUN_ID 
-        my_run = my_runs_dict[TEST_IMAGE_RUN_ID]
-        my_run_params = my_run.get_parameters() 
-        my_run_params_bytes = json.dumps(my_run_params).encode("ASCII") 
-        assert check_sha_hash(my_run_params_bytes, RUN_PARAMS_SHA_CHECKSUM)
-
-
     @staticmethod
     def test_update_runs_dict():
         my_measurement = TestMeasurement.initialize_measurement()
@@ -108,7 +87,6 @@ class TestMeasurement:
         VALUE_NAME_TO_CHECK = "id"
         EXPECTED_VALUES = np.array([TEST_IMAGE_RUN_ID])
         my_measurement = TestMeasurement.initialize_measurement() 
-        my_measurement._initialize_runs_dict()
         values = my_measurement.get_parameter_value_from_runs("id")
         assert np.array_equal(values, EXPECTED_VALUES)
         #Test run filtering
@@ -129,7 +107,6 @@ class TestMeasurement:
         VALUE = 3 
         VALUE_AS_ARRAY = np.array([3])
         my_measurement = TestMeasurement.initialize_measurement() 
-        my_measurement._initialize_runs_dict()
         for run_id in my_measurement.runs_dict:
             current_run = my_measurement.runs_dict[run_id] 
             current_run.analysis_results[VALUE_NAME_TO_CHECK] = VALUE 
@@ -153,7 +130,6 @@ class TestMeasurement:
         VALUE_AS_ARRAY = np.array([VALUE])
         EXPECTED_PARAMS = np.array([TEST_IMAGE_RUN_ID])
         my_measurement = TestMeasurement.initialize_measurement() 
-        my_measurement._initialize_runs_dict()
         for run_id in my_measurement.runs_dict:
             current_run = my_measurement.runs_dict[run_id] 
             current_run.analysis_results[VALUE_NAME_TO_CHECK] = VALUE 
@@ -197,7 +173,6 @@ class TestMeasurement:
         VALUE_1_AS_LIST = [1] 
         VALUE_2_AS_LIST = [2]
         my_measurement = TestMeasurement.initialize_measurement() 
-        my_measurement._initialize_runs_dict()
         def analysis_func_1(my_measurement, my_run):
             return (VALUE_1,)
         def analysis_func_2(my_measurement, my_run):
@@ -282,7 +257,6 @@ class TestMeasurement:
     @staticmethod
     def test_set_box():
         my_measurement = TestMeasurement.initialize_measurement() 
-        my_measurement._initialize_runs_dict() 
         box_coordinates = [1, 2, 3, 4]
         my_measurement.set_box('foo', box_coordinates = box_coordinates)
         assert my_measurement.measurement_parameters['foo'] == box_coordinates

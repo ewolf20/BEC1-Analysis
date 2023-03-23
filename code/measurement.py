@@ -20,6 +20,9 @@ FILENAME_DATETIME_FORMAT_STRING = "%Y-%m-%d--%H-%M-%S"
 PARAMETERS_DATETIME_FORMAT_STRING = "%Y-%m-%dT%H:%M:%SZ"
 PARAMETERS_RUN_TIME_NAME = "runtime"
 FILENAME_DELIMITER_CHAR = "_"
+TEMP_FILE_MARKER = "TEMP"
+
+RUN_MISMATCH_PATIENCE_TIME_SECS = 30
 
 class Measurement():
 
@@ -61,7 +64,7 @@ class Measurement():
         self.badshot_function = badshot_function
         self.badshot_checked_list = []
         self.runs_dict = {}
-        self._initialize_runs_dict()
+        self._update_runs_dict()
         if analyses_list is None:
             self.analyses_list = []
         self.measurement_analysis_results = {}
@@ -70,14 +73,6 @@ class Measurement():
 
     def set_badshot_function(self, badshot_function):
         self.badshot_function = badshot_function
-
-    """Initializes the runs dict.
-    
-    Creates a dictionary {run_id:Run} of runs in the measurement. Each individual run is an object containing the run parameters and images."""
-    def _initialize_runs_dict(self):
-        matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_from_measurement_folder()
-        for run_id_and_parameters in matched_run_ids_and_parameters_list:
-            self._add_run(run_id_and_parameters)
 
 
     def _get_run_ids_and_parameters_from_measurement_folder(self):
@@ -89,7 +84,7 @@ class Measurement():
         else:
             raise RuntimeError("""Drawing parameters directly from breadboard is deprecated. You may use ImageWatchdog.get_run_metadata()
                                 to generate a run params json for legacy datasets.""")
-        unique_run_ids_list = list(set([Measurement._parse_run_id_from_filename(f) for f in os.listdir(self.measurement_directory_path) if self.image_format in f]))
+        unique_run_ids_list = self._get_unique_run_ids_from_folder()
         sorted_run_ids_list = sorted(unique_run_ids_list)
         matched_run_ids_and_parameters_list = []
         #O(n^2) naive search, but it's fine...
@@ -99,8 +94,25 @@ class Measurement():
                     matched_run_ids_and_parameters_list.append((run_id, parameters))
                     break
             else:
-                raise RuntimeError("Unable to find data for run id: " + str(run_id))
+                warnings.warn("Unable to find data for run id: " + str(run_id))
         return matched_run_ids_and_parameters_list
+
+
+    def _get_unique_run_ids_from_folder(self):
+        image_filenames_list = [f for f in os.listdir(self.measurement_directory_path) if self.image_format in f]
+        unique_run_ids_list = []
+        for image_filename in image_filenames_list:
+            run_id = Measurement._parse_run_id_from_filename(image_filename)
+            if not run_id in unique_run_ids_list:
+                for other_filename in image_filenames_list:
+                    if str(run_id) in other_filename and TEMP_FILE_MARKER in other_filename:
+                        break
+                else:
+                    unique_run_ids_list.append(run_id)
+        return unique_run_ids_list
+            
+
+
 
     def _add_run(self, run_id_and_parameters):
         run_id, run_parameters = run_id_and_parameters
@@ -109,6 +121,8 @@ class Measurement():
         for run_id_image_filename in run_id_image_filenames:
             for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
                 if image_name in run_id_image_filename:
+                    if TEMP_FILE_MARKER in run_id_image_filename:
+                        raise RuntimeError("The following run image is still loading: {0}".format(run_id_image_filename))
                     run_id_image_pathname = os.path.join(self.measurement_directory_path, run_id_image_filename)
                     run_image_pathname_dict[image_name] = run_id_image_pathname 
                     break
@@ -121,9 +135,10 @@ class Measurement():
         self.runs_dict[run_id] = generated_run
 
 
-
+    """
+    Scans the measurement folder for new runs to add to self.runs_dict; 
+    ignores errors from runs more recent than some given time, to avoid issues with live analysis."""
     def _update_runs_dict(self):
-        RUN_MISMATCH_PATIENCE_TIME_SECS = 10
         matched_run_ids_and_parameters_list = self._get_run_ids_and_parameters_from_measurement_folder()
         for run_id_and_parameters in matched_run_ids_and_parameters_list:
             run_id, parameters = run_id_and_parameters
@@ -194,8 +209,9 @@ class Measurement():
                     self.measurement_analysis_results = Measurement._undigest_analysis_results(dump_dict[key]) 
                 else:
                     run_id_as_integer = int(key)
-                    current_run = self.runs_dict[run_id_as_integer] 
-                    current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[key])
+                    if run_id_as_integer in self.runs_dict:
+                        current_run = self.runs_dict[run_id_as_integer] 
+                        current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[key])
 
 
     @staticmethod 
