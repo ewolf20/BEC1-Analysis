@@ -104,7 +104,11 @@ class Measurement():
         for image_filename in image_filenames_list:
             run_id = Measurement._parse_run_id_from_filename(image_filename)
             if not run_id in unique_run_ids_list:
-                unique_run_ids_list.append(run_id)
+                for other_filename in image_filenames_list:
+                    if str(run_id) in other_filename and TEMP_FILE_MARKER in other_filename:
+                        break
+                else:
+                    unique_run_ids_list.append(run_id)
         return unique_run_ids_list
             
 
