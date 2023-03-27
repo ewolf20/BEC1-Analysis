@@ -1,6 +1,8 @@
 from collections import namedtuple
 from dataclasses import make_dataclass 
 
+import warnings
+
 import numpy as np 
 from scipy.special import betainc
 
@@ -12,7 +14,7 @@ ConfidenceInterval = namedtuple("ConfidenceInterval", ["low", "high"])
 
 #Use "standard_error" to match convention for scipy.stats.bootstrap, but what is returned 
 #is the STANDARD DEVIATION
-fields = ['confidence_interval', 'bootstrap_distribution', 'standard_error']
+fields = ['confidence_interval', 'bootstrap_distribution', 'standard_error', 'covariance_matrix']
 BootstrapResult = make_dataclass("BootstrapResult", fields)
 
 """A generalized version of bootstrapping suitable for statistics on samples whose datapoints are not scalar. 
@@ -68,6 +70,10 @@ lie within the confidence interval.
 batch_size: Only used if vectorized is True. If specified, the vectorized resampled data is passed to statistic in batches of batch_size resamplings, thereby 
 allowing control over the space used in memory. If not specified and vectorized is True, the entire set of n_resamples resamplings is passed at once. 
 
+ignore_errors: Only used if vectorized is False. If True, errors thrown while a statistic is being evaluated on a dataset are handled and raised as warnings, 
+with the corresponding statistic value omitted from the bootstrapped distribution. Useful for statistics given by e.g. fit algorithms which are likely, 
+but not guaranteed to converge. 
+
 
 Remark: This code takes heavy inspiration from scipy.stat.bootstrap, but is designed to offer more permissive bootstrapping (supporting e.g. samples whose
     "data points" are ndarrays, objects, etc.). Correspondingly, it should be expected to be slower in almost all cases, possibly significantly; where 
@@ -75,7 +81,7 @@ Remark: This code takes heavy inspiration from scipy.stat.bootstrap, but is desi
 """
 def generalized_bootstrap(data, statistic, *args, resampling_axis = 0, additional_axes = (),
                         method = "basic", n_resamples = 100, confidence_level = 0.95, vectorized = False, 
-                        batch_size = None):
+                        batch_size = None, ignore_errors = False):
     if(not batch_size):
         batch_size = n_resamples
     rng = np.random.default_rng()
@@ -90,8 +96,15 @@ def generalized_bootstrap(data, statistic, *args, resampling_axis = 0, additiona
                 for random_index in random_indices:
                     new_sample_list.append(data_sample[random_index])
                 new_input_list.append(new_sample_list)
-            statistic_value = statistic(*new_input_list, *args)
-            bootstrapped_statistic_values_list.append(statistic_value)
+            try:
+                statistic_value = statistic(*new_input_list, *args)
+            except Exception as e:
+                if ignore_errors:
+                    warnings.warn(str(e))
+                else:
+                    raise e
+            else:
+                bootstrapped_statistic_values_list.append(statistic_value)
         bootstrapped_statistic_values = np.stack(bootstrapped_statistic_values_list, axis = -1)
     else:
         vectorized_bootstrapped_statistic_values_list = [] 
@@ -123,10 +136,15 @@ def generalized_bootstrap(data, statistic, *args, resampling_axis = 0, additiona
         confidence_interval_lower = c_lower 
         confidence_interval_upper = c_upper
     standard_deviation = np.std(bootstrapped_statistic_values, axis = -1, ddof = 1)
+    bootstrap_statistic_averages = np.average(bootstrapped_statistic_values, axis = -1) 
+    bootstrap_statistic_averages_reshaped = np.expand_dims(bootstrap_statistic_averages, axis = -1)
+    bootstrap_distribution_length = bootstrapped_statistic_values.shape[-1]
+    bootstrap_distribution_deviations = bootstrapped_statistic_values - bootstrap_statistic_averages_reshaped
+    covariance_matrix = np.matmul(bootstrap_distribution_deviations, np.transpose(bootstrap_distribution_deviations)) / (bootstrap_distribution_length - 1)
     bootstrap_distribution = bootstrapped_statistic_values
     return BootstrapResult(confidence_interval = ConfidenceInterval(confidence_interval_lower, confidence_interval_upper), 
-                            bootstrap_distribution = bootstrap_distribution, standard_error = standard_deviation)
-
+                            bootstrap_distribution = bootstrap_distribution, standard_error = standard_deviation, 
+                            covariance_matrix = covariance_matrix)
 
 def _reshape_data_array_for_vectorized_bootstrap(rng, data_array, resampling_axis, additional_axes, n_resamples):
     data_array_shape = data_array.shape
