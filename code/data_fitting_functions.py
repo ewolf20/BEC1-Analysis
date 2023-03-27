@@ -10,7 +10,7 @@ from .science_functions import two_level_system_population_rabi
 from .statistics_functions import filter_1d_residuals, generalized_bootstrap
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
-                                    filter_outliers = False, report_inliers = False, monte_carlo_cov = False, monte_carlo_samples = 1000):
+                                    filter_outliers = False, report_inliers = False):
     #Cast to guarantee we can use array syntax
     frequencies = np.array(frequencies) 
     counts = np.array(counts)
@@ -52,10 +52,6 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         if(errors):
             errors = errors[inlier_indices]
         results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = popt, sigma = errors)
-    if(monte_carlo_cov):
-        popt, _ = results 
-        pcov = _monte_carlo_covariance_helper(imaging_resonance_lorentzian, frequencies, counts, errors, popt, num_samples = monte_carlo_samples)
-        results = (popt, pcov) 
     if(report_inliers):
         return (results, inlier_indices) 
     else:
@@ -561,7 +557,7 @@ def _group_like_x_xy_data(x_data, y_data, rtol = 1e-5, atol = 1e-8):
     return (unique_x_data, like_x_y_data_list)
 
 
-def bootstrap_fit_covariance(fit_function, x_data, y_data, fit_fun_args = None, fit_fun_kwargs = None, n_resamples = 500, 
+def bootstrap_fit_covariance(fit_function, x_data, y_data, popt, n_resamples = 500, 
                     return_full_bootstrap_result = False, ignore_errors = False, x_rtol = 1e-5, x_atol = 1e-8):
     if fit_fun_kwargs is None:
         fit_fun_kwargs = {}
@@ -575,8 +571,9 @@ def bootstrap_fit_covariance(fit_function, x_data, y_data, fit_fun_args = None, 
             num_y_vals = len(y_data)
             x_data_array = np.concatenate((x_data_array, unique_x_val * np.ones(num_y_vals)))
             y_data_array = np.concatenate((y_data_array, y_data))
-        popt, _ = fit_function(x_data_array, y_data_array, *fit_fun_args, **fit_fun_kwargs) 
-        return popt 
+        results = curve_fit(fit_function, x_data, y_data, p0 = popt)
+        statistic_popt, _ = results
+        return statistic_popt 
     bootstrap_result = generalized_bootstrap(like_x_y_data_list, fit_statistic, n_resamples = n_resamples, vectorized = False, 
                         ignore_errors = ignore_errors)
     if return_full_bootstrap_result:
@@ -602,7 +599,7 @@ def _filter_1d_outliers(x_values, y_values, fitting_func, popt, alpha = 1e-4):
 """
 Helper function for using a Monte Carlo analysis to get the covariance matrix of 
 the best-fit parameters for a function fun to a dataset x_data, y_data."""
-def _monte_carlo_covariance_helper(fun, x_data, y_data, y_errors, popt, num_samples = 100):
+def monte_carlo_fit_covariance(fit_function, x_data, y_data, y_errors, popt, num_samples = 100):
     if(y_errors is None):
         raise RuntimeError("Monte Carlo covariance analysis not supported for non-specified errors.")
     popt_list = []
