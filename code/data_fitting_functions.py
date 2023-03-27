@@ -7,7 +7,7 @@ from scipy.special import erf
 from scipy.signal import argrelextrema
 
 from .science_functions import two_level_system_population_rabi
-from .statistics_functions import filter_1d_residuals
+from .statistics_functions import filter_1d_residuals, generalized_bootstrap
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
                                     filter_outliers = False, report_inliers = False, monte_carlo_cov = False, monte_carlo_samples = 1000):
@@ -542,6 +542,48 @@ def _sort_and_deduplicate_xy_data(x_values, y_values):
     deduplicated_x_values.append(most_recent_x_value)
     deduplicated_y_values.append(most_recent_y_sum / recurrence_counter)
     return (np.array(deduplicated_x_values), np.array(deduplicated_y_values))
+
+
+
+def _group_like_x_xy_data(x_data, y_data, rtol = 1e-5, atol = 1e-8):
+    unique_x_data_values_list = [] 
+    like_x_y_data_list = []
+    for x_val in x_data:
+        for present_x_val in unique_x_data_values_list:
+            if np.isclose(x_val, present_x_val, rtol = rtol, atol = atol):
+                break 
+        else:
+            unique_x_data_values_list.append(x_val)
+    unique_x_data = np.array(unique_x_data_values_list) 
+    for unique_x_val in unique_x_data:
+        associated_y_vals = y_data[np.isclose(x_data, unique_x_val, rtol = rtol, atol = atol)]
+        like_x_y_data_list.append(associated_y_vals)
+    return (unique_x_data, like_x_y_data_list)
+
+
+def bootstrap_fit_covariance(fit_function, x_data, y_data, fit_fun_args = None, fit_fun_kwargs = None, n_resamples = 500, 
+                    return_full_bootstrap_result = False, ignore_errors = False, x_rtol = 1e-5, x_atol = 1e-8):
+    if fit_fun_kwargs is None:
+        fit_fun_kwargs = {}
+    if fit_fun_args is None:
+        fit_fun_args = []
+    unique_x_data, like_x_y_data_list = _group_like_x_xy_data(x_data, y_data, rtol = x_rtol, atol = x_atol)
+    def fit_statistic(*y_data_list):
+        x_data_array = np.array([]) 
+        y_data_array = np.array([])
+        for unique_x_val, y_data in zip(unique_x_data, y_data_list):
+            num_y_vals = len(y_data)
+            x_data_array = np.concatenate((x_data_array, unique_x_val * np.ones(num_y_vals)))
+            y_data_array = np.concatenate((y_data_array, y_data))
+        popt, _ = fit_function(x_data_array, y_data_array, *fit_fun_args, **fit_fun_kwargs) 
+        return popt 
+    bootstrap_result = generalized_bootstrap(like_x_y_data_list, fit_statistic, n_resamples = n_resamples, vectorized = False, 
+                        ignore_errors = ignore_errors)
+    if return_full_bootstrap_result:
+        return bootstrap_result 
+    else:
+        return bootstrap_result.covariance_matrix
+    
 
 """
 Given a fitting function & parameter values and a set of x-y data (as np arrays)
