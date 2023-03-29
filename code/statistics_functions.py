@@ -81,10 +81,10 @@ Remark: This code takes heavy inspiration from scipy.stat.bootstrap, but is desi
 """
 def generalized_bootstrap(data, statistic, *args, resampling_axis = 0, additional_axes = (),
                         method = "basic", n_resamples = 100, confidence_level = 0.95, vectorized = False, 
-                        batch_size = None, ignore_errors = False):
+                        batch_size = None, ignore_errors = False, rng_seed = None):
     if(not batch_size):
         batch_size = n_resamples
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed = rng_seed)
     if not vectorized:
         bootstrapped_statistic_values_list = []
         for i in range(n_resamples):

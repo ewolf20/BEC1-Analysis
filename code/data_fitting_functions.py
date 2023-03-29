@@ -558,11 +558,8 @@ def _group_like_x_xy_data(x_data, y_data, rtol = 1e-5, atol = 1e-8):
 
 
 def bootstrap_fit_covariance(fit_function, x_data, y_data, popt, n_resamples = 500, 
-                    return_full_bootstrap_result = False, ignore_errors = False, x_rtol = 1e-5, x_atol = 1e-8):
-    if fit_fun_kwargs is None:
-        fit_fun_kwargs = {}
-    if fit_fun_args is None:
-        fit_fun_args = []
+                    return_full_bootstrap_result = False, ignore_errors = False, x_rtol = 1e-5, x_atol = 1e-8, 
+                    rng_seed = None):
     unique_x_data, like_x_y_data_list = _group_like_x_xy_data(x_data, y_data, rtol = x_rtol, atol = x_atol)
     def fit_statistic(*y_data_list):
         x_data_array = np.array([]) 
@@ -571,11 +568,11 @@ def bootstrap_fit_covariance(fit_function, x_data, y_data, popt, n_resamples = 5
             num_y_vals = len(y_data)
             x_data_array = np.concatenate((x_data_array, unique_x_val * np.ones(num_y_vals)))
             y_data_array = np.concatenate((y_data_array, y_data))
-        results = curve_fit(fit_function, x_data, y_data, p0 = popt)
+        results = curve_fit(fit_function, x_data_array, y_data_array, p0 = popt)
         statistic_popt, _ = results
         return statistic_popt 
     bootstrap_result = generalized_bootstrap(like_x_y_data_list, fit_statistic, n_resamples = n_resamples, vectorized = False, 
-                        ignore_errors = ignore_errors)
+                        ignore_errors = ignore_errors, rng_seed = rng_seed)
     if return_full_bootstrap_result:
         return bootstrap_result 
     else:
@@ -599,13 +596,12 @@ def _filter_1d_outliers(x_values, y_values, fitting_func, popt, alpha = 1e-4):
 """
 Helper function for using a Monte Carlo analysis to get the covariance matrix of 
 the best-fit parameters for a function fun to a dataset x_data, y_data."""
-def monte_carlo_fit_covariance(fit_function, x_data, y_data, y_errors, popt, num_samples = 100):
-    if(y_errors is None):
-        raise RuntimeError("Monte Carlo covariance analysis not supported for non-specified errors.")
+def monte_carlo_fit_covariance(fit_function, x_data, y_data, y_errors, popt, num_samples = 100, rng_seed = None):
     popt_list = []
+    rng = np.random.default_rng(seed = rng_seed)
     for i in range(num_samples):
-        simulated_y_data = y_data + np.random.normal(loc = 0.0, scale = y_errors, size = y_errors.shape)
-        results = curve_fit(fun, x_data, simulated_y_data, p0 = popt)
+        simulated_y_data = y_data + rng.normal(loc = 0.0, scale = y_errors, size = y_errors.shape)
+        results = curve_fit(fit_function, x_data, simulated_y_data, p0 = popt)
         simulated_popt, _ = results 
         popt_list.append(simulated_popt) 
     #Make sure the monte carlo sample axis is -1 and the parameter axis is 0
