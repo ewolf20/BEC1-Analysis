@@ -3,14 +3,14 @@ import warnings
 import numpy as np 
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
-from scipy.special import betainc
+from scipy.special import erf
 from scipy.signal import argrelextrema
 
 from .science_functions import two_level_system_population_rabi
-from .statistics_functions import filter_1d_residuals
+from .statistics_functions import filter_1d_residuals, generalized_bootstrap
 
 def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
-                                    filter_outliers = False, report_inliers = False, monte_carlo_cov = False, monte_carlo_samples = 1000):
+                                    filter_outliers = False, report_inliers = False):
     #Cast to guarantee we can use array syntax
     frequencies = np.array(frequencies) 
     counts = np.array(counts)
@@ -52,10 +52,6 @@ def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewid
         if(errors):
             errors = errors[inlier_indices]
         results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = popt, sigma = errors)
-    if(monte_carlo_cov):
-        popt, _ = results 
-        pcov = _monte_carlo_covariance_helper(imaging_resonance_lorentzian, frequencies, counts, errors, popt, num_samples = monte_carlo_samples)
-        results = (popt, pcov) 
     if(report_inliers):
         return (results, inlier_indices) 
     else:
@@ -435,6 +431,89 @@ def condensate_bimodal_function(x, center, condensate_width, condensate_amp, gau
 
 
 
+#Box fitting
+
+def fit_error_function_rectangle(positions, values,
+                        amp_guess = None, width_guess = None, center_guess = None, edge_width_guess = None,
+                        fit_width = True):
+    max_value = np.max(values) 
+    if amp_guess is None:
+        amp_guess = max_value 
+    positions_above_half_max = positions[values > 0.5 * max_value] 
+    positions_above_half_max_len = len(positions_above_half_max)
+    if center_guess is None:
+        center_guess = positions_above_half_max[positions_above_half_max_len // 2]
+    if edge_width_guess is None:
+        positions_delta = np.diff(positions)[0] 
+        edge_width_guess = positions_delta
+    if fit_width:
+        if width_guess is None:
+            width_guess = positions_above_half_max[-1] - positions_above_half_max[0] 
+        p_init = [
+            amp_guess, 
+            width_guess, 
+            center_guess, 
+            edge_width_guess
+        ]
+        return curve_fit(error_function_rectangle, positions, values, p0 = p_init)
+    else:
+        if width_guess is None:
+            raise ValueError("If not fitting the width, it must be specified.")
+        def error_function_rectangle_fixed_width(x, amp, center, edge_width):
+            return error_function_rectangle(x, amp, width_guess, center, edge_width)
+        p_init = [
+            amp_guess, 
+            center_guess,
+            edge_width_guess
+        ]
+        return curve_fit(error_function_rectangle_fixed_width, positions, values, p0 = p_init)
+
+def error_function_rectangle(x, amp, width, center, edge_width):
+    rect_on = center - width / 2.0 
+    rect_off = center + width / 2.0 
+    return amp / 2.0 * (erf((x - rect_on) / edge_width) - erf((x - rect_off) / edge_width))
+
+
+
+def fit_semicircle(positions, values, 
+                    amp_guess = None, center_guess = None, radius_guess = None, 
+                    fit_radius = True):
+    max_value = np.max(values)
+    if amp_guess is None:
+        amp_guess = max_value
+    positions_above_05 = positions[values > 0.05 * max_value]
+    len_positions_above_05 = len(positions_above_05)
+    if center_guess is None:
+        center_guess = positions_above_05[len_positions_above_05 // 2]
+    if fit_radius:
+        if radius_guess is None:
+            radius_guess = 0.5 * (positions_above_05[-1] - positions_above_05[0])
+        p_init = [
+            amp_guess, 
+            center_guess, 
+            radius_guess
+        ]
+        return curve_fit(semicircle, positions, values, p0 = p_init)
+    else:
+        if radius_guess is None:
+            raise ValueError("If the radius is not fitted, it must be specified.")
+        def semicircle_fixed_radius(positions, amp, center):
+            return semicircle(positions, amp, center, radius_guess)
+        p_init = [
+            amp_guess, 
+            center_guess
+        ]
+        return curve_fit(semicircle_fixed_radius, positions, values, p0 = p_init)
+
+def semicircle(positions, amp, center, radius):
+    past_radius_indices = np.abs((positions - center) / radius) >= 1
+    within_radius_indices = np.logical_not(past_radius_indices)
+    return_array = np.zeros(len(positions))
+    return_array[past_radius_indices] = 0.0 
+    return_array[within_radius_indices] = amp * np.sqrt(1 - np.square((positions[within_radius_indices] - center) / radius))
+    return return_array
+
+
 def _sort_and_deduplicate_xy_data(x_values, y_values):
     sorted_x_values, sorted_y_values = zip(*sorted(zip(x_values, y_values), key = lambda f: f[0]))
     sorted_x_values = np.array(sorted_x_values) 
@@ -460,6 +539,46 @@ def _sort_and_deduplicate_xy_data(x_values, y_values):
     deduplicated_y_values.append(most_recent_y_sum / recurrence_counter)
     return (np.array(deduplicated_x_values), np.array(deduplicated_y_values))
 
+
+
+def _group_like_x_xy_data(x_data, y_data, rtol = 1e-5, atol = 1e-8):
+    unique_x_data_values_list = [] 
+    like_x_y_data_list = []
+    for x_val in x_data:
+        for present_x_val in unique_x_data_values_list:
+            if np.isclose(x_val, present_x_val, rtol = rtol, atol = atol):
+                break 
+        else:
+            unique_x_data_values_list.append(x_val)
+    unique_x_data = np.array(unique_x_data_values_list) 
+    for unique_x_val in unique_x_data:
+        associated_y_vals = y_data[np.isclose(x_data, unique_x_val, rtol = rtol, atol = atol)]
+        like_x_y_data_list.append(associated_y_vals)
+    return (unique_x_data, like_x_y_data_list)
+
+
+def bootstrap_fit_covariance(fit_function, x_data, y_data, popt, n_resamples = 500, 
+                    return_full_bootstrap_result = False, ignore_errors = False, x_rtol = 1e-5, x_atol = 1e-8, 
+                    rng_seed = None):
+    unique_x_data, like_x_y_data_list = _group_like_x_xy_data(x_data, y_data, rtol = x_rtol, atol = x_atol)
+    def fit_statistic(*y_data_list):
+        x_data_array = np.array([]) 
+        y_data_array = np.array([])
+        for unique_x_val, y_data in zip(unique_x_data, y_data_list):
+            num_y_vals = len(y_data)
+            x_data_array = np.concatenate((x_data_array, unique_x_val * np.ones(num_y_vals)))
+            y_data_array = np.concatenate((y_data_array, y_data))
+        results = curve_fit(fit_function, x_data_array, y_data_array, p0 = popt)
+        statistic_popt, _ = results
+        return statistic_popt 
+    bootstrap_result = generalized_bootstrap(like_x_y_data_list, fit_statistic, n_resamples = n_resamples, vectorized = False, 
+                        ignore_errors = ignore_errors, rng_seed = rng_seed)
+    if return_full_bootstrap_result:
+        return bootstrap_result 
+    else:
+        return bootstrap_result.covariance_matrix
+    
+
 """
 Given a fitting function & parameter values and a set of x-y data (as np arrays)
 they purport to fit, filter outliers using Student's t-test at the specified confidence level.
@@ -477,13 +596,12 @@ def _filter_1d_outliers(x_values, y_values, fitting_func, popt, alpha = 1e-4):
 """
 Helper function for using a Monte Carlo analysis to get the covariance matrix of 
 the best-fit parameters for a function fun to a dataset x_data, y_data."""
-def _monte_carlo_covariance_helper(fun, x_data, y_data, y_errors, popt, num_samples = 100):
-    if(y_errors is None):
-        raise RuntimeError("Monte Carlo covariance analysis not supported for non-specified errors.")
+def monte_carlo_fit_covariance(fit_function, x_data, y_data, y_errors, popt, num_samples = 100, rng_seed = None):
     popt_list = []
+    rng = np.random.default_rng(seed = rng_seed)
     for i in range(num_samples):
-        simulated_y_data = y_data + np.random.normal(loc = 0.0, scale = y_errors, size = y_errors.shape)
-        results = curve_fit(fun, x_data, simulated_y_data, p0 = popt)
+        simulated_y_data = y_data + rng.normal(loc = 0.0, scale = y_errors, size = y_errors.shape)
+        results = curve_fit(fit_function, x_data, simulated_y_data, p0 = popt)
         simulated_popt, _ = results 
         popt_list.append(simulated_popt) 
     #Make sure the monte carlo sample axis is -1 and the parameter axis is 0

@@ -235,13 +235,16 @@ def test_fit_one_dimensional_condensate():
     popt = np.array([center, condensate_width, condensate_amp, thermal_width, thermal_amp])
     assert np.all(np.isclose(popt, EXPECTED_POPT))
 
-def test_monte_carlo_covariance_helper():
+#TODO: Modify bootstrap and monte carlo to take in an external random object!!!
+
+def test_monte_carlo_fit_covariance():
+    RNG_SEED = 1337
     NUM_SAMPLES = 10000
     DATA_LENGTH = 100
     SAMPLE_SLOPE = 2.3 
     SAMPLE_INTERCEPT = -3.1
-    EXPECTED_COVARIANCE_MATRIX = np.array([[ 0.11762376, -0.05881188],
-                                            [-0.05881188,  0.03940594]])
+    EXPECTED_COVARIANCE_MATRIX = np.array([[0.11568357, -0.05788674],
+                                            [-0.05788674, 0.03921054]])
     def my_fitting_function(x, a, b):
         return a*x + b 
     x_values = np.linspace(0, 1, 100) 
@@ -250,6 +253,37 @@ def test_monte_carlo_covariance_helper():
     errors = np.ones(len(x_values)) 
     results = curve_fit(my_fitting_function, x_values, y_values, sigma = errors, absolute_sigma = True)
     popt, pcov = results
-    pcov_monte = data_fitting_functions._monte_carlo_covariance_helper(my_fitting_function, x_values, y_values, errors, popt, 
-                                                                num_samples = NUM_SAMPLES)
-    assert np.all(np.abs((pcov_monte - pcov) / pcov) < 2e-1)
+    pcov_monte = data_fitting_functions.monte_carlo_fit_covariance(my_fitting_function, x_values, y_values, errors, popt, 
+                                                                num_samples = NUM_SAMPLES, rng_seed = RNG_SEED)
+    assert np.all(np.abs((pcov_monte - pcov) / pcov) < 1e-1)
+    assert np.all(np.isclose(pcov_monte, EXPECTED_COVARIANCE_MATRIX))
+
+
+
+def test_bootstrap_fit_covariance():
+    RNG_SEED = 1337
+    NUM_SAMPLES = 500
+    DATA_LENGTH = 100 
+    SAMPLE_SLOPE = 2.3 
+    SAMPLE_INTERCEPT = -3.1
+    EXPECTED_BOOTSTRAP_LOWER_SLOPE = 1.735
+    EXPECTED_BOOTSTRAP_UPPER_SLOPE = 2.850
+    EXPECTED_BOOTSTRAP_LOWER_INTERCEPT = -3.479
+    EXPECTED_BOOTSTRAP_UPPER_INTERCEPT = -2.803
+    def my_fitting_function(x, a, b):
+        return a * x + b 
+    x_values = np.repeat(np.linspace(0, 1, 25), 4)
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy")) 
+    y_values = SAMPLE_SLOPE * x_values + SAMPLE_INTERCEPT + normal_randoms[:len(x_values)]
+    errors = np.ones(len(x_values))
+    results = curve_fit(my_fitting_function, x_values, y_values, sigma = errors, absolute_sigma = True)
+    popt, _ = results 
+    bootstrap_results = data_fitting_functions.bootstrap_fit_covariance(my_fitting_function, x_values, 
+                            y_values, popt, n_resamples = NUM_SAMPLES, return_full_bootstrap_result = True, 
+                            rng_seed = RNG_SEED)
+    slope_low, intercept_low = bootstrap_results.confidence_interval[0]
+    slope_high, intercept_high = bootstrap_results.confidence_interval[1]
+    assert np.isclose(slope_low, EXPECTED_BOOTSTRAP_LOWER_SLOPE, rtol = 1e-3)
+    assert np.isclose(slope_high, EXPECTED_BOOTSTRAP_UPPER_SLOPE, rtol = 1e-3)
+    assert np.isclose(intercept_low, EXPECTED_BOOTSTRAP_LOWER_INTERCEPT, rtol = 1e-3)
+    assert np.isclose(intercept_high, EXPECTED_BOOTSTRAP_UPPER_INTERCEPT, rtol = 1e-3)

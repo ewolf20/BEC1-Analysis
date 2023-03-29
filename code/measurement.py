@@ -121,8 +121,6 @@ class Measurement():
         for run_id_image_filename in run_id_image_filenames:
             for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
                 if image_name in run_id_image_filename:
-                    if TEMP_FILE_MARKER in run_id_image_filename:
-                        raise RuntimeError("The following run image is still loading: {0}".format(run_id_image_filename))
                     run_id_image_pathname = os.path.join(self.measurement_directory_path, run_id_image_filename)
                     run_image_pathname_dict[image_name] = run_id_image_pathname 
                     break

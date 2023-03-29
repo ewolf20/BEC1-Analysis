@@ -21,7 +21,7 @@ class NumberClass():
 def test_generalized_bootstrap():
     my_random_normals = np.load("resources/Sample_Normal_Randoms.npy")
     num_bootstraps = 10000
-    EXPECTED_BOOTSTRAP_STANDARD_DEVIATION = 0.0888
+    EXPECTED_BOOTSTRAP_STANDARD_DEVIATION = 0.0876
     num_samples = len(my_random_normals)
     my_random_object_list = [] 
     for random_number in my_random_normals:
@@ -46,6 +46,11 @@ def test_generalized_bootstrap():
     bootstrap_array_no_additional_standard_deviations = bootstrap_array_no_additional_result.standard_error
     assert len(bootstrap_array_no_additional_standard_deviations == ARRAY_EXTRA_AXIS_LENGTH)
     assert np.all(np.abs(bootstrap_array_no_additional_standard_deviations - EXPECTED_BOOTSTRAP_STANDARD_DEVIATION) < 2e-1)
+    bootstrap_array_no_additional_covariance_matrix = bootstrap_array_no_additional_result.covariance_matrix 
+    bootstrap_array_no_additional_correlation_matrix = np.matmul(np.diag(1.0 / bootstrap_array_no_additional_standard_deviations), np.matmul(
+        bootstrap_array_no_additional_covariance_matrix, np.diag(1.0 / bootstrap_array_no_additional_standard_deviations)
+    ))
+    assert np.all(np.isclose(bootstrap_array_no_additional_correlation_matrix, np.ones(bootstrap_array_no_additional_correlation_matrix.shape)))
     bootstrap_array_result = statistics_functions.generalized_bootstrap((my_random_array,), test_array_statistic, vectorized = True, 
                                                             additional_axes = (1,), n_resamples = num_bootstraps, batch_size = 100)
     bootstrap_array_standard_deviation = bootstrap_array_result.standard_error
