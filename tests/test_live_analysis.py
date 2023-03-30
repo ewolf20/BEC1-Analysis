@@ -130,14 +130,14 @@ def initialize_live_analysis_folder_fake():
 
 #================Begin tests=================
 
-LIVE_ANALYSIS_TEST_NUMBER = 1347
+LIVE_ANALYSIS_TEST_NUMBER = 10
 LIVE_ANALYSIS_TIME_INCREMENT_SECS = 1.0
 
 def fake_live_analysis_function(my_measurement, my_run):
     total_sum = 0.0
     for image_name in my_run.image_dict:
         total_sum += my_run.get_image(image_name)[0][0][0]
-    return "Run id: {0:.1f}, sum: {1:.1f}".format(my_run.parameters["id"], total_sum % UINT_16_CUTOFF)
+    return total_sum
 
 def test_live_analysis_top_double_normal_ordering():
     RNG_SEED = 1337
@@ -147,14 +147,15 @@ def test_live_analysis_top_double_normal_ordering():
     try:
         my_measurement = initialize_measurement(live_analysis_folder_pathname, "top_double")
         my_measurement.add_to_live_analyses(fake_live_analysis_function, "foo")
-        counter = 1337
+        counter = 0
         while counter < LIVE_ANALYSIS_TEST_NUMBER:
             run_id = counter 
             update_live_analysis_parameters_json(live_analysis_folder_pathname, run_id)
             put_image_in_live_analysis_folder_fake(run_id, live_analysis_folder_pathname, mode = "Top", val = counter)
             my_measurement.update(catch_errors = False)
-            print(my_measurement.get_analysis_value_from_runs("foo"))
-            print([my_measurement.runs_dict[key].image_dict for key in my_measurement.runs_dict])
+            ids, vals = my_measurement.get_parameter_analysis_value_pair_from_runs("id", "foo")
+            assert np.all(np.isclose(2 * ids, vals))
+            assert len(vals) == counter + 1
             counter += 1
     finally:
         shutil.rmtree(live_analysis_folder_pathname)
@@ -167,13 +168,15 @@ def test_live_analysis_top_double_params_meas_image_ordering():
     try:
         my_measurement = initialize_measurement(live_analysis_folder_pathname, "top_double")
         my_measurement.add_to_live_analyses(fake_live_analysis_function, "foo")
-        counter = 1337
+        counter = 0
         while counter < LIVE_ANALYSIS_TEST_NUMBER:
             run_id = counter 
             update_live_analysis_parameters_json(live_analysis_folder_pathname, run_id)
             my_measurement.update(catch_errors = False)
             put_image_in_live_analysis_folder_fake(run_id, live_analysis_folder_pathname, mode = "Top", val = counter)
-            print(my_measurement.get_analysis_value_from_runs("foo"))
+            ids, vals = my_measurement.get_parameter_analysis_value_pair_from_runs("id", "foo") 
+            assert np.all(np.isclose(2 * ids, vals))
+            assert len(vals) == counter
             counter += 1
     finally:
         shutil.rmtree(live_analysis_folder_pathname)
@@ -192,12 +195,39 @@ def test_live_analysis_top_double_image_meas_params_ordering():
             put_image_in_live_analysis_folder_fake(run_id, live_analysis_folder_pathname, mode = "Top", val = counter)
             my_measurement.update(catch_errors = False)
             update_live_analysis_parameters_json(live_analysis_folder_pathname, run_id)
-            print(my_measurement.get_analysis_value_from_runs("foo"))
+            ids, vals = my_measurement.get_parameter_analysis_value_pair_from_runs("id", "foo") 
+            assert np.all(np.isclose(2 * ids, vals))
+            assert len(vals) == counter
             counter += 1
     finally:
         shutil.rmtree(live_analysis_folder_pathname)
 
 
+
+def test_live_analysis_top_double_normal_order_missing_params():
+    RNG_SEED = 1337
+    rng = np.random.default_rng(seed = RNG_SEED)
+    live_analysis_folder_pathname = initialize_live_analysis_folder_fake()
+
+    try:
+        my_measurement = initialize_measurement(live_analysis_folder_pathname, "top_double")
+        my_measurement.add_to_live_analyses(fake_live_analysis_function, "foo")
+        counter = 0
+        while counter < LIVE_ANALYSIS_TEST_NUMBER:
+            run_id = counter 
+            if(counter != 3):
+                update_live_analysis_parameters_json(live_analysis_folder_pathname, run_id)
+            put_image_in_live_analysis_folder_fake(run_id, live_analysis_folder_pathname, mode = "Top", val = counter)
+            my_measurement.update(catch_errors = False)
+            ids, vals = my_measurement.get_parameter_analysis_value_pair_from_runs("id", "foo")
+            assert np.all(np.isclose(2 * ids, vals))
+            if counter < 3:
+                assert len(vals) == counter + 1 
+            else:
+                assert len(vals) == counter
+            counter += 1
+    finally:
+        shutil.rmtree(live_analysis_folder_pathname)
 
 
 
