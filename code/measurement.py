@@ -117,7 +117,8 @@ class Measurement():
     def _add_run(self, run_id_and_parameters):
         run_id, run_parameters = run_id_and_parameters
         run_image_pathname_dict = {}
-        run_id_image_filenames = [f for f in os.listdir(self.measurement_directory_path) if run_id == Measurement._parse_run_id_from_filename(f)]
+        run_id_image_filenames = [f for f in os.listdir(self.measurement_directory_path) if (self.image_format in f and 
+                                                                                run_id == Measurement._parse_run_id_from_filename(f))]
         for run_id_image_filename in run_id_image_filenames:
             for image_name in MEASUREMENT_IMAGE_NAME_DICT[self.imaging_type]:
                 if image_name in run_id_image_filename:
