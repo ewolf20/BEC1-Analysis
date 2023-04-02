@@ -1,8 +1,0 @@
-Amplitude: 30
-Center: 314
-Linewidth: 5
-Offset: 10 
-
-Noise:
-
-Gaussian, 0 centered, sigma = 0.5
