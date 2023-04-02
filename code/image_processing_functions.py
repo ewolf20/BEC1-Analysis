@@ -400,7 +400,7 @@ def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axi
         hybrid_trap_3D_density_harmonic_axis = hybrid_trap_radial_integrated_density / hybrid_trap_cross_sectional_area_um 
         harmonic_axis_positions_um = um_per_pixel * (np.arange(len(image_to_use)) - rotated_y_center)
         #Fit lorentzian to the 1D-integrated data to improve center-finding fidelity
-        results = data_fitting_functions.fit_imaging_resonance_lorentzian(harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
+        results = data_fitting_functions.fit_lorentzian_with_offset(harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
         popt, pcov = results
         amp, center, gamma, offset = popt
         refitted_harmonic_axis_positions_um = harmonic_axis_positions_um - center
