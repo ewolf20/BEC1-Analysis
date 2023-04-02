@@ -9,56 +9,63 @@ from scipy.signal import argrelextrema
 from .science_functions import two_level_system_population_rabi
 from .statistics_functions import filter_1d_residuals, generalized_bootstrap
 
-def fit_imaging_resonance_lorentzian(frequencies, counts, errors = None, linewidth = None, center = None, offset = None,
+def fit_lorentzian(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None,
                                     filter_outliers = False, report_inliers = False):
+    return _fit_lorentzian_helper(x_vals, y_vals, errors = errors, amp_guess = amp_guess, center_guess = center_guess, 
+                        gamma_guess = gamma_guess, filter_outliers = filter_outliers, report_inliers = report_inliers, fit_offset = False)
+
+def fit_lorentzian_with_offset(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None, offset_guess = None,
+                                    filter_outliers = False, report_inliers = False):
+    return _fit_lorentzian_helper(x_vals, y_vals, errors = errors, amp_guess = amp_guess, center_guess = center_guess, 
+                        gamma_guess = gamma_guess, offset_guess = offset_guess, 
+                        filter_outliers = filter_outliers, report_inliers = report_inliers, fit_offset = True)
+    
+def _fit_lorentzian_helper(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None, offset_guess = None,
+                                    filter_outliers = False, report_inliers = False, fit_offset = False):
     #Cast to guarantee we can use array syntax
-    frequencies = np.array(frequencies) 
-    counts = np.array(counts)
+    x_vals = np.array(x_vals) 
+    y_vals = np.array(y_vals)
     if(not errors is None):
         errors = np.array(errors)
     #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
-    INITIAL_GAMMA_GUESS = 5.0
-    data_average = sum(counts) / len(counts)
-    frequency_average = sum(frequencies) / len(frequencies)
-    frequency_range = max(frequencies) - min(frequencies) 
-    center_guess = frequencies[np.argmax(np.abs(counts))]
-    gamma_guess = INITIAL_GAMMA_GUESS
-    offset_guess = data_average
-    if(max(counts) - data_average > data_average - min(counts)):
-        amp_guess = max(counts) - data_average 
+    data_average = np.average(y_vals)
+    if amp_guess is None:
+        biggest_val = y_vals[np.argmax(np.abs(y_vals))]
+        amp_guess = biggest_val - data_average
+    if center_guess is None:
+        center_guess = x_vals[np.argmax(np.abs(y_vals))]
+    if gamma_guess is None:
+        x_range = max(x_vals) - min(x_vals) 
+        gamma_guess = x_range / 2
+    if offset_guess is None and fit_offset:
+        offset_guess = data_average
+    if fit_offset:
+        fit_fun = lorentzian_with_offset 
+        params = [amp_guess, center_guess, gamma_guess, offset_guess]
     else:
-        amp_guess = data_average - min(counts)
-    params = np.ones(4)
-    params[0] = amp_guess 
-    if(center):
-        params[1] = center 
-    else:
-        params[1] = center_guess 
-    if(linewidth):
-        params[2] = linewidth 
-    else:
-        params[2] = gamma_guess
-    if(offset):
-        params[3] = offset 
-    else:
-        params[3] = offset_guess
-    results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = params, sigma = errors)
+        fit_fun = lorentzian 
+        params = [amp_guess, center_guess, gamma_guess]
+    results = curve_fit(fit_fun, x_vals, y_vals, p0 = params, sigma = errors)
     if(filter_outliers):
         popt, pcov = results
-        inlier_indices = _filter_1d_outliers(frequencies, counts, imaging_resonance_lorentzian, 
+        inlier_indices = _filter_1d_outliers(x_vals, y_vals, fit_fun, 
                                                             popt)
-        frequencies = frequencies[inlier_indices] 
-        counts = counts[inlier_indices] 
+        x_vals = x_vals[inlier_indices] 
+        y_vals = y_vals[inlier_indices] 
         if(errors):
             errors = errors[inlier_indices]
-        results = curve_fit(imaging_resonance_lorentzian, frequencies, counts, p0 = popt, sigma = errors)
+        results = curve_fit(lorentzian_with_offset, x_vals, y_vals, p0 = popt, sigma = errors)
     if(report_inliers):
         return (results, inlier_indices) 
     else:
         return results
 
-def imaging_resonance_lorentzian(imaging_freq, amp, center, gamma, offset):
-    return amp * 1.0 / (np.square(2.0 * (imaging_freq - center) / gamma) + 1) + offset
+def lorentzian_with_offset(x, amp, center, gamma, offset):
+    return amp * 1.0 / (np.square(2.0 * (x - center) / gamma) + 1) + offset
+
+
+def lorentzian(x, amp, center, gamma):
+    return amp * 1.0 / (np.square(2.0 * (x - center) / gamma) + 1)
 
 
 
@@ -640,6 +647,6 @@ def fit_report(model_function, fit_results, precision = 3):
 
 def get_varnames_from_function(my_func):
     arg_names = my_func.__code__.co_varnames[:my_func.__code__.co_argcount]
-    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'imaging_freq', 'x_values', 'rf_freqs']
+    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'x_values', 'rf_freqs']
     arg_names = [f for f in arg_names if (not f in DEFAULT_INDEPENDENT_VARNAMES)]
     return arg_names
