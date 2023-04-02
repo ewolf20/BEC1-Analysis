@@ -54,7 +54,7 @@ def _fit_lorentzian_helper(x_vals, y_vals, errors = None, amp_guess = None, cent
         y_vals = y_vals[inlier_indices] 
         if(errors):
             errors = errors[inlier_indices]
-        results = curve_fit(lorentzian_with_offset, x_vals, y_vals, p0 = popt, sigma = errors)
+        results = curve_fit(fit_fun, x_vals, y_vals, p0 = popt, sigma = errors)
     if(report_inliers):
         return (results, inlier_indices) 
     else:
