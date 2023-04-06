@@ -232,23 +232,32 @@ def mean_location_test(data, mean_test_value, confidence_level = 0.95, axis = -1
 
 
 """
-Given a fitting function & parameter values and a set of x-y data (as np arrays)
+Given a fitting function & parameter values and a set of 1D x-y data (as np arrays)
 they purport to fit, filter outliers using Student's t-test at the specified confidence level.
 
 Returns the indices of the x-y data which are _INLIERS_, i.e. the complement of outliers,
-points that can be identified as having a chance of less than alpha to occur."""
-def filter_1d_residuals(residuals, degs_of_freedom, alpha = 1e-4):
+points that can be identified as having a chance of less than alpha to occur.
+
+If iterative is false, runs through the data only once to check for outliers. If true, 
+iteratively prunes out detected outliers and returns to the data, implementing 
+Grubbs' test"""
+
+def filter_1d_residuals(residuals, degs_of_freedom, alpha = 1e-4, iterative = False):
     num_samples = len(residuals)
-    sigma_sum = np.sum(np.square(residuals))
-    studentized_residuals = np.zeros(residuals.shape)
-    for i, residual in enumerate(residuals):
-        sigma_sum_sans_current = sigma_sum - np.square(residual)
-        sigma_squared_sans_current = (1.0 / (num_samples - degs_of_freedom - 1)) * sigma_sum_sans_current 
-        sigma_sans_current = np.sqrt(sigma_squared_sans_current)
-        studentized_residual = residual / sigma_sans_current 
-        studentized_residuals[i] = studentized_residual
-    is_inlier_array = _studentized_residual_test(studentized_residuals, num_samples - degs_of_freedom - 1, alpha)
-    inlier_indices = np.nonzero(is_inlier_array)[0]
+    current_mask = np.ma.nomask
+    masked_residuals = np.ma.array(residuals)
+    while True:
+        masked_residuals.mask = current_mask
+        sigma_sum = np.sum(np.square(masked_residuals))
+        sigma_sum_sans_one_array = sigma_sum - np.square(masked_residuals)
+        sigma_squared_sans_one_array = sigma_sum_sans_one_array * (1.0 / (num_samples - degs_of_freedom - 1))
+        sigma_sans_one_array = np.sqrt(sigma_squared_sans_one_array)
+        studentized_residuals = masked_residuals / sigma_sans_one_array
+        is_outlier_array = np.logical_not(_studentized_residual_test(studentized_residuals, num_samples - degs_of_freedom - 1, alpha))
+        current_mask = np.logical_or(current_mask, np.ma.filled(is_outlier_array, fill_value = True))
+        if not iterative or not np.any(is_outlier_array):
+            break
+    inlier_indices = np.nonzero(np.logical_not(current_mask))[0]
     return inlier_indices
 
 #Source for approach: https://en.wikipedia.org/wiki/Studentized_residual

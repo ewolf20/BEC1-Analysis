@@ -96,4 +96,14 @@ def test_filter_1d_outliers():
     randoms[OUTLIER_INDEX] = 5
     inlier_indices = statistics_functions.filter_1d_residuals(randoms, DEGS_FREEDOM)
     assert len(inlier_indices) == (len(randoms) - 1)
-    assert not np.any(OUTLIER_INDEX == inlier_indices)
+    assert not OUTLIER_INDEX in inlier_indices
+    # Test iterative filtering 
+    SUPER_OUTLIER_INDEX = 45 
+    randoms[SUPER_OUTLIER_INDEX] = 100
+    inlier_indices_noniterative = statistics_functions.filter_1d_residuals(randoms, DEGS_FREEDOM)
+    assert len(inlier_indices_noniterative) == (len(randoms) - 1)
+    assert not SUPER_OUTLIER_INDEX in inlier_indices_noniterative
+    inlier_indices_iterative = statistics_functions.filter_1d_residuals(randoms, DEGS_FREEDOM, iterative = True)
+    assert len(inlier_indices_iterative) == (len(randoms) - 2)
+    assert not SUPER_OUTLIER_INDEX in inlier_indices_iterative
+    assert not OUTLIER_INDEX in inlier_indices_iterative
