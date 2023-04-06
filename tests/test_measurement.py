@@ -116,6 +116,13 @@ class TestMeasurement:
         assert np.array_equal(filtered_values_false, np.array([]))
         filtered_values_true = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: True)
         assert np.array_equal(filtered_values_true, VALUE_AS_ARRAY)
+        def combined_filter_part_1(my_measurement, my_run):
+            return True 
+        def combined_filter_part_2(my_measurement, my_run):
+            return False
+        filtered_values_combined = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = (combined_filter_part_1, 
+                                                                                                            combined_filter_part_2))
+        assert np.array_equal(filtered_values_combined, np.array([]))
         #Test non-numpy output 
         filtered_values_true_list = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: True, 
                                                                                 numpyfy = False)
