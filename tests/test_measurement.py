@@ -116,6 +116,13 @@ class TestMeasurement:
         assert np.array_equal(filtered_values_false, np.array([]))
         filtered_values_true = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: True)
         assert np.array_equal(filtered_values_true, VALUE_AS_ARRAY)
+        def combined_filter_part_1(my_measurement, my_run):
+            return True 
+        def combined_filter_part_2(my_measurement, my_run):
+            return False
+        filtered_values_combined = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = (combined_filter_part_1, 
+                                                                                                            combined_filter_part_2))
+        assert np.array_equal(filtered_values_combined, np.array([]))
         #Test non-numpy output 
         filtered_values_true_list = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: True, 
                                                                                 numpyfy = False)
@@ -253,6 +260,41 @@ class TestMeasurement:
         assert np.array_equal(my_measurement.get_analysis_value_from_runs('foo'), [] )
 
 
+    @staticmethod 
+    def test_get_outlier_filter():
+        my_measurement = TestMeasurement.initialize_measurement()
+        randoms = np.load(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "Sample_Normal_Randoms.npy"))
+        for key in my_measurement.runs_dict:
+            my_measurement.runs_dict.pop(key)
+        OUTLIER_INDEX = 46
+        OUTLIER_VALUE = 5
+        for i in range(len(randoms)):
+            current_run = Run(i, TEST_IMAGE_PATHNAME_DICT, {"id":i})
+            if not i == OUTLIER_INDEX:
+                current_run.analysis_results["foo"] = randoms[i] 
+            else:
+                current_run.analysis_results["foo"] = OUTLIER_VALUE
+        outlier_filter = my_measurement.get_outlier_filter("foo", confidence_interval = 0.9999)
+        outlier_filtered_ids = my_measurement.get_parameter_value_from_runs("id", run_filter = outlier_filter)
+        assert len(outlier_filtered_ids) == len(randoms) - 1
+        assert not OUTLIER_INDEX in outlier_filtered_ids
+        #Test extra filtering
+        def even_id_filter(my_measurement, my_run):
+            return my_run.parameters["id"] %2 == 0
+        outlier_filter_even_id = my_measurement.get_outlier_filter("foo", confidence_interval = 0.9999, run_filter = even_id_filter)
+        outlier_filtered_even_ids = my_measurement.get_parameter_value_from_runs("id", run_filter = outlier_filter_even_id)
+        assert len(outlier_filtered_even_ids) == len(randoms) // 2 - 1
+        assert not OUTLIER_INDEX in outlier_filtered_even_ids
+        #Test minimum and maximum returning 
+        outlier_filter, interval = my_measurement.get_outlier_filter("foo", confidence_interval = 0.9999, return_interval = True)
+        interval_lower, interval_upper = interval 
+        filtered_values = my_measurement.get_analysis_value("foo", run_filter = outlier_filter)
+        assert np.min(filtered_values) == interval_lower 
+        assert np.max(filtered_values) == interval_upper
+
+
+
+
     #Does not test the interactive box setting.
     @staticmethod
     def test_set_box():
@@ -266,6 +308,13 @@ class TestMeasurement:
     @staticmethod
     def test_parse_run_id_from_filename():
         assert TEST_IMAGE_RUN_ID == Measurement._parse_run_id_from_filename(TEST_IMAGE_FILE_NAME)
+
+
+    @staticmethod 
+
+    def test_get_outlier_filter():
+        randoms = np.load(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "Sample_Normal_Randoms.npy"))
+
 
 
 class TestRun:

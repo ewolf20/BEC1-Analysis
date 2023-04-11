@@ -88,7 +88,7 @@ def test_mean_location_test():
 
 
 
-def test_filter_1d_outliers():
+def test_filter_1d_residuals():
     randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
     OUTLIER_INDEX = 46
     OFFSET = 5
@@ -96,4 +96,33 @@ def test_filter_1d_outliers():
     randoms[OUTLIER_INDEX] = 5
     inlier_indices = statistics_functions.filter_1d_residuals(randoms, DEGS_FREEDOM)
     assert len(inlier_indices) == (len(randoms) - 1)
-    assert not np.any(OUTLIER_INDEX == inlier_indices)
+    assert not OUTLIER_INDEX in inlier_indices
+    # Test iterative filtering 
+    SUPER_OUTLIER_INDEX = 45 
+    randoms[SUPER_OUTLIER_INDEX] = 100
+    inlier_indices_noniterative = statistics_functions.filter_1d_residuals(randoms, DEGS_FREEDOM)
+    assert len(inlier_indices_noniterative) == (len(randoms) - 1)
+    assert not SUPER_OUTLIER_INDEX in inlier_indices_noniterative
+    inlier_indices_iterative = statistics_functions.filter_1d_residuals(randoms, DEGS_FREEDOM, iterative = True)
+    assert len(inlier_indices_iterative) == (len(randoms) - 2)
+    assert not SUPER_OUTLIER_INDEX in inlier_indices_iterative
+    assert not OUTLIER_INDEX in inlier_indices_iterative
+
+
+def test_filter_mean_outliers():
+    randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    OUTLIER_INDEX = 46
+    OUTLIER = 5
+    SUPER_OUTLIER_INDEX = 47
+    SUPER_OUTLIER = 10000
+    #super outlier is so big that the other outlier wouldn't be detected if super outlier is included in the mean
+    randoms[OUTLIER_INDEX] = OUTLIER 
+    randoms[SUPER_OUTLIER_INDEX] = SUPER_OUTLIER
+    inlier_indices_noniterative = statistics_functions.filter_mean_outliers(randoms, iterative = False) 
+    assert len(inlier_indices_noniterative) == len(randoms) - 1
+    assert not SUPER_OUTLIER_INDEX in inlier_indices_noniterative
+    inlier_indices_iterative = statistics_functions.filter_mean_outliers(randoms, iterative = True) 
+    assert len(inlier_indices_iterative) == len(randoms) - 2 
+    assert not SUPER_OUTLIER_INDEX in inlier_indices_iterative
+    assert not OUTLIER_INDEX in inlier_indices_iterative
+    

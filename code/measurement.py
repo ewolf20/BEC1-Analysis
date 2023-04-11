@@ -10,7 +10,7 @@ import numpy as np
 from astropy.io import fits
 
 from .image_processing_functions import get_absorption_image
-from . import loading_functions 
+from . import loading_functions, statistics_functions
 
 IMAGE_FORMATS_LIST = ['.fits']
 IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
@@ -344,14 +344,11 @@ class Measurement():
     
     run_filter: As with analyze_runs, if passed, only returns parameter values for which the function run_filter returns True."""
     def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None, numpyfy = True):
-        if run_filter is None:
-            run_filter = lambda my_measurement, my_run: True
+        filtered_dict = self._filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
         return_list = []
-        for run_id in self.runs_dict:
+        for run_id in filtered_dict:
             current_run = self.runs_dict[run_id] 
-            should_return = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
-            if should_return:
-                return_list.append(current_run.parameters[value_name])
+            return_list.append(current_run.parameters[value_name])
         if not numpyfy:
             return return_list
         else:
@@ -359,16 +356,12 @@ class Measurement():
 
 
     def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None, numpyfy = True):
-        if run_filter is None:
-            run_filter = lambda my_measurement, my_run: True
+        filtered_dict = self._filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
+                                                analysis_value_err_check_name=value_name)
         return_list = []
-        for run_id in self.runs_dict:
-            current_run = self.runs_dict[run_id]
-            should_return = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
-            if should_return:
-                result_value = current_run.analysis_results[value_name] 
-                if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
-                    return_list.append(current_run.analysis_results[value_name])
+        for run_id in filtered_dict:
+            current_run = filtered_dict[run_id]
+            return_list.append(current_run.analysis_results[value_name])
         if not numpyfy:
             return return_list
         else:
@@ -378,18 +371,14 @@ class Measurement():
     some runs have errors in the analysis."""
     def get_parameter_analysis_value_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
                                                     run_filter = None, numpyfy = True):
-        if run_filter is None:
-            run_filter = lambda my_measurement, my_run: True
+        filtered_dict = self._filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
+                                                analysis_value_err_check_name=analysis_value_name)
         param_list = []
         analysis_result_list = []
-        for run_id in self.runs_dict:
-            current_run = self.runs_dict[run_id] 
-            should_return = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
-            if should_return:
-                result_value = current_run.analysis_results[analysis_value_name]
-                if not ignore_errors or not (isinstance(result_value, str) and result_value == Measurement.ANALYSIS_ERROR_INDICATOR_STRING):
-                    param_list.append(current_run.parameters[parameter_name])
-                    analysis_result_list.append(result_value)
+        for run_id in filtered_dict:
+            current_run = filtered_dict[run_id] 
+            param_list.append(current_run.parameters[parameter_name])
+            analysis_result_list.append(current_run.analysis_results[analysis_value_name])
         if not numpyfy:
             return (param_list, analysis_result_list)
         else:
@@ -419,7 +408,7 @@ class Measurement():
     analysis error indicator string as the value in the analysis_results dict.
 
     run_filter: A function fun(my_measurement, my_run) which determines which runs to analyze; if passed, only those runs for which filter returns 
-    true are analyzed.
+    True are analyzed.
     
     NOTE: Because the output of analysis_function can be arbitrary, it is the form of the argument result_varname that determines whether the 
     function is treated as having a return which is in single or tuple form. The former form is allowed for notational convenience, the latter 
@@ -431,26 +420,23 @@ class Measurement():
                     run_filter = None, print_progress = False):
         if fun_kwargs is None:
             fun_kwargs = {}
-        if run_filter is None:
-            run_filter = lambda my_measurement, my_run: True
         results_in_tuple_form = isinstance(result_varnames, tuple)
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
         run_id_to_analyze_list = []
-        for run_id in self.runs_dict:
-            current_run = self.runs_dict[run_id]
-            should_analyze = all([not ignore_badshots or not current_run.is_badshot, run_filter(self, current_run)])
-            if should_analyze:
-                if(not overwrite_existing):
-                    result_varnames_not_all_present = False 
-                    for varname in result_varnames:
-                        if not varname in current_run.analysis_results:
-                            result_varnames_not_all_present = True
-                            break 
-                    if result_varnames_not_all_present:
-                        run_id_to_analyze_list.append(run_id)
-                else:
+        filtered_dict = self._filter_run_dict(ignore_badshots=ignore_badshots, run_filter = run_filter)
+        for run_id in filtered_dict:
+            current_run = filtered_dict[run_id]
+            if(not overwrite_existing):
+                result_varnames_not_all_present = False 
+                for varname in result_varnames:
+                    if not varname in current_run.analysis_results:
+                        result_varnames_not_all_present = True
+                        break 
+                if result_varnames_not_all_present:
                     run_id_to_analyze_list.append(run_id)
+            else:
+                run_id_to_analyze_list.append(run_id)
         if print_progress:
             analysis_len = len(run_id_to_analyze_list)
             counter = 0
@@ -458,7 +444,7 @@ class Measurement():
             if(print_progress):
                 print("Analyzing run {0:d} ({1:.1%})".format(run_id, counter / analysis_len))
                 counter += 1
-            current_run = self.runs_dict[run_id]
+            current_run = filtered_dict[run_id]
             if catch_errors:
                 try:
                     results = analysis_function(self, current_run, **fun_kwargs)
@@ -474,14 +460,41 @@ class Measurement():
                     results = (results,)
             for varname, result in zip(result_varnames, results):
                     if overwrite_existing or not varname in current_run.analysis_results:
-                        current_run.analysis_results[varname] = result 
+                        current_run.analysis_results[varname] = result
+
+
+    """
+    Convenience function for automatically excluding data points above a certain level of significance.
+    
+    Given a result_name, return a filter function which returns True for all runs where run.analysis_results[result_name] 
+    is within a confidence interval of the mean specified by confidence_interval, using the Student T test. 
+
+    If run filter is specified, only those runs for which run_filter returns True will be examined, and the filter 
+    which is returned will also incorporate the stipulated run_filter.
+
+    If return_interval is True, returns (filter_function, confidence_range), where confidence_range = (lower_bound, upper_bound)
+    """
+    def get_outlier_filter(self, result_name, confidence_interval = 0.95, return_interval = False, run_filter = None, 
+                            ignore_errors = True, ignore_badshots = True, iterative = True):
+        ids, values = self.get_parameter_analysis_value_pair_from_runs("id", result_name, ignore_badshots = ignore_badshots,
+                                                     ignore_errors = ignore_errors, run_filter = run_filter, numpyfy = True)
+        inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = 1 - confidence_interval, iterative = iterative)
+        inlier_ids = ids[inlier_indices]
+        def inlier_run_filter(my_measurement, my_run):
+            return my_run.parameters["id"] in inlier_ids
+        combined_run_filter = Measurement._condition_run_filter((inlier_run_filter, run_filter))
+        if not return_interval:
+            return combined_run_filter
+        else:
+            inlier_values = values[inlier_indices] 
+            min_value = np.min(inlier_values) 
+            max_value = np.max(inlier_values) 
+            return (combined_run_filter, (min_value, max_value))
     
 
     def add_to_live_analyses(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
         if fun_kwargs is None:
             fun_kwargs = {}
-        if run_filter is None:
-            run_filter = lambda my_measurement, my_run: True
         self.analyses_list.append((analysis_function, result_varnames, fun_kwargs, run_filter))
 
 
@@ -532,6 +545,42 @@ class Measurement():
                 elif badshot_function:
                     current_run.is_badshot = badshot_function(self, current_run)
             current_run.parameters["badshot"] = current_run.is_badshot
+
+
+    def _filter_run_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
+        filtered_dict = {}
+        conditioned_run_filter = Measurement._condition_run_filter(run_filter)
+        for run_id in self.runs_dict:
+            current_run = self.runs_dict[run_id]
+            if ignore_badshots and current_run.is_badshot:
+                continue 
+            if not conditioned_run_filter(self, current_run):
+                continue 
+            if ignore_errors:
+                analysis_result = current_run.analysis_results[analysis_value_err_check_name]
+                if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
+                    continue
+            filtered_dict[run_id] = current_run
+        return filtered_dict 
+
+
+    #Helper function for handling cases where run filter is None, a filter, or a tuple of filters
+    @staticmethod
+    def _condition_run_filter(run_filter):
+        if run_filter is None:
+            return lambda my_measurement, my_run: True
+        else:
+            try:
+                for filter in run_filter:
+                    break
+                def combined_filter_func(my_measurement, my_run):
+                    for filter in run_filter:
+                        if (not filter is None ) and (not filter(my_measurement, my_run)):
+                            return False 
+                    return True
+                return combined_filter_func
+            except TypeError:
+                return run_filter
 
 
     def _label_badshots_default(self, override_existing_badshots = False):
