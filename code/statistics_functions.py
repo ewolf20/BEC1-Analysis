@@ -260,6 +260,40 @@ def filter_1d_residuals(residuals, degs_of_freedom, alpha = 1e-4, iterative = Fa
     inlier_indices = np.nonzero(np.logical_not(current_mask))[0]
     return inlier_indices
 
+
+"""
+Given a set of purportedly normally distributed values with unknown mean and standard deviation, 
+apply a Student t-test to prune out outlier points, i.e. those with probability less than alpha of 
+occurring.
+
+If iterative is True, repeatedly iterate through the data after discovering outliers, implementing 
+Grubbs' test.
+
+The difference between this and filter_residuals, above, is that it also strips outliers from the _mean_ 
+of the data, recalculating this every time an outlier is removed. """
+def filter_mean_outliers(values, alpha = 1e-4, iterative = False):
+    DEGREES_OF_FREEDOM = 1
+    num_samples = len(values) 
+    current_mask = np.ma.nomask 
+    masked_values = np.ma.array(values)
+    while True:
+        masked_values.mask = current_mask 
+        masked_mean = np.average(masked_values) 
+        masked_deviations = masked_values - masked_mean 
+        sigma_sum = np.sum(np.square(masked_deviations)) 
+        sigma_sum_sans_one_array = sigma_sum - np.square(masked_deviations)
+        sigma_squared_sans_one_array = sigma_sum_sans_one_array * (1.0 / (num_samples - DEGREES_OF_FREEDOM - 1))
+        sigma_sans_one_array = np.sqrt(sigma_squared_sans_one_array) 
+        studentized_deviations = masked_deviations / sigma_sans_one_array 
+        is_outlier_array = np.logical_not(_studentized_residual_test(studentized_deviations, num_samples - DEGREES_OF_FREEDOM - 1, alpha))
+        current_mask = np.logical_or(current_mask, np.ma.filled(is_outlier_array, fill_value = True))
+        if not iterative or not np.any(is_outlier_array):
+            break
+    inlier_indices = np.nonzero(np.logical_not(current_mask))[0] 
+    return inlier_indices
+
+
+
 #Source for approach: https://en.wikipedia.org/wiki/Studentized_residual
 def _studentized_residual_test(t, degrees_of_freedom, alpha):
     nu = degrees_of_freedom
