@@ -36,7 +36,7 @@ def load_run_parameters_from_json(parameters_path, make_raw_parameters_terse = F
 def _load_json_with_retries(pathname):
     counter = 0
     SLEEP_TIME = 0.33
-    PATIENCE = 3
+    PATIENCE = 5
     while True:
         try:
             with open(pathname, 'r') as json_file:
