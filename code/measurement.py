@@ -78,12 +78,8 @@ class Measurement():
     def _get_run_ids_and_parameters_from_measurement_folder(self):
         DATA_DUMP_PARAMS_FILENAME = "run_params_dump.json" 
         path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, DATA_DUMP_PARAMS_FILENAME)
-        if(os.path.exists(path_to_dump_file_in_measurement_folder)):
-            run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
+        run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
                                                                     make_raw_parameters_terse = (not self.run_parameters_verbose))
-        else:
-            raise RuntimeError("""Drawing parameters directly from breadboard is deprecated. You may use ImageWatchdog.get_run_metadata()
-                                to generate a run params json for legacy datasets.""")
         unique_run_ids_list = self._get_unique_run_ids_from_folder()
         sorted_run_ids_list = sorted(unique_run_ids_list)
         matched_run_ids_and_parameters_list = []
