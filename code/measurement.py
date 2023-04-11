@@ -10,7 +10,7 @@ import numpy as np
 from astropy.io import fits
 
 from .image_processing_functions import get_absorption_image
-from . import loading_functions 
+from . import loading_functions, statistics_functions
 
 IMAGE_FORMATS_LIST = ['.fits']
 IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
@@ -460,7 +460,36 @@ class Measurement():
                     results = (results,)
             for varname, result in zip(result_varnames, results):
                     if overwrite_existing or not varname in current_run.analysis_results:
-                        current_run.analysis_results[varname] = result 
+                        current_run.analysis_results[varname] = result
+
+
+    """
+    Convenience function for automatically excluding data points above a certain level of significance.
+    
+    Given a result_name, return a filter function which returns True for all runs where run.analysis_results[result_name] 
+    is within a confidence interval of the mean specified by confidence_interval, using the Student T test. 
+
+    If run filter is specified, only those runs for which run_filter returns True will be examined, and the filter 
+    which is returned will also incorporate the stipulated run_filter.
+
+    If return_interval is True, returns (filter_function, confidence_range), where confidence_range = (lower_bound, upper_bound)
+    """
+    def get_outlier_filter(self, result_name, confidence_interval = 0.95, return_interval = False, run_filter = None, 
+                            ignore_errors = True, ignore_badshots = True, iterative = True):
+        ids, values = self.get_parameter_analysis_value_pair_from_runs("id", result_name, ignore_badshots = ignore_badshots,
+                                                     ignore_errors = ignore_errors, run_filter = run_filter, numpyfy = True)
+        inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = 1 - confidence_interval, iterative = iterative)
+        inlier_ids = ids[inlier_indices]
+        def inlier_run_filter(my_measurement, my_run):
+            return my_run.parameters["id"] in inlier_ids
+        combined_run_filter = Measurement._condition_run_filter((inlier_run_filter, run_filter))
+        if not return_interval:
+            return combined_run_filter
+        else:
+            inlier_values = values[inlier_indices] 
+            min_value = np.min(inlier_values) 
+            max_value = np.max(inlier_values) 
+            return (combined_run_filter, (min_value, max_value))
     
 
     def add_to_live_analyses(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
@@ -546,7 +575,7 @@ class Measurement():
                     break
                 def combined_filter_func(my_measurement, my_run):
                     for filter in run_filter:
-                        if not filter(my_measurement, my_run):
+                        if (not filter is None ) and (not filter(my_measurement, my_run)):
                             return False 
                     return True
                 return combined_filter_func
