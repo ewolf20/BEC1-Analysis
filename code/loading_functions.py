@@ -9,8 +9,18 @@ import numpy as np
 
 from .. import resources as r
 
-def load_run_parameters_from_json(parameters_path, make_raw_parameters_terse = False):
-    parameters_dict = _load_json_with_retries(parameters_path)
+def load_run_parameters_from_json(parameters_path, make_raw_parameters_terse = False, have_patience = False):
+    PATIENT_RETRIES = 10 
+    PATIENT_SLEEP_TIME = 1.0
+    IMPATIENT_RETRIES = 3
+    IMPATIENT_SLEEP_TIME = 0.3
+    if have_patience:
+        load_retries = PATIENT_RETRIES
+        load_sleep_time = PATIENT_SLEEP_TIME
+    else:
+        load_retries = IMPATIENT_RETRIES 
+        load_sleep_time = IMPATIENT_SLEEP_TIME
+    parameters_dict = _load_json_with_retries(parameters_path, retries = load_retries, sleep_time = load_sleep_time)
     unsorted_parameters_list = [] 
     for key in parameters_dict:
         run_id = int(key)
@@ -33,10 +43,8 @@ def load_run_parameters_from_json(parameters_path, make_raw_parameters_terse = F
 
 #Hack method to load json files that may be being written to by other 
 #threads/processes
-def _load_json_with_retries(pathname):
+def _load_json_with_retries(pathname, retries = 0, sleep_time = 0.0):
     counter = 0
-    SLEEP_TIME = 0.33
-    PATIENCE = 5
     while True:
         try:
             with open(pathname, 'r') as json_file:
@@ -44,8 +52,8 @@ def _load_json_with_retries(pathname):
         except (json.JSONDecodeError, OSError, FileNotFoundError) as e:
             print("Got error")
             counter += 1
-            if counter < PATIENCE:
-                time.sleep(SLEEP_TIME)
+            if counter < retries:
+                time.sleep(sleep_time)
             else:
                 raise e
 
