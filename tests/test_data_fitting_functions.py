@@ -3,6 +3,7 @@ import sys
 
 import numpy as np 
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
@@ -293,6 +294,20 @@ def test_fit_semicircle():
     assert np.isclose(center, EXPECTED_CENTER, rtol = 1e-3)
     assert np.isclose(radius, EXPECTED_RADIUS, rtol = 1e-3)
 
+
+def test_crop_box():
+    sample_box_data = np.load(os.path.join("resources", "Sample_Box.npy")) 
+    EXPECTED_BOX_CROP = (34, 50, 214, 174)
+    box_crop = data_fitting_functions.crop_box(sample_box_data)
+    assert EXPECTED_BOX_CROP == box_crop
+    EXPECTED_BOX_CROP_SPECIFIED_POINTS = (70, 39, 178, 186)
+    box_crop_specified_points = data_fitting_functions.crop_box(sample_box_data, horiz_crop_point = 0.8, vert_crop_point = 0.05)
+    assert box_crop_specified_points == EXPECTED_BOX_CROP_SPECIFIED_POINTS
+    FIXED_VERT_WIDTH = 90 
+    FIXED_HORIZ_RADIUS = 120
+    EXPECTED_BOX_CROP_FIXED_WIDTHS = (4, 68, 244, 158)
+    box_crop_fixed_widths = data_fitting_functions.crop_box(sample_box_data, horiz_radius = FIXED_HORIZ_RADIUS, vert_width = FIXED_VERT_WIDTH)
+    assert EXPECTED_BOX_CROP_FIXED_WIDTHS == box_crop_fixed_widths
 
 
 def test_bootstrap_fit_covariance():

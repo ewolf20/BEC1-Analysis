@@ -3,7 +3,7 @@ import warnings
 import numpy as np 
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
-from scipy.special import erf
+from scipy.special import erf, erfinv
 from scipy.signal import argrelextrema
 
 from .science_functions import two_level_system_population_rabi
@@ -482,6 +482,17 @@ def error_function_rectangle(x, amp, width, center, edge_width):
 
 
 
+
+def _error_function_rectangle_crop_helper(width, center, edge_width, crop_point = 0.5):
+    #Calculates the crop point assuming the other erf is identically 1; usually a good assumption
+    erf_value = 2.0 * (crop_point - 0.5)
+    erf_contribution = edge_width * erfinv(erf_value)
+    crop_center_shift = width / 2.0 - erf_contribution
+    return (center - crop_center_shift, center + crop_center_shift)
+
+
+
+
 def fit_semicircle(positions, values, 
                     amp_guess = None, center_guess = None, radius_guess = None, 
                     fit_radius = True):
@@ -519,6 +530,54 @@ def semicircle(positions, amp, center, radius):
     return_array[past_radius_indices] = 0.0 
     return_array[within_radius_indices] = amp * np.sqrt(1 - np.square((positions[within_radius_indices] - center) / radius))
     return return_array
+
+
+def _semicircle_crop_helper(center, radius, crop_point = 0.0):
+    if crop_point < 0.0:
+        raise ValueError("Crop point can't be negative.")
+    crop_center_shift = np.sqrt(1 - np.square(crop_point)) * radius 
+    return (center - crop_center_shift, center + crop_center_shift)
+
+
+
+def crop_box(atom_densities, vert_crop_point = 0.5, horiz_crop_point = 0.01, horiz_radius = None, vert_width = None):
+    x_integrated_atom_densities = np.sum(atom_densities, axis = -1) 
+    x_int_len = len(x_integrated_atom_densities)
+    x_integrated_indices = np.arange(x_int_len)
+    y_integrated_atom_densities = np.sum(atom_densities, axis = 0)
+    y_int_len = len(y_integrated_atom_densities)
+    y_integrated_indices = np.arange(y_int_len)
+    if horiz_radius is None:
+        horiz_fit_results = fit_semicircle(y_integrated_indices, y_integrated_atom_densities)
+        horiz_popt, horiz_pcov = horiz_fit_results 
+        h_amp, h_center, h_radius = horiz_popt 
+    else:
+        horiz_fit_results = fit_semicircle(y_integrated_indices, y_integrated_atom_densities, 
+                                                            fit_radius = False, radius_guess = horiz_radius)
+        horiz_popt, horiz_pcov = horiz_fit_results 
+        h_amp, h_center = horiz_popt 
+        h_radius = horiz_radius
+    h_crop_min, h_crop_max = _semicircle_crop_helper(h_center, h_radius, crop_point = horiz_crop_point)
+    h_crop_min = np.rint(h_crop_min).astype(int)
+    h_crop_min = np.max((0, h_crop_min))
+    h_crop_max = np.rint(h_crop_max).astype(int)
+    h_crop_max = np.min((y_int_len - 1, h_crop_max))
+    if vert_width is None:
+        vert_fit_results = fit_error_function_rectangle(x_integrated_indices, x_integrated_atom_densities)
+        vert_popt, vert_pcov = vert_fit_results 
+        v_amp, v_width, v_center, v_edge_width = vert_popt 
+    else:
+        vert_fit_results = fit_error_function_rectangle(x_integrated_indices, x_integrated_atom_densities, fit_width = False, 
+                                                width_guess = vert_width)
+        vert_popt, vert_pcov = vert_fit_results 
+        v_amp, v_center, v_edge_width = vert_popt 
+        v_width = vert_width
+    v_crop_min, v_crop_max = _error_function_rectangle_crop_helper(v_width, v_center, v_edge_width, crop_point = vert_crop_point)
+    v_crop_min = np.rint(v_crop_min).astype(int)
+    v_crop_min = np.max((0, v_crop_min))
+    v_crop_max = np.rint(v_crop_max).astype(int)
+    v_crop_max = np.min((x_int_len - 1, v_crop_max))
+    return (h_crop_min, v_crop_min, h_crop_max, v_crop_max)
 
 
 def _sort_and_deduplicate_xy_data(x_values, y_values):
