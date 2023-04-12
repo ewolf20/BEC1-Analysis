@@ -306,7 +306,7 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
 
 def box_autocut(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                         first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
-                        top_cutpos = 0.5, side_cutpos = 0.01, widths_free = False):
+                        vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False, density_to_use = 2):
     BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     if imaging_mode == "polrot":
         atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, 
@@ -315,6 +315,22 @@ def box_autocut(my_measurement, my_run, first_state_index = 1, second_state_inde
     elif imaging_mode == "abs":
         atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
         atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+    if density_to_use == 1:
+        atom_density_to_fit = atom_density_first 
+    elif density_to_use == 2:
+        atom_density_to_fit = atom_density_second
+    else:
+        raise ValueError("Incorrect parameter value for density_to_use. Should be 1 or 2.")
+    if not widths_free:
+        horiz_radius = my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
+        vert_width = my_measurement.experiment_parameters["box_length_pix"]
+        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
+                            vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point, 
+                            horiz_radius = horiz_radius, vert_width = vert_width)
+    else:
+        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
+                            vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point)
+    return box_crop 
 
 #RAPID RAMP
 
