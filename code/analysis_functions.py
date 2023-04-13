@@ -271,7 +271,9 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
                                         no_shake_density_name_second = None,
                                         imaging_mode = "polrot",
                                         return_phases = False,
-                                        first_stored_density_name = None, second_stored_density_name = None):
+                                        first_stored_density_name = None, second_stored_density_name = None, 
+                                        autocut = False, autocut_density_to_use = 2, autocut_widths_free = False, 
+                                        autocut_vert_crop_point = 0.5, autocut_horiz_crop_point = 0.01):
     BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     if no_shake_density_name_first is None:
         no_shake_density_first = 0.0
@@ -290,6 +292,14 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
         atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
     bs_density_first = atom_density_first - no_shake_density_first 
     bs_density_second = atom_density_second - no_shake_density_second
+    if autocut:
+        box_crop = box_autocut(my_measurement, my_run, first_state_index = first_state_index, second_state_index = second_state_index, 
+                                first_stored_density_name=first_stored_density_name, second_stored_density_name=second_stored_density_name, 
+                                imaging_mode = imaging_mode, vert_crop_point=autocut_vert_crop_point, horiz_crop_point=autocut_horiz_crop_point, 
+                                widths_free = autocut_widths_free, density_to_use=autocut_density_to_use)
+        x_min, y_min, x_max, y_max = box_crop
+        bs_density_first = bs_density_first[y_min:y_max, x_min:x_max]
+        bs_density_second = bs_density_second[y_min:y_max, x_min:x_max]
     #Current convention has the integration direction as the last index, i.e. the x-axis. 
     integrated_density_first = np.sum(bs_density_first, axis = -1)
     integrated_density_second = np.sum(bs_density_second, axis = -1)

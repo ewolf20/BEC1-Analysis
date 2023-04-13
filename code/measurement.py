@@ -478,7 +478,7 @@ class Measurement():
                             ignore_errors = True, ignore_badshots = True, iterative = True):
         ids, values = self.get_parameter_analysis_value_pair_from_runs("id", result_name, ignore_badshots = ignore_badshots,
                                                      ignore_errors = ignore_errors, run_filter = run_filter, numpyfy = True)
-        inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = 1 - confidence_interval, iterative = iterative)
+        inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = (1 - confidence_interval) / 2, iterative = iterative)
         inlier_ids = ids[inlier_indices]
         def inlier_run_filter(my_measurement, my_run):
             return my_run.parameters["id"] in inlier_ids
