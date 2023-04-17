@@ -2,8 +2,11 @@ import os
 import sys 
 
 import numpy as np 
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 from scipy.optimize import curve_fit
+from scipy.signal import savgol_filter
 
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
@@ -240,6 +243,71 @@ def test_monte_carlo_fit_covariance():
     assert np.all(np.abs((pcov_monte - pcov) / pcov) < 1e-1)
     assert np.all(np.isclose(pcov_monte, EXPECTED_COVARIANCE_MATRIX))
 
+
+def test_fit_error_function_rectangle():
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    indices = np.arange(len(normal_randoms)) 
+    RECTANGLE_CENTER = 42
+    RECTANGLE_WIDTH = 50
+    RECTANGLE_AMP = 1.0
+    noiseless_rectangle = np.where(
+        np.abs(indices - RECTANGLE_CENTER) < RECTANGLE_WIDTH / 2, 
+        RECTANGLE_AMP, 
+        0.0 
+    )
+    smoothed_noiseless_rectangle = savgol_filter(noiseless_rectangle, 11, 3)
+    noisy_rectangle = smoothed_noiseless_rectangle + normal_randoms * 0.1
+    fit_results = data_fitting_functions.fit_error_function_rectangle(indices, noisy_rectangle)
+    popt, pcov = fit_results
+    amp, width, center, edge_width = popt
+    EXPECTED_AMP = 1.013
+    EXPECTED_CENTER = 42.06 
+    EXPECTED_WIDTH = 48.56
+    EXPECTED_EDGE_WIDTH = 1.924
+    assert np.isclose(amp, EXPECTED_AMP, rtol = 1e-3)
+    assert np.isclose(center, EXPECTED_CENTER, rtol = 1e-3)
+    assert np.isclose(width, EXPECTED_WIDTH, rtol = 1e-3)
+    assert np.isclose(edge_width, EXPECTED_EDGE_WIDTH, rtol = 1e-3)
+    #Without fitting width...
+    
+
+
+def test_fit_semicircle():
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    indices = np.arange(len(normal_randoms)) 
+    CIRCLE_CENTER = 42
+    CIRCLE_RADIUS = 22
+    CIRCLE_AMP = 1.0 
+    noiseless_circle = np.where(
+        np.abs(indices - CIRCLE_CENTER) < CIRCLE_RADIUS, 
+        CIRCLE_AMP * np.sqrt(1 - np.square((indices - CIRCLE_CENTER) / CIRCLE_RADIUS)),
+        0.0
+    )
+    noisy_circle = noiseless_circle + normal_randoms * 0.1 
+    fit_results = data_fitting_functions.fit_semicircle(indices, noisy_circle) 
+    popt, pcov = fit_results
+    amp, center, radius = popt
+    EXPECTED_AMP = 1.005 
+    EXPECTED_CENTER = 41.99 
+    EXPECTED_RADIUS = 22.08
+    assert np.isclose(amp, EXPECTED_AMP, rtol = 1e-3)
+    assert np.isclose(center, EXPECTED_CENTER, rtol = 1e-3)
+    assert np.isclose(radius, EXPECTED_RADIUS, rtol = 1e-3)
+
+
+def test_crop_box():
+    sample_box_data = np.load(os.path.join("resources", "Sample_Box.npy")) 
+    EXPECTED_BOX_CROP = (34, 50, 214, 174)
+    box_crop = data_fitting_functions.crop_box(sample_box_data)
+    assert EXPECTED_BOX_CROP == box_crop
+    EXPECTED_BOX_CROP_SPECIFIED_POINTS = (70, 39, 178, 186)
+    box_crop_specified_points = data_fitting_functions.crop_box(sample_box_data, horiz_crop_point = 0.8, vert_crop_point = 0.05)
+    assert box_crop_specified_points == EXPECTED_BOX_CROP_SPECIFIED_POINTS
+    FIXED_VERT_WIDTH = 90 
+    FIXED_HORIZ_RADIUS = 120
+    EXPECTED_BOX_CROP_FIXED_WIDTHS = (4, 68, 244, 158)
+    box_crop_fixed_widths = data_fitting_functions.crop_box(sample_box_data, horiz_radius = FIXED_HORIZ_RADIUS, vert_width = FIXED_VERT_WIDTH)
+    assert EXPECTED_BOX_CROP_FIXED_WIDTHS == box_crop_fixed_widths
 
 
 def test_bootstrap_fit_covariance():

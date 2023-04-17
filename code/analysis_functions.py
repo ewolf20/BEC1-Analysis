@@ -271,7 +271,9 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
                                         no_shake_density_name_second = None,
                                         imaging_mode = "polrot",
                                         return_phases = False,
-                                        first_stored_density_name = None, second_stored_density_name = None):
+                                        first_stored_density_name = None, second_stored_density_name = None, 
+                                        autocut = False, autocut_density_to_use = 2, autocut_widths_free = False, 
+                                        autocut_vert_crop_point = 0.5, autocut_horiz_crop_point = 0.01):
     BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     if no_shake_density_name_first is None:
         no_shake_density_first = 0.0
@@ -290,6 +292,14 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
         atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
     bs_density_first = atom_density_first - no_shake_density_first 
     bs_density_second = atom_density_second - no_shake_density_second
+    if autocut:
+        box_crop = box_autocut(my_measurement, my_run, first_state_index = first_state_index, second_state_index = second_state_index, 
+                                first_stored_density_name=first_stored_density_name, second_stored_density_name=second_stored_density_name, 
+                                imaging_mode = imaging_mode, vert_crop_point=autocut_vert_crop_point, horiz_crop_point=autocut_horiz_crop_point, 
+                                widths_free = autocut_widths_free, density_to_use=autocut_density_to_use)
+        x_min, y_min, x_max, y_max = box_crop
+        bs_density_first = bs_density_first[y_min:y_max, x_min:x_max]
+        bs_density_second = bs_density_second[y_min:y_max, x_min:x_max]
     #Current convention has the integration direction as the last index, i.e. the x-axis. 
     integrated_density_first = np.sum(bs_density_first, axis = -1)
     integrated_density_second = np.sum(bs_density_second, axis = -1)
@@ -306,7 +316,7 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
 
 def box_autocut(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                         first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
-                        top_cutpos = 0.5, side_cutpos = 0.01, widths_free = False):
+                        vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False, density_to_use = 2):
     BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     if imaging_mode == "polrot":
         atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, 
@@ -315,6 +325,22 @@ def box_autocut(my_measurement, my_run, first_state_index = 1, second_state_inde
     elif imaging_mode == "abs":
         atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
         atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+    if density_to_use == 1:
+        atom_density_to_fit = atom_density_first 
+    elif density_to_use == 2:
+        atom_density_to_fit = atom_density_second
+    else:
+        raise ValueError("Incorrect parameter value for density_to_use. Should be 1 or 2.")
+    if not widths_free:
+        horiz_radius = my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
+        vert_width = my_measurement.experiment_parameters["box_length_pix"]
+        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
+                            vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point, 
+                            horiz_radius = horiz_radius, vert_width = vert_width)
+    else:
+        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
+                            vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point)
+    return box_crop 
 
 #RAPID RAMP
 
@@ -418,24 +444,27 @@ is better done by performing the analysis on all runs, then averaging over the r
 
 def get_no_shake_average_profiles(my_measurement, first_state_index = 1, second_state_index = 3,
                                     imaging_mode = "polrot",
-                                        first_stored_density_name = None, second_stored_density_name = None):
+                                        first_stored_density_name = None, second_stored_density_name = None, 
+                                        run_filter = None):
     BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     no_shake_sum_first = 0.0 
     no_shake_sum_second = 0.0 
     counter = 0 
-    for run_id in my_measurement.runs_dict:
-        current_run = my_measurement.runs_dict[run_id] 
-        if not current_run.is_badshot and current_run.parameters["ShakingCycles"] == 0:
-            if imaging_mode == "polrot":
-                density_first, density_second = _load_densities_polrot(my_measurement, current_run, first_state_index, 
-                                                        second_state_index, first_stored_density_name, second_stored_density_name,
-                                                        BOX_TRAP_B_FIELD_CONDITION)
-            elif imaging_mode == "abs":
-                density_first = _load_density_top_A_abs(my_measurement, current_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
-                density_second = _load_density_top_B_abs(my_measurement, current_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
-            no_shake_sum_first += density_first 
-            no_shake_sum_second += density_second
-            counter += 1 
+    def no_shake_filter(my_measurement, my_run):
+        return my_run.parameters["ShakingCycles"] == 0
+    filtered_dict = my_measurement.filter_run_dict(run_filter = (run_filter, no_shake_filter))
+    for run_id in filtered_dict:
+        current_run = filtered_dict[run_id]
+        if imaging_mode == "polrot":
+            density_first, density_second = _load_densities_polrot(my_measurement, current_run, first_state_index, 
+                                                    second_state_index, first_stored_density_name, second_stored_density_name,
+                                                    BOX_TRAP_B_FIELD_CONDITION)
+        elif imaging_mode == "abs":
+            density_first = _load_density_top_A_abs(my_measurement, current_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+            density_second = _load_density_top_B_abs(my_measurement, current_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+        no_shake_sum_first += density_first 
+        no_shake_sum_second += density_second
+        counter += 1 
     no_shake_average_first = no_shake_sum_first / counter 
     no_shake_average_second = no_shake_sum_second / counter
     return (no_shake_average_first, no_shake_average_second)
