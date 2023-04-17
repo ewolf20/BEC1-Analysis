@@ -200,6 +200,15 @@ def wrapped_c_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, 
     return np.array([output_buffer[0], output_buffer[1]])
 
 
+def _c_polrot_image_function_with_target_offset(od_naught_vector, abs_A, abs_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                intensity_A, intensity_B, intensity_sat, phase_sign):
+    fun_val = wrapped_c_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                                    intensity_A, intensity_B, intensity_sat, phase_sign)
+    fun_val[0] -= abs_A 
+    fun_val[1] -= abs_B 
+    return fun_val
+
+
 """
 Polrot image function, implemented in python. More readable & accessible, but slower."""
 def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensity_A, intensity_B, intensity_sat, 
@@ -332,11 +341,9 @@ def generator_factory(value):
 
 def parallelizable_polrot_density_function(absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                     on_resonance_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
-        solver_extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+        solver_extra_args = (absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                 intensity_A, intensity_B, intensity_sat, phase_sign)
-        def current_function(od_naught_vector, *args):
-            return wrapped_c_polrot_image_function(od_naught_vector, *args) - np.array([absorption_A, absorption_B])
-        root = fsolve(current_function, [0, 0], args = solver_extra_args)
+        root = fsolve(_c_polrot_image_function_with_target_offset, [0, 0], args = solver_extra_args)
         od_naught_1, od_naught_2 = root 
         atom_density_1 = od_naught_1 / on_resonance_cross_section 
         atom_density_2 = od_naught_2 / on_resonance_cross_section 
