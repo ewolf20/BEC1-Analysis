@@ -1,7 +1,6 @@
-from multiprocessing import Pool
 import os 
 
-from numba import jit, njit
+from numba import jit
 import numpy as np
 from scipy.optimize import fsolve
 from scipy import ndimage
@@ -213,7 +212,7 @@ def _c_polrot_image_function_with_target_offset(od_naught_vector, abs_A, abs_B, 
 @jit(nopython = True)
 def _python_polrot_image_function_with_target_offset(od_naught_vector, abs_A, abs_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
                                         linewidth, intensity_A, intensity_B, intensity_sat, phase_sign):
-    fun_val = python_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
+    fun_val = _compiled_python_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
                                         intensity_A, intensity_B, intensity_sat, phase_sign)
     fun_val[0] -= abs_A 
     fun_val[1] -= abs_B
@@ -222,8 +221,24 @@ def _python_polrot_image_function_with_target_offset(od_naught_vector, abs_A, ab
 """
 Polrot image function, implemented in python. More readable & accessible, but slower."""
 @jit(nopython = True)
-def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensity_A, intensity_B, intensity_sat, 
-                                phase_sign):
+def _compiled_python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
+                                             intensity_A, intensity_B, intensity_sat, phase_sign):
+    od_naught_1, od_naught_2 = od_naughts 
+    od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
+    od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
+    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_B, intensity_sat) 
+    od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
+    phi_A = (-od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth ) * phase_sign
+    phi_B = (-od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth ) * phase_sign
+    abs_A = np.exp(-od_1A / 2.0) * np.exp(-od_2A / 2.0) 
+    abs_B = np.exp(-od_1B / 2.0) * np.exp(-od_2B / 2.0) 
+    result_A = 0.5 + np.square(abs_A) / 2.0 - abs_A * np.sin(phi_A) 
+    result_B = 0.5 + np.square(abs_B) / 2.0 - abs_B * np.sin(phi_B) 
+    return np.array([result_A, result_B])
+
+
+def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
+                                             intensity_A, intensity_B, intensity_sat, phase_sign):
     od_naught_1, od_naught_2 = od_naughts 
     od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
     od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
@@ -333,16 +348,14 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
         intensities_A = np.zeros(abs_image_A.shape)
         intensities_B = np.zeros(abs_image_A.shape)
         intensities_sat = np.inf * np.ones(abs_image_A.shape)
-    cpu_count = os.cpu_count()
-    cpus_to_use = cpu_count // 2
     map_iterator = zip(abs_image_A.flatten(), abs_image_B.flatten(), generator_factory(detuning_1A), 
                         generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
                         generator_factory(linewidth), generator_factory(geometry_adjusted_cross_section), intensities_A.flatten(), 
                         intensities_B.flatten(), intensities_sat.flatten(), generator_factory(phase_sign))
-    with Pool(cpus_to_use) as p:
-        for atom_density_1, atom_density_2 in p.starmap(parallelizable_polrot_density_function, map_iterator):
-            atom_densities_list_1.append(atom_density_1)
-            atom_densities_list_2.append(atom_density_2)
+    for itr_val in map_iterator:
+        atom_density_1, atom_density_2 = parallelizable_polrot_density_function(*itr_val)
+        atom_densities_list_1.append(atom_density_1)
+        atom_densities_list_2.append(atom_density_2)
     atom_densities_array_1 = np.reshape(atom_densities_list_1, abs_image_A.shape)
     atom_densities_array_2 = np.reshape(atom_densities_list_2, abs_image_A.shape)
     return (atom_densities_array_1, atom_densities_array_2)
@@ -374,34 +387,14 @@ def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, d
     geometry_adjusted_cross_section = res_cross_section * cross_section_imaging_geometry_factor
     if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
         raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
-    image_A_list = []
-    image_B_list = []
     if not intensities_A:
         intensities_A = np.zeros(densities_1.shape)
         intensities_B = np.zeros(densities_2.shape)
         intensities_sat = np.inf * np.ones(densities_1.shape)
-    cpu_count = os.cpu_count()
-    cpus_to_use = cpu_count // 2
-    map_iterator = zip(densities_1.flatten(), densities_2.flatten(), generator_factory(detuning_1A), 
-                        generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
-                        generator_factory(linewidth), generator_factory(geometry_adjusted_cross_section), intensities_A.flatten(), 
-                        intensities_B.flatten(), intensities_sat.flatten(), generator_factory(phase_sign))
-    with Pool(cpus_to_use) as p:
-        for absorption_A, absorption_B in p.starmap(parallelizable_density_polrot_function, map_iterator):
-            image_A_list.append(absorption_A)
-            image_B_list.append(absorption_B)
-    image_A_array = np.reshape(image_A_list, densities_1.shape)
-    image_B_array = np.reshape(image_B_list, densities_1.shape)
-    return (image_A_array, image_B_array)
-
-def parallelizable_density_polrot_function(atom_density_1, atom_density_2, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    on_resonance_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
-        extra_args = (detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                intensity_A, intensity_B, intensity_sat, phase_sign)
-        od_naught_1 = atom_density_1 * on_resonance_cross_section
-        od_naught_2 = atom_density_2 * on_resonance_cross_section
-        od_naught_vector = [od_naught_1, od_naught_2] 
-        return wrapped_c_polrot_image_function(od_naught_vector, *extra_args)
+    od_naught_1 = densities_1 * geometry_adjusted_cross_section
+    od_naught_2 = densities_2 * geometry_adjusted_cross_section
+    return python_polrot_image_function(np.array([od_naught_1, od_naught_2]), detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
+                            intensities_A, intensities_B, intensities_sat, phase_sign)
 
 
 
