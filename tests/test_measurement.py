@@ -123,6 +123,13 @@ class TestMeasurement:
         filtered_values_combined = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = (combined_filter_part_1, 
                                                                                                             combined_filter_part_2))
         assert np.array_equal(filtered_values_combined, np.array([]))
+        #Test global filtering 
+        my_measurement.set_global_run_filter(lambda my_measurement, my_run: False)
+        filtered_values_global = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK)
+        assert np.array_equal(filtered_values_global, np.array([]))
+        my_measurement.set_global_run_filter(None)
+        filtered_values_global = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK)
+        assert np.array_equal(filtered_values_global, VALUE_AS_ARRAY)
         #Test non-numpy output 
         filtered_values_true_list = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: True, 
                                                                                 numpyfy = False)
@@ -219,6 +226,7 @@ class TestMeasurement:
             assert not "oof" in current_run.analysis_results
         my_measurement.analyze_runs(analysis_func_1_scalar, "oof", run_filter = lambda my_measurement, my_run: True)
         assert my_measurement.get_analysis_value_from_runs("oof") == [1]
+        #Test filtering with global 
 
     @staticmethod
     def test_label_badshots_custom():

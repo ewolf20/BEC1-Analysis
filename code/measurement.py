@@ -42,7 +42,8 @@ class Measurement():
     """
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
                     hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
-                    saved_analysis_filename = "measurement_run_analysis_dump.json", badshot_function = None, analyses_list = None):
+                    saved_analysis_filename = "measurement_run_analysis_dump.json", badshot_function = None, analyses_list = None, 
+                    global_run_filter = None):
         if(not measurement_directory_path):
             measurement_directory_path = os.getcwd()
         self.measurement_directory_path = measurement_directory_path 
@@ -70,9 +71,13 @@ class Measurement():
         self.measurement_analysis_results = {}
         if use_saved_analysis:
             self.load_analysis(saved_analysis_filename)
+        self.global_run_filter = global_run_filter
 
     def set_badshot_function(self, badshot_function):
         self.badshot_function = badshot_function
+
+    def set_global_run_filter(self, run_filter):
+        self.global_run_filter = run_filter
 
 
     def _get_run_ids_and_parameters_from_measurement_folder(self):
@@ -550,11 +555,13 @@ class Measurement():
     def filter_run_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
         filtered_dict = {}
         conditioned_run_filter = Measurement._condition_run_filter(run_filter)
+        conditioned_global_run_filter = Measurement._condition_run_filter(self.global_run_filter)
+        conditioned_overall_run_filter = Measurement._condition_run_filter((conditioned_run_filter, conditioned_global_run_filter))
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
             if ignore_badshots and current_run.is_badshot:
                 continue 
-            if not conditioned_run_filter(self, current_run):
+            if not conditioned_overall_run_filter(self, current_run):
                 continue 
             if ignore_errors:
                 analysis_result = current_run.analysis_results[analysis_value_err_check_name]
