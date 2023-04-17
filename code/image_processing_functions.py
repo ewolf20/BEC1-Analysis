@@ -1,6 +1,7 @@
 from multiprocessing import Pool
 import os 
 
+from numba import jit, njit
 import numpy as np
 from scipy.optimize import fsolve
 from scipy import ndimage
@@ -209,8 +210,18 @@ def _c_polrot_image_function_with_target_offset(od_naught_vector, abs_A, abs_B, 
     return fun_val
 
 
+@jit(nopython = True)
+def _python_polrot_image_function_with_target_offset(od_naught_vector, abs_A, abs_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
+                                        linewidth, intensity_A, intensity_B, intensity_sat, phase_sign):
+    fun_val = python_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
+                                        intensity_A, intensity_B, intensity_sat, phase_sign)
+    fun_val[0] -= abs_A 
+    fun_val[1] -= abs_B
+    return fun_val
+
 """
 Polrot image function, implemented in python. More readable & accessible, but slower."""
+@jit(nopython = True)
 def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, intensity_A, intensity_B, intensity_sat, 
                                 phase_sign):
     od_naught_1, od_naught_2 = od_naughts 
@@ -227,6 +238,7 @@ def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_
     return np.array([result_A, result_B])
 
 
+@jit(nopython = True)
 def od_lorentzian(detuning, linewidth, intensity, intensity_sat):
     return 1.0 / (1 + np.square(2 * detuning / linewidth) + np.square(intensity / intensity_sat))
 
@@ -343,7 +355,7 @@ def parallelizable_polrot_density_function(absorption_A, absorption_B, detuning_
                                     on_resonance_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
         solver_extra_args = (absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
                                 intensity_A, intensity_B, intensity_sat, phase_sign)
-        root = fsolve(_c_polrot_image_function_with_target_offset, [0, 0], args = solver_extra_args)
+        root = fsolve(_python_polrot_image_function_with_target_offset, [0, 0], args = solver_extra_args)
         od_naught_1, od_naught_2 = root 
         atom_density_1 = od_naught_1 / on_resonance_cross_section 
         atom_density_2 = od_naught_2 / on_resonance_cross_section 
