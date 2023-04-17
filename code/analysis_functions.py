@@ -444,24 +444,27 @@ is better done by performing the analysis on all runs, then averaging over the r
 
 def get_no_shake_average_profiles(my_measurement, first_state_index = 1, second_state_index = 3,
                                     imaging_mode = "polrot",
-                                        first_stored_density_name = None, second_stored_density_name = None):
+                                        first_stored_density_name = None, second_stored_density_name = None, 
+                                        run_filter = None):
     BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     no_shake_sum_first = 0.0 
     no_shake_sum_second = 0.0 
     counter = 0 
-    for run_id in my_measurement.runs_dict:
-        current_run = my_measurement.runs_dict[run_id] 
-        if not current_run.is_badshot and current_run.parameters["ShakingCycles"] == 0:
-            if imaging_mode == "polrot":
-                density_first, density_second = _load_densities_polrot(my_measurement, current_run, first_state_index, 
-                                                        second_state_index, first_stored_density_name, second_stored_density_name,
-                                                        BOX_TRAP_B_FIELD_CONDITION)
-            elif imaging_mode == "abs":
-                density_first = _load_density_top_A_abs(my_measurement, current_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
-                density_second = _load_density_top_B_abs(my_measurement, current_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
-            no_shake_sum_first += density_first 
-            no_shake_sum_second += density_second
-            counter += 1 
+    def no_shake_filter(my_measurement, my_run):
+        return my_run.parameters["ShakingCycles"] == 0
+    filtered_dict = my_measurement.filter_run_dict(run_filter = (run_filter, no_shake_filter))
+    for run_id in filtered_dict:
+        current_run = filtered_dict[run_id]
+        if imaging_mode == "polrot":
+            density_first, density_second = _load_densities_polrot(my_measurement, current_run, first_state_index, 
+                                                    second_state_index, first_stored_density_name, second_stored_density_name,
+                                                    BOX_TRAP_B_FIELD_CONDITION)
+        elif imaging_mode == "abs":
+            density_first = _load_density_top_A_abs(my_measurement, current_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+            density_second = _load_density_top_B_abs(my_measurement, current_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+        no_shake_sum_first += density_first 
+        no_shake_sum_second += density_second
+        counter += 1 
     no_shake_average_first = no_shake_sum_first / counter 
     no_shake_average_second = no_shake_sum_second / counter
     return (no_shake_average_first, no_shake_average_second)

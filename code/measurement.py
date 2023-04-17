@@ -344,7 +344,7 @@ class Measurement():
     
     run_filter: As with analyze_runs, if passed, only returns parameter values for which the function run_filter returns True."""
     def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None, numpyfy = True):
-        filtered_dict = self._filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
+        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
         return_list = []
         for run_id in filtered_dict:
             current_run = self.runs_dict[run_id] 
@@ -356,7 +356,7 @@ class Measurement():
 
 
     def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None, numpyfy = True):
-        filtered_dict = self._filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
+        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=value_name)
         return_list = []
         for run_id in filtered_dict:
@@ -371,7 +371,7 @@ class Measurement():
     some runs have errors in the analysis."""
     def get_parameter_analysis_value_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
                                                     run_filter = None, numpyfy = True):
-        filtered_dict = self._filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
+        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=analysis_value_name)
         param_list = []
         analysis_result_list = []
@@ -424,7 +424,7 @@ class Measurement():
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
         run_id_to_analyze_list = []
-        filtered_dict = self._filter_run_dict(ignore_badshots=ignore_badshots, run_filter = run_filter)
+        filtered_dict = self.filter_run_dict(ignore_badshots=ignore_badshots, run_filter = run_filter)
         for run_id in filtered_dict:
             current_run = filtered_dict[run_id]
             if(not overwrite_existing):
@@ -547,7 +547,7 @@ class Measurement():
             current_run.parameters["badshot"] = current_run.is_badshot
 
 
-    def _filter_run_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
+    def filter_run_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
         filtered_dict = {}
         conditioned_run_filter = Measurement._condition_run_filter(run_filter)
         for run_id in self.runs_dict:
