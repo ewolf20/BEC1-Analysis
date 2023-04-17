@@ -147,30 +147,6 @@ def test_polrot_images_function():
     assert np.all(np.abs(saved_image_B - image_B) < 1e-6)
 
 
-"""
-Test for agreement between the python and c implementations of the polrot function. Values randomly chosen to be reasonable."""
-def test_polrot_c_python_agreement():
-    detuning_1A = 10
-    detuning_1B = -50 
-    detuning_2A = 13
-    detuning_2B = 63
-    li_linewidth = image_processing_functions._get_linewidth_from_species("6Li") 
-    li_cross_section = image_processing_functions._get_res_cross_section_from_species("6Li")
-    density_1 = 37.0
-    density_2 = 13.0
-    intensity_A = 0.2
-    intensity_B = 0.3
-    intensity_sat = 1.0
-    phase_sign = 1.0
-    od_naughts = np.array([density_1, density_2]) * li_cross_section
-    python_result_A, python_result_B = image_processing_functions.python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
-                                                                    li_linewidth, intensity_A, intensity_B, intensity_sat, phase_sign)
-    c_result_A, c_result_B = image_processing_functions.wrapped_c_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
-                                                                    li_linewidth, intensity_A, intensity_B, intensity_sat, phase_sign)
-    assert(np.abs(python_result_A - c_result_A) / np.abs(python_result_A) < 1e-3)
-    assert(np.abs(python_result_B - c_result_B) / np.abs(python_result_B) < 1e-3)
-    
-
 def test_get_atom_density_from_polrot_images():
     fake_image_A, fake_image_B = _generate_fake_polrot_images()
     reconstructed_density_1, reconstructed_density_2 = image_processing_functions.get_atom_density_from_polrot_images(fake_image_A, fake_image_B, 

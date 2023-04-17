@@ -5,8 +5,6 @@ import numpy as np
 from scipy.optimize import fsolve
 from scipy import ndimage
 
-from .c_code._polrot_code import ffi as polrot_image_ffi
-from .c_code._polrot_code import lib as polrot_image_lib
 from . import data_fitting_functions
 
 
@@ -187,26 +185,6 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
     without_atoms_dark_subtracted = without_atoms_dark_subtracted * with_without_light_ratio
     saturation_term = (1.0 / on_resonance_cross_section) * (without_atoms_dark_subtracted - with_atoms_dark_subtracted) / saturation_counts
     return beer_lambert_term + saturation_term
-
-"""
-Warning: Due to the underlying C implementation, this does not support vectorized arguments! OD naught vector must be a 1D vector of length 2, 
-containing the optical densities of both species, and all others must be scalars!"""
-def wrapped_c_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    intensity_A, intensity_B, intensity_sat, phase_sign):
-    wrapped_od_naught = polrot_image_ffi.new("float[]", list(od_naught_vector))
-    output_buffer = polrot_image_ffi.new("double[]", 2)
-    status_code = polrot_image_lib.give_polrot_image(wrapped_od_naught, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
-                                                intensity_A, intensity_B, intensity_sat, phase_sign, output_buffer)
-    return np.array([output_buffer[0], output_buffer[1]])
-
-
-def _c_polrot_image_function_with_target_offset(od_naught_vector, abs_A, abs_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                intensity_A, intensity_B, intensity_sat, phase_sign):
-    fun_val = wrapped_c_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    intensity_A, intensity_B, intensity_sat, phase_sign)
-    fun_val[0] -= abs_A 
-    fun_val[1] -= abs_B 
-    return fun_val
 
 
 @jit(nopython = True)
