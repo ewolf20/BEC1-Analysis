@@ -43,7 +43,7 @@ class Measurement():
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
                     hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
                     saved_analysis_filename = "measurement_run_analysis_dump.json", badshot_function = None, analyses_list = None, 
-                    global_run_filter = None):
+                    global_run_filter = None, is_live = False):
         if(not measurement_directory_path):
             measurement_directory_path = os.getcwd()
         self.measurement_directory_path = measurement_directory_path 
@@ -65,6 +65,7 @@ class Measurement():
         self.badshot_function = badshot_function
         self.badshot_checked_list = []
         self.runs_dict = {}
+        self.is_live = is_live
         self._update_runs_dict()
         if analyses_list is None:
             self.analyses_list = []
@@ -84,7 +85,8 @@ class Measurement():
         DATA_DUMP_PARAMS_FILENAME = "run_params_dump.json" 
         path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, DATA_DUMP_PARAMS_FILENAME)
         run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
-                                                                    make_raw_parameters_terse = (not self.run_parameters_verbose))
+                                                                    make_raw_parameters_terse = (not self.run_parameters_verbose), 
+                                                                    have_patience = self.is_live)
         unique_run_ids_list = self._get_unique_run_ids_from_folder()
         sorted_run_ids_list = sorted(unique_run_ids_list)
         matched_run_ids_and_parameters_list = []
