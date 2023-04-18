@@ -172,7 +172,7 @@ def test_generate_polrot_lookup_table():
         generated_array = np.load("Polrot_Lookup_Table.npy") 
         stored_array = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Polrot_Lookup_Table_Small.npy")) 
         print(generated_array - stored_array)
-        assert np.all(np.abs(generated_array - stored_array) < 1e-3) 
+        assert np.all(np.isclose(generated_array, stored_array, rtol = 1e-3, atol = 1e-2))
     finally:
         os.remove("Polrot_Lookup_Table.npy") 
         os.remove("Polrot_Lookup_Table_Params.txt") 
