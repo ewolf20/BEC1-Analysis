@@ -488,6 +488,8 @@ def _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_f
         lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_unitarity_resonance_value"]
     elif b_field_condition == "rapid_ramp":
         lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_rr_resonance_value"]
+    elif b_field_condition == "zero crossing":
+        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_zero_crossing_resonance_value"]
     lock_frequency_multiplier = my_measurement.experiment_parameters["hf_lock_frequency_multiplier"]
     lock_setpoint = my_measurement.experiment_parameters["hf_lock_setpoint"]
     return lock_frequency_multiplier * (lock_setpoint - lock_value_for_nominal_resonance)
