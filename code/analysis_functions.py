@@ -4,28 +4,71 @@ from scipy import ndimage
 
 from . import data_fitting_functions, image_processing_functions, science_functions
 
+#ABS IMAGES (Sometimes called 'Fake OD')
+
+def get_abs_image_side(my_measurement, my_run):
+    my_run_image_array = my_run.get_image('Side', memmap = True) 
+    my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    return my_run_abs_image
+
+
+def get_abs_image_top_A(my_measurement, my_run):
+    my_run_image_array_A = my_run.get_image('TopA', memmap = True) 
+    my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array_A, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    return my_run_abs_image
+
+def get_abs_image_top_B(my_measurement, my_run):
+    my_run_image_array_B = my_run.get_image('TopB', memmap = True) 
+    my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    return my_run_abs_image
+    
+def get_abs_images_top_double(my_measurement, my_run):
+    return (get_abs_image_top_A(my_measurement, my_run), get_abs_image_top_B(my_measurement, my_run))
+
+#OD IMAGES
+
+def get_od_image_side(my_measurement, my_run):
+    my_run_image_array = my_run.get_image('Side', memmap = True) 
+    my_run_od_image = image_processing_functions.get_absorption_od_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    return my_run_od_image
+
+def get_od_image_top_A(my_measurement, my_run):
+    my_run_image_array_A = my_run.get_image('TopA', memmap = True) 
+    my_run_od_image_A = image_processing_functions.get_absorption_od_image(my_run_image_array_A, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    return my_run_od_image_A
+
+
+def get_od_image_top_B(my_measurement, my_run):
+    my_run_image_array_B = my_run.get_image('TopB', memmap = True) 
+    my_run_od_image_B = image_processing_functions.get_absorption_od_image(my_run_image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    return my_run_od_image_B
+
+def get_od_images_top_double(my_measurement, my_run):
+    od_image_A = get_od_image_top_A(my_measurement, my_run) 
+    od_image_B = get_od_image_top_B(my_measurement, my_run) 
+    return (od_image_A, od_image_B)
 
 #PIXEL SUMS
 
 def get_od_pixel_sum_side(my_measurement, my_run):
-    my_run_image_array = my_run.get_image('Side', memmap = True) 
-    my_run_abs_image = image_processing_functions.get_absorption_od_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    my_run_abs_image = get_od_image_side(my_measurement, my_run)
     pixel_sum = image_processing_functions.pixel_sum(my_run_abs_image)
     return pixel_sum
 
 
 def get_od_pixel_sum_top_A(my_measurement, my_run):
-    my_run_image_array_A = my_run.get_image('TopA', memmap = True) 
-    my_run_abs_image_A = image_processing_functions.get_absorption_od_image(my_run_image_array_A, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    my_run_abs_image_A = get_od_image_top_A(my_measurement, my_run)
     pixel_sum_A = image_processing_functions.pixel_sum(my_run_abs_image_A)
     return pixel_sum_A
 
 def get_od_pixel_sum_top_B(my_measurement, my_run):
-    my_run_image_array_B = my_run.get_image('TopB', memmap = True) 
-    my_run_abs_image_B = image_processing_functions.get_absorption_od_image(my_run_image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    my_run_abs_image_B = get_od_image_top_B(my_measurement, my_run)
     pixel_sum_B = image_processing_functions.pixel_sum(my_run_abs_image_B)
     return pixel_sum_B
 
@@ -139,6 +182,43 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
                                                                 cross_section_imaging_geometry_factor = top_cross_section_geometry_factor)
     return (atom_density_first, atom_density_second)
 
+
+
+def get_box_autocut_atom_densities(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+                        first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
+                        b_field_condition = "unitarity",
+                        vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False, density_to_use = 2):
+    density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_state_index, second_state_index, 
+                                first_stored_density_name, second_stored_density_name, b_field_condition, imaging_mode)
+    box_crop = box_autocut(my_measurement, my_run, first_state_index = first_state_index, second_state_index = second_state_index, 
+                            first_stored_density_name = first_stored_density_name, 
+                            second_stored_density_name = second_stored_density_name,
+                            imaging_mode = imaging_mode, b_field_condition = b_field_condition, vert_crop_point = vert_crop_point, 
+                            horiz_crop_point = horiz_crop_point, widths_free = widths_free, density_to_use = density_to_use)
+    x_min, y_min, x_max, y_max = box_crop 
+    density_1_cropped = density_1[y_min:y_max, x_min:x_max] 
+    density_2_cropped = density_2[y_min:y_max, x_min:x_max]
+    return (density_1_cropped, density_2_cropped)
+
+
+def get_x_integrated_atom_densities_top_double(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+                                    first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot", 
+                                    b_field_condition = "unitarity"):
+    density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_state_index, second_state_index, 
+                                first_stored_density_name, second_stored_density_name, b_field_condition, imaging_mode)
+    density_1_x_integrated = np.sum(density_1, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    density_2_x_integrated = np.sum(density_2, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    return (density_1_x_integrated, density_2_x_integrated)
+
+
+def get_y_integrated_atom_densities_top_double(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+                                    first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot", 
+                                    b_field_condition = "unitarity"):
+    density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_state_index, second_state_index, 
+                                first_stored_density_name, second_stored_density_name, b_field_condition, imaging_mode)
+    density_1_x_integrated = np.sum(density_1, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    density_2_x_integrated = np.sum(density_2, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    return (density_1_x_integrated, density_2_x_integrated)
 #ATOM COUNTS
 
 """
@@ -193,12 +273,10 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, first_
                                                     autocut = True, imaging_mode = "polrot",
                                                     first_stored_density_name = None, second_stored_density_name = None):
     HYBRID_TRAP_B_FIELD_CONDITION = "unitarity"
-    if imaging_mode == "polrot":
-        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
-                                                    first_stored_density_name, second_stored_density_name, HYBRID_TRAP_B_FIELD_CONDITION)
-    elif imaging_mode == "abs":
-        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, HYBRID_TRAP_B_FIELD_CONDITION)
-        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, HYBRID_TRAP_B_FIELD_CONDITION)
+    atom_density_first, atom_density_second = _load_densities_top_double(
+                                                my_measurement, my_run, first_state_index, second_state_index, 
+                                                first_stored_density_name, second_stored_density_name, 
+                                                HYBRID_TRAP_B_FIELD_CONDITION, imaging_mode)
     axicon_tilt_deg = my_measurement.experiment_parameters["axicon_tilt_deg"]
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     axicon_length_pix = my_measurement.experiment_parameters["hybrid_trap_typical_length_pix"]
@@ -270,11 +348,11 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
                                         order = None, no_shake_density_name_first = None, 
                                         no_shake_density_name_second = None,
                                         imaging_mode = "polrot",
+                                        b_field_condition = "unitarity",
                                         return_phases = False,
                                         first_stored_density_name = None, second_stored_density_name = None, 
                                         autocut = False, autocut_density_to_use = 2, autocut_widths_free = False, 
                                         autocut_vert_crop_point = 0.5, autocut_horiz_crop_point = 0.01):
-    BOX_TRAP_B_FIELD_CONDITION = "unitarity"
     if no_shake_density_name_first is None:
         no_shake_density_first = 0.0
     else:
@@ -283,13 +361,9 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
         no_shake_density_second = 0.0 
     else:
         no_shake_density_second = my_measurement.measurement_analysis_results[no_shake_density_name_second] 
-    if imaging_mode == "polrot":
-        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, 
-                                                    second_state_index, first_stored_density_name, second_stored_density_name,
-                                                    BOX_TRAP_B_FIELD_CONDITION)
-    elif imaging_mode == "abs":
-        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
-        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+    atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, 
+                                                first_state_index, second_state_index, first_stored_density_name, 
+                                                second_stored_density_name, b_field_condition, imaging_mode)
     bs_density_first = atom_density_first - no_shake_density_first 
     bs_density_second = atom_density_second - no_shake_density_second
     if autocut:
@@ -316,15 +390,11 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
 
 def box_autocut(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                         first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
+                        b_field_condition = "unitarity",
                         vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False, density_to_use = 2):
-    BOX_TRAP_B_FIELD_CONDITION = "unitarity"
-    if imaging_mode == "polrot":
-        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, 
-                                                    second_state_index, first_stored_density_name, second_stored_density_name,
-                                                    BOX_TRAP_B_FIELD_CONDITION)
-    elif imaging_mode == "abs":
-        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
-        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+    atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, 
+                                                first_state_index, second_state_index, first_stored_density_name, 
+                                                second_stored_density_name, b_field_condition, imaging_mode)
     if density_to_use == 1:
         atom_density_to_fit = atom_density_first 
     elif density_to_use == 2:
@@ -349,12 +419,9 @@ Get the integrated density along the rapid ramp harmonic axis."""
 def get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
                                     first_stored_density_name = None, second_stored_density_name = None):
     RR_B_FIELD_CONDITION = "rapid_ramp"
-    if imaging_mode == "polrot":
-        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
-                                                    first_stored_density_name, second_stored_density_name, RR_B_FIELD_CONDITION)
-    elif imaging_mode == "abs":
-        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, RR_B_FIELD_CONDITION)
-        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, RR_B_FIELD_CONDITION)
+    atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run,
+                                                first_state_index, second_state_index, first_stored_density_name, 
+                                                second_stored_density_name, RR_B_FIELD_CONDITION, imaging_mode)
     #Rotate images 
     rr_angle = my_measurement.experiment_parameters["rr_tilt_deg"]
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
@@ -363,7 +430,7 @@ def get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, imaging
     integrated_atom_density_first = np.sum(atom_density_first, axis = -1)
     integrated_atom_density_second = np.sum(atom_density_second, axis = -1)
     return (integrated_atom_density_first, integrated_atom_density_second)
-    
+
 
 """
 Get the rapid ramp condensate fraction via a "correct", fit based approach that fits the condensate and 
@@ -395,12 +462,10 @@ Get the condensate fraction via a 'kludge': Define a box inside of which the con
 just outside that box, sum up the atom counts inside, and then"""
 def get_rr_condensate_fractions_box(my_measurement, my_run, imaging_mode = "abs", first_state_index = 1, second_state_index = 3, 
                                     first_stored_density_name = None, second_stored_density_name = None):
-    if imaging_mode == "polrot":
-        atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
-                                                    first_stored_density_name, second_stored_density_name)
-    elif imaging_mode == "abs":
-        atom_density_first = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name)
-        atom_density_second = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name)
+    RR_B_FIELD_CONDITION = "rapid_ramp"
+    atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, first_state_index, second_state_index, 
+                                                        first_stored_density_name, second_stored_density_name, RR_B_FIELD_CONDITION, 
+                                                        imaging_mode)
     #Rotate images 
     rr_angle = my_measurement.experiment_parameters["rr_tilt_deg"]
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
@@ -455,13 +520,9 @@ def get_no_shake_average_profiles(my_measurement, first_state_index = 1, second_
     filtered_dict = my_measurement.filter_run_dict(run_filter = (run_filter, no_shake_filter))
     for run_id in filtered_dict:
         current_run = filtered_dict[run_id]
-        if imaging_mode == "polrot":
-            density_first, density_second = _load_densities_polrot(my_measurement, current_run, first_state_index, 
-                                                    second_state_index, first_stored_density_name, second_stored_density_name,
-                                                    BOX_TRAP_B_FIELD_CONDITION)
-        elif imaging_mode == "abs":
-            density_first = _load_density_top_A_abs(my_measurement, current_run, first_state_index, first_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
-            density_second = _load_density_top_B_abs(my_measurement, current_run, second_state_index, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION)
+        density_first, density_second = _load_densities_top_double(my_measurement, current_run, first_state_index, second_state_index, 
+                                                first_stored_density_name, second_stored_density_name, BOX_TRAP_B_FIELD_CONDITION, 
+                                                imaging_mode)
         no_shake_sum_first += density_first 
         no_shake_sum_second += density_second
         counter += 1 
@@ -503,6 +564,17 @@ def _load_densities_polrot(my_measurement, my_run, first_state_index, second_sta
         atom_density_first = my_run.analysis_results[first_stored_density_name]
         atom_density_second = my_run.analysis_results[second_stored_density_name]
     return (atom_density_first, atom_density_second)
+
+
+def _load_densities_top_double(my_measurement, my_run, first_state_index, second_state_index, first_stored_density_name, 
+                        second_stored_density_name, b_field_condition, imaging_mode):
+    if imaging_mode == "polrot":
+        return _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, first_stored_density_name, 
+                            second_stored_density_name, b_field_condition)
+    elif imaging_mode == "abs":
+        density_1 = _load_density_top_A_abs(my_measurement, my_run, first_state_index, first_stored_density_name, b_field_condition)
+        density_2 = _load_density_top_B_abs(my_measurement, my_run, second_state_index, second_stored_density_name, b_field_condition)
+        return (density_1, density_2)
 
 def _load_density_top_A_abs(my_measurement, my_run, state_index, stored_density_name, b_field_condition):
     if stored_density_name is None:
