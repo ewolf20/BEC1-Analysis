@@ -184,17 +184,20 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
 
 
 
-def get_box_autocut_atom_densities(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+def get_atom_densities_box_autocut(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                         first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
                         b_field_condition = "unitarity",
                         vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False, density_to_use = 2):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_state_index, second_state_index, 
                                 first_stored_density_name, second_stored_density_name, b_field_condition, imaging_mode)
-    box_crop = box_autocut(my_measurement, my_run, first_state_index = first_state_index, second_state_index = second_state_index, 
-                            first_stored_density_name = first_stored_density_name, 
-                            second_stored_density_name = second_stored_density_name,
-                            imaging_mode = imaging_mode, b_field_condition = b_field_condition, vert_crop_point = vert_crop_point, 
-                            horiz_crop_point = horiz_crop_point, widths_free = widths_free, density_to_use = density_to_use)
+    if density_to_use == 1:
+        crop_density = density_1 
+    elif density_to_use == 2:
+        crop_density = density_2 
+    else:
+        raise ValueError("Density_to_use must be 1 or 2.")
+    box_crop = box_autocut(my_measurement, crop_density, vert_crop_point = vert_crop_point, 
+                            horiz_crop_point = horiz_crop_point, widths_free = widths_free)
     x_min, y_min, x_max, y_max = box_crop 
     density_1_cropped = density_1[y_min:y_max, x_min:x_max] 
     density_2_cropped = density_2[y_min:y_max, x_min:x_max]
@@ -361,7 +364,16 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
         no_shake_density_second = 0.0 
     else:
         no_shake_density_second = my_measurement.measurement_analysis_results[no_shake_density_name_second] 
-    atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, 
+    if autocut:
+        atom_density_first, atom_density_second = get_atom_densities_box_autocut(
+            my_measurement, my_run, first_state_index = first_state_index, second_state_index = second_state_index, 
+            first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
+            imaging_mode = imaging_mode, b_field_condition = b_field_condition, 
+            vert_crop_point = autocut_vert_crop_point, horiz_crop_point = autocut_horiz_crop_point, 
+            widths_free = autocut_widths_free, density_to_use = autocut_density_to_use
+        )
+    else:
+        atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, 
                                                 first_state_index, second_state_index, first_stored_density_name, 
                                                 second_stored_density_name, b_field_condition, imaging_mode)
     bs_density_first = atom_density_first - no_shake_density_first 
@@ -386,31 +398,6 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
         return (amp_first, amp_second)
     else:
         return (amp_first, phase_first, amp_second, phase_second)
-
-
-def box_autocut(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                        first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
-                        b_field_condition = "unitarity",
-                        vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False, density_to_use = 2):
-    atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, 
-                                                first_state_index, second_state_index, first_stored_density_name, 
-                                                second_stored_density_name, b_field_condition, imaging_mode)
-    if density_to_use == 1:
-        atom_density_to_fit = atom_density_first 
-    elif density_to_use == 2:
-        atom_density_to_fit = atom_density_second
-    else:
-        raise ValueError("Incorrect parameter value for density_to_use. Should be 1 or 2.")
-    if not widths_free:
-        horiz_radius = my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
-        vert_width = my_measurement.experiment_parameters["box_length_pix"]
-        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
-                            vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point, 
-                            horiz_radius = horiz_radius, vert_width = vert_width)
-    else:
-        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
-                            vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point)
-    return box_crop 
 
 #RAPID RAMP
 
@@ -529,6 +516,22 @@ def get_no_shake_average_profiles(my_measurement, first_state_index = 1, second_
     no_shake_average_first = no_shake_sum_first / counter 
     no_shake_average_second = no_shake_sum_second / counter
     return (no_shake_average_first, no_shake_average_second)
+
+
+
+#UTILITY, POSSIBLY FOR EXTERNAL CALLING
+
+def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False):
+    if not widths_free:
+        horiz_radius = my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
+        vert_width = my_measurement.experiment_parameters["box_length_pix"]
+        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
+                            vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point, 
+                            horiz_radius = horiz_radius, vert_width = vert_width)
+    else:
+        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
+                            vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point)
+    return box_crop 
 
 #UTILITY, NOT INTENDED FOR EXTERNAL CALLING
 def _get_resonance_frequency_from_state_index(my_measurement, state_index):
