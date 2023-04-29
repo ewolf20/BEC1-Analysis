@@ -274,31 +274,52 @@ class TestMeasurement:
         randoms = np.load(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "Sample_Normal_Randoms.npy"))
         for key in my_measurement.runs_dict:
             my_measurement.runs_dict.pop(key)
-        OUTLIER_INDEX = 46
-        OUTLIER_VALUE = 5
+        OUTLIER_INDEX_FOO = 46
+        OUTLIER_VALUE_FOO = 5
+        OUTLIER_INDEX_BAR = 37
+        OUTLIER_VALUE_BAR = 6
         for i in range(len(randoms)):
             current_run = Run(i, TEST_IMAGE_PATHNAME_DICT, {"id":i})
-            if not i == OUTLIER_INDEX:
+            if not i == OUTLIER_INDEX_FOO:
                 current_run.analysis_results["foo"] = randoms[i] 
             else:
-                current_run.analysis_results["foo"] = OUTLIER_VALUE
+                current_run.analysis_results["foo"] = OUTLIER_VALUE_FOO
+            if not i == OUTLIER_INDEX_BAR:
+                current_run.analysis_results["bar"] = randoms[i] 
+            else:
+                current_run.analysis_results["bar"] = OUTLIER_VALUE_BAR
         outlier_filter = my_measurement.get_outlier_filter("foo", confidence_interval = 0.9999)
         outlier_filtered_ids = my_measurement.get_parameter_value_from_runs("id", run_filter = outlier_filter)
         assert len(outlier_filtered_ids) == len(randoms) - 1
-        assert not OUTLIER_INDEX in outlier_filtered_ids
+        assert not OUTLIER_INDEX_FOO in outlier_filtered_ids
         #Test extra filtering
         def even_id_filter(my_measurement, my_run):
             return my_run.parameters["id"] %2 == 0
         outlier_filter_even_id = my_measurement.get_outlier_filter("foo", confidence_interval = 0.9999, run_filter = even_id_filter)
         outlier_filtered_even_ids = my_measurement.get_parameter_value_from_runs("id", run_filter = outlier_filter_even_id)
         assert len(outlier_filtered_even_ids) == len(randoms) // 2 - 1
-        assert not OUTLIER_INDEX in outlier_filtered_even_ids
+        assert not OUTLIER_INDEX_FOO in outlier_filtered_even_ids
         #Test minimum and maximum returning 
         outlier_filter, interval = my_measurement.get_outlier_filter("foo", confidence_interval = 0.9999, return_interval = True)
         interval_lower, interval_upper = interval 
         filtered_values = my_measurement.get_analysis_value("foo", run_filter = outlier_filter)
         assert np.min(filtered_values) == interval_lower 
         assert np.max(filtered_values) == interval_upper
+        #Test filtering on multiple values simultaneously
+        outlier_filter_multiple_values, interval_foo, interval_bar = my_measurement.get_outlier_filter(("foo", "bar"), confidence_interval = 0.9999, 
+                                                                                                        return_interval = True)
+        outlier_filtered_multiple_value_ids = my_measurement.get_parameter_value_from_runs("id", run_filter = outlier_filter_multiple_values)
+        assert len(outlier_filtered_multiple_value_ids) == len(randoms) - 2
+        assert not OUTLIER_INDEX_FOO in outlier_filtered_multiple_value_ids
+        assert not OUTLIER_INDEX_BAR in outlier_filtered_multiple_value_ids
+        outlier_filtered_multiple_values_foo = my_measurement.get_analysis_value_from_runs("foo", run_filter = outlier_filter_multiple_values)
+        min_foo, max_foo = interval_foo 
+        assert min(outlier_filtered_multiple_values_foo) == min_foo 
+        assert max(outlier_filtered_multiple_values_foo) == max_foo 
+        outlier_filtered_multiple_values_bar = my_measurement.get_analysis_value_from_runs("bar", run_filter = outlier_filter_multiple_values) 
+        min_bar, max_bar = interval_bar 
+        assert min(outlier_filtered_multiple_values_bar) == min_bar 
+        assert max(outlier_filtered_multiple_values_bar) == max_bar
 
 
 

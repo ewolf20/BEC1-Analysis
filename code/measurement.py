@@ -476,27 +476,39 @@ class Measurement():
     Given a result_name, return a filter function which returns True for all runs where run.analysis_results[result_name] 
     is within a confidence interval of the mean specified by confidence_interval, using the Student T test. 
 
+    Params:
+
+    result_name: a string or tuple of strings indicating the analysis result which is to be filtered on. If a tuple is passed, 
+    the filter function returned is True only when the T test is passed for all strings in result_name
+
     If run filter is specified, only those runs for which run_filter returns True will be examined, and the filter 
     which is returned will also incorporate the stipulated run_filter.
 
-    If return_interval is True, returns (filter_function, confidence_range), where confidence_range = (lower_bound, upper_bound)
+    If return_interval is True, returns a tuple (filter_function, confidence_range_1, confidence_range_2, ...), 
+    where confidence_range_i = (lower_bound_i, upper_bound_i) for each result_name_i in the passed result_name. 
     """
     def get_outlier_filter(self, result_name, confidence_interval = 0.95, return_interval = False, run_filter = None, 
                             ignore_errors = True, ignore_badshots = True, iterative = True):
-        ids, values = self.get_parameter_analysis_value_pair_from_runs("id", result_name, ignore_badshots = ignore_badshots,
+        result_name_tuple = Measurement._condition_string_tuple(result_name)
+        overall_valid_ids = self.get_parameter_value_from_runs("id", ignor_badshots = ignore_badshots, run_filter = run_filter)
+        interval_tuples_list = []
+        for current_result_name in result_name_tuple:
+            ids, values = self.get_parameter_analysis_value_pair_from_runs("id", result_name, ignore_badshots = ignore_badshots,
                                                      ignore_errors = ignore_errors, run_filter = run_filter, numpyfy = True)
-        inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = (1 - confidence_interval) / 2, iterative = iterative)
-        inlier_ids = ids[inlier_indices]
+            inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = (1 - confidence_interval) / 2, iterative = iterative)
+            inlier_ids = ids[inlier_indices]
+            inlier_values = values[inlier_indices]
+            min_inlier_value = np.min(inlier_values) 
+            max_inlier_value = np.max(inlier_values)
+            interval_tuples_list.append((min_inlier_value, max_inlier_value))
+            current_valid_ids = np.intersect1d(current_valid_ids, inlier_ids)
         def inlier_run_filter(my_measurement, my_run):
             return my_run.parameters["id"] in inlier_ids
         combined_run_filter = Measurement._condition_run_filter((inlier_run_filter, run_filter))
         if not return_interval:
             return combined_run_filter
         else:
-            inlier_values = values[inlier_indices] 
-            min_value = np.min(inlier_values) 
-            max_value = np.max(inlier_values) 
-            return (combined_run_filter, (min_value, max_value))
+            return (combined_run_filter, *interval_tuples_list)
     
 
     def add_to_live_analyses(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
@@ -590,6 +602,15 @@ class Measurement():
                 return combined_filter_func
             except TypeError:
                 return run_filter
+
+
+    #Helper function for functions which take inputs of either strings or tuples of strings
+    @staticmethod
+    def _condition_string_tuple(string_or_tuple):
+        if isinstance(string_or_tuple, tuple):
+            return string_or_tuple 
+        else:
+            return (string_or_tuple,)
 
 
     def _label_badshots_default(self, override_existing_badshots = False):
