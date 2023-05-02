@@ -10,10 +10,10 @@ path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
 
-TEST_MEASUREMENT_DIRECTORY_PATH = "./resources"
+TEST_MEASUREMENT_DIRECTORY_PATH = "./resources/Test_Measurement_Directory"
 TEST_MEASUREMENT_DIRECTORY_PATH_WITH_DUMP = "./resources/Test_Dump_Directory"
 
-TEST_IMAGE_FILE_PATH = "resources/805277_2022-04-06--8-49-08_Side.fits"
+TEST_IMAGE_FILE_PATH = "resources/Test_Measurement_Directory/805277_2022-04-06--8-49-08_Side.fits"
 TEST_IMAGE_FILE_NAME = "805277_2022-04-06--8-49-08_Side.fits"
 
 TEST_IMAGE_RUN_ID = 805277
@@ -85,7 +85,9 @@ class TestMeasurement:
     @staticmethod
     def test_get_parameter_value_from_runs():
         VALUE_NAME_TO_CHECK = "id"
+        OTHER_VALUE_NAME = "runtime"
         EXPECTED_VALUES = np.array([TEST_IMAGE_RUN_ID])
+        EXPECTED_OTHER_VALUES = np.array(['2022-04-06T08:49:10Z']) 
         my_measurement = TestMeasurement.initialize_measurement() 
         values = my_measurement.get_parameter_value_from_runs("id")
         assert np.array_equal(values, EXPECTED_VALUES)
@@ -99,17 +101,26 @@ class TestMeasurement:
                                                             numpyfy = False)
         assert isinstance(filtered_values_true_list, list) 
         assert filtered_values_true_list == [TEST_IMAGE_RUN_ID]
+        #Test retrieving two vals at once
+        id_vals, runtime_vals = my_measurement.get_parameter_value_from_runs(("id", "runtime"))
+        assert np.array_equal(id_vals, EXPECTED_VALUES) 
+        assert np.array_equal(runtime_vals, EXPECTED_OTHER_VALUES)
+
 
 
     @staticmethod 
     def test_get_analysis_value_from_runs():
         VALUE_NAME_TO_CHECK = "foo"
+        OTHER_VALUE_NAME = "bar"
         VALUE = 3 
         VALUE_AS_ARRAY = np.array([3])
+        OTHER_VALUE = 2
+        OTHER_VALUE_AS_ARRAY = np.array([2])
         my_measurement = TestMeasurement.initialize_measurement() 
         for run_id in my_measurement.runs_dict:
             current_run = my_measurement.runs_dict[run_id] 
             current_run.analysis_results[VALUE_NAME_TO_CHECK] = VALUE 
+            current_run.analysis_results[OTHER_VALUE_NAME] = OTHER_VALUE
         assert np.array_equal(my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK), VALUE_AS_ARRAY)
         #Test run filtering
         filtered_values_false = my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK, run_filter = lambda my_measurement, my_run: False)
@@ -135,21 +146,38 @@ class TestMeasurement:
                                                                                 numpyfy = False)
         assert isinstance(filtered_values_true_list, list)
         assert filtered_values_true_list == [VALUE]
+        #Test retrieving two values at once
+        foo_vals, bar_vals = my_measurement.get_analysis_value_from_runs((VALUE_NAME_TO_CHECK, OTHER_VALUE_NAME))
+        assert np.array_equal(VALUE_AS_ARRAY, foo_vals)
+        assert np.array_equal(OTHER_VALUE_AS_ARRAY, bar_vals)
+
 
 
     @staticmethod 
     def test_get_parameter_analysis_value_pair_from_runs():
         VALUE_NAME_TO_CHECK = "foo"
         VALUE = 3
+        OTHER_VALUE_NAME = "bar"
+        OTHER_VALUE = 2
+        OTHER_VALUE_AS_ARRAY = np.array([OTHER_VALUE])
         VALUE_AS_ARRAY = np.array([VALUE])
         EXPECTED_PARAMS = np.array([TEST_IMAGE_RUN_ID])
+        EXPECTED_RUNTIME_ARRAY = np.array(['2022-04-06T08:49:10Z']) 
+
         my_measurement = TestMeasurement.initialize_measurement() 
         for run_id in my_measurement.runs_dict:
             current_run = my_measurement.runs_dict[run_id] 
             current_run.analysis_results[VALUE_NAME_TO_CHECK] = VALUE 
+            current_run.analysis_results[OTHER_VALUE_NAME] = OTHER_VALUE
         param_array, analysis_array = my_measurement.get_parameter_analysis_value_pair_from_runs("id", "foo")
         assert np.array_equal(param_array, EXPECTED_PARAMS)
         assert np.array_equal(analysis_array, VALUE_AS_ARRAY)
+        #Test multiple return values
+        id_array, runtime_array, foo_array, bar_array = my_measurement.get_parameter_analysis_value_pair_from_runs(("id", "runtime"), ("foo", "bar")) 
+        assert np.array_equal(id_array, EXPECTED_PARAMS)
+        assert np.array_equal(foo_array, VALUE_AS_ARRAY)
+        assert np.array_equal(bar_array, OTHER_VALUE_AS_ARRAY)
+        assert np.array_equal(runtime_array, EXPECTED_RUNTIME_ARRAY)
         #Test error filtering
         for run_id in my_measurement.runs_dict:
             current_run = my_measurement.runs_dict[run_id] 
@@ -271,9 +299,8 @@ class TestMeasurement:
     @staticmethod 
     def test_get_outlier_filter():
         my_measurement = TestMeasurement.initialize_measurement()
-        randoms = np.load(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "Sample_Normal_Randoms.npy"))
-        for key in my_measurement.runs_dict:
-            my_measurement.runs_dict.pop(key)
+        randoms = np.load(os.path.join("./resources", "Sample_Normal_Randoms.npy"))
+        my_measurement.runs_dict = {}
         OUTLIER_INDEX_FOO = 46
         OUTLIER_VALUE_FOO = 5
         OUTLIER_INDEX_BAR = 37
@@ -288,6 +315,7 @@ class TestMeasurement:
                 current_run.analysis_results["bar"] = randoms[i] 
             else:
                 current_run.analysis_results["bar"] = OUTLIER_VALUE_BAR
+            my_measurement.runs_dict[i] = current_run
         outlier_filter = my_measurement.get_outlier_filter("foo", confidence_interval = 0.9999)
         outlier_filtered_ids = my_measurement.get_parameter_value_from_runs("id", run_filter = outlier_filter)
         assert len(outlier_filtered_ids) == len(randoms) - 1
@@ -302,7 +330,7 @@ class TestMeasurement:
         #Test minimum and maximum returning 
         outlier_filter, interval = my_measurement.get_outlier_filter("foo", confidence_interval = 0.9999, return_interval = True)
         interval_lower, interval_upper = interval 
-        filtered_values = my_measurement.get_analysis_value("foo", run_filter = outlier_filter)
+        filtered_values = my_measurement.get_analysis_value_from_runs("foo", run_filter = outlier_filter)
         assert np.min(filtered_values) == interval_lower 
         assert np.max(filtered_values) == interval_upper
         #Test filtering on multiple values simultaneously
@@ -337,12 +365,6 @@ class TestMeasurement:
     @staticmethod
     def test_parse_run_id_from_filename():
         assert TEST_IMAGE_RUN_ID == Measurement._parse_run_id_from_filename(TEST_IMAGE_FILE_NAME)
-
-
-    @staticmethod 
-
-    def test_get_outlier_filter():
-        randoms = np.load(os.path.join(TEST_MEASUREMENT_DIRECTORY_PATH, "Sample_Normal_Randoms.npy"))
 
 
 

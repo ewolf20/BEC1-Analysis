@@ -15,7 +15,7 @@ sys.path.insert(0, path_to_analysis)
 
 RESOURCES_DIRECTORY_PATH = "./resources"
 
-TEST_IMAGE_FILE_PATH = "resources/805277_2022-04-06--8-49-08_Side.fits"
+TEST_IMAGE_FILE_PATH = "resources/Test_Measurement_Directory/805277_2022-04-06--8-49-08_Side.fits"
 TEST_IMAGE_FILE_NAME = "805277_2022-04-06--8-49-08_Side.fits"
 ABSORPTION_NUMPY_ARRAY_FILEPATH = "resources/Test_Image_Absorption.npy" 
 OD_NUMPY_ARRAY_FILEPATH = "resources/Test_Image_OD.npy"

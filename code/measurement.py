@@ -346,33 +346,55 @@ class Measurement():
     Given a value name value_name, returns a list with the value of that parameter for each run. 
     
     Params:
+
+    Value name: A string or tuple of strings identifying the values to be returned. If a single string is passed, method returns 
+    an array/list of values; if a tuple is passed, a tuple of arrays/lists is returned, one for each value.
     
     Ignore badshots: If True, does not return the parameter value for runs which are flagged as bad shots. 
     
-    run_filter: As with analyze_runs, if passed, only returns parameter values for which the function run_filter returns True."""
+    run_filter: As with analyze_runs, if passed, only returns parameter values for which the function run_filter returns True.
+    
+    Numpyfy: If True, returned object is a numpy array of the queried values. Otherwise, a list is returned."""
     def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None, numpyfy = True):
         filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
-        return_list = []
-        for run_id in filtered_dict:
-            current_run = self.runs_dict[run_id] 
-            return_list.append(current_run.parameters[value_name])
-        if not numpyfy:
-            return return_list
+        value_name_is_tuple = isinstance(value_name, tuple)
+        value_names_tuple = Measurement._condition_string_tuple(value_name)
+        combined_values_list = []
+        for value_name in value_names_tuple:
+            values_list = []
+            for run_id in filtered_dict:
+                current_run = self.runs_dict[run_id] 
+                values_list.append(current_run.parameters[value_name])
+            if not numpyfy:
+                combined_values_list.append(values_list)
+            else:
+                combined_values_list.append(np.array(values_list))
+        if value_name_is_tuple:
+            return tuple(combined_values_list) 
         else:
-            return np.array(return_list)
+            return combined_values_list[0]
+        
 
 
     def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None, numpyfy = True):
         filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=value_name)
-        return_list = []
-        for run_id in filtered_dict:
-            current_run = filtered_dict[run_id]
-            return_list.append(current_run.analysis_results[value_name])
-        if not numpyfy:
-            return return_list
+        value_name_is_tuple = isinstance(value_name, tuple)
+        value_names_tuple = Measurement._condition_string_tuple(value_name)
+        combined_values_list = []
+        for value_name in value_names_tuple:
+            values_list = []
+            for run_id in filtered_dict:
+                current_run = filtered_dict[run_id]
+                values_list.append(current_run.analysis_results[value_name])
+            if not numpyfy:
+                combined_values_list.append(values_list)
+            else:
+                combined_values_list.append(np.array(values_list))
+        if value_name_is_tuple:
+            return tuple(combined_values_list) 
         else:
-            return np.array(return_list)
+            return combined_values_list[0] 
     
     """Convenience function which returns a pair of parameter values and analysis results. Convenient for plotting, and also convenient where 
     some runs have errors in the analysis."""
@@ -380,17 +402,25 @@ class Measurement():
                                                     run_filter = None, numpyfy = True):
         filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=analysis_value_name)
-        param_list = []
-        analysis_result_list = []
+        parameter_value_names_tuple = Measurement._condition_string_tuple(parameter_name)
+        analysis_value_names_tuple = Measurement._condition_string_tuple(analysis_value_name)
+        combined_param_values_list = [[] for x in range(len(parameter_value_names_tuple))]
+        combined_analysis_result_list = [[] for x in range(len(analysis_value_names_tuple))]
         for run_id in filtered_dict:
             current_run = filtered_dict[run_id] 
-            param_list.append(current_run.parameters[parameter_name])
-            analysis_result_list.append(current_run.analysis_results[analysis_value_name])
-        if not numpyfy:
-            return (param_list, analysis_result_list)
-        else:
-            return (np.array(param_list), np.array(analysis_result_list))
-
+            for param_value_name, param_list in zip(
+                                        parameter_value_names_tuple, 
+                                        combined_param_values_list):
+                param_list.append(current_run.parameters[param_value_name])
+            for analysis_value_name, analysis_list in zip(
+                                                        analysis_value_names_tuple, 
+                                                        combined_analysis_result_list):
+                analysis_list.append(current_run.analysis_results[analysis_value_name])
+        if numpyfy:
+            combined_param_values_list = [np.array(l) for l in combined_param_values_list]
+            combined_analysis_result_list = [np.array(l) for l in combined_analysis_result_list]
+        return (*combined_param_values_list, *combined_analysis_result_list)
+        
     """
     Performs arbitrary user-specified analysis on the underlying runs dict. 
     
@@ -490,20 +520,20 @@ class Measurement():
     def get_outlier_filter(self, result_name, confidence_interval = 0.95, return_interval = False, run_filter = None, 
                             ignore_errors = True, ignore_badshots = True, iterative = True):
         result_name_tuple = Measurement._condition_string_tuple(result_name)
-        overall_valid_ids = self.get_parameter_value_from_runs("id", ignor_badshots = ignore_badshots, run_filter = run_filter)
+        overall_valid_ids = self.get_parameter_value_from_runs("id", ignore_badshots = ignore_badshots, run_filter = run_filter)
         interval_tuples_list = []
         for current_result_name in result_name_tuple:
-            ids, values = self.get_parameter_analysis_value_pair_from_runs("id", result_name, ignore_badshots = ignore_badshots,
+            ids, values = self.get_parameter_analysis_value_pair_from_runs("id", current_result_name, ignore_badshots = ignore_badshots,
                                                      ignore_errors = ignore_errors, run_filter = run_filter, numpyfy = True)
             inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = (1 - confidence_interval) / 2, iterative = iterative)
             inlier_ids = ids[inlier_indices]
             inlier_values = values[inlier_indices]
-            min_inlier_value = np.min(inlier_values) 
-            max_inlier_value = np.max(inlier_values)
+            min_inlier_value = np.min(inlier_values, initial = np.inf) 
+            max_inlier_value = np.max(inlier_values, initial = -np.inf)
             interval_tuples_list.append((min_inlier_value, max_inlier_value))
-            current_valid_ids = np.intersect1d(current_valid_ids, inlier_ids)
+            overall_valid_ids = np.intersect1d(overall_valid_ids, inlier_ids)
         def inlier_run_filter(my_measurement, my_run):
-            return my_run.parameters["id"] in inlier_ids
+            return my_run.parameters["id"] in overall_valid_ids
         combined_run_filter = Measurement._condition_run_filter((inlier_run_filter, run_filter))
         if not return_interval:
             return combined_run_filter
@@ -571,17 +601,23 @@ class Measurement():
         conditioned_run_filter = Measurement._condition_run_filter(run_filter)
         conditioned_global_run_filter = Measurement._condition_run_filter(self.global_run_filter)
         conditioned_overall_run_filter = Measurement._condition_run_filter((conditioned_run_filter, conditioned_global_run_filter))
+        if ignore_errors:
+            conditioned_analysis_err_check_name_tuple = Measurement._condition_string_tuple(analysis_value_err_check_name)
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
+            filter_run = False
             if ignore_badshots and current_run.is_badshot:
-                continue 
-            if not conditioned_overall_run_filter(self, current_run):
-                continue 
-            if ignore_errors:
-                analysis_result = current_run.analysis_results[analysis_value_err_check_name]
-                if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
-                    continue
-            filtered_dict[run_id] = current_run
+                filter_run = True 
+            if filter_run or not conditioned_overall_run_filter(self, current_run):
+                filter_run = True 
+            if not filter_run and ignore_errors:
+                for err_check_name in conditioned_analysis_err_check_name_tuple:
+                    analysis_result = current_run.analysis_results[err_check_name]
+                    if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
+                        filter_run = True
+                        break
+            if not filter_run:
+                filtered_dict[run_id] = current_run
         return filtered_dict 
 
 
