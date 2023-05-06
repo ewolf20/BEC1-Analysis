@@ -314,8 +314,13 @@ class Measurement():
     until a box is selected on one.
     
     image_to_use: The name of the image to use for setting the box position. If not specified, the default image for the run is used.
+
+    overwrite_existing: If False, the box will only be set if the key label does not exist in self.measurement_parameters; otherwise, 
+    nothing is done.
     """
-    def set_box(self, label, run_to_use = None, image_to_use = None, box_coordinates = None):
+    def set_box(self, label, run_to_use = None, image_to_use = None, box_coordinates = None, overwrite_existing = True):
+        if not overwrite_existing and label in self.measurement_parameters:
+            return None
         if(not box_coordinates):
             if run_to_use is None:
                 id_try_list = list(self.runs_dict) 
