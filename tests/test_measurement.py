@@ -38,8 +38,9 @@ def get_sha_hash_string(my_bytes):
 class TestMeasurement:
 
     @staticmethod 
-    def initialize_measurement():
-        return Measurement(measurement_directory_path = TEST_MEASUREMENT_DIRECTORY_PATH, imaging_type = 'side_low_mag')
+    def initialize_measurement(connected_mode = True):
+        return Measurement(measurement_directory_path = TEST_MEASUREMENT_DIRECTORY_PATH, imaging_type = 'side_low_mag', 
+                            connected_mode = connected_mode)
 
     @staticmethod 
     def test__init__():
@@ -55,8 +56,32 @@ class TestMeasurement:
         assert TEST_IMAGE_RUN_ID in my_measurement.runs_dict
 
     @staticmethod 
-    def test_analysis_dump_and_load():
+    def test_measurement_dump_and_load():
         RUN_ANALYSIS_CHECKSUM = None
+        spoofed_measurement = TestMeasurement._dump_and_load_measurement_spoofer()
+        try:
+            TEST_DUMP_FOLDERNAME = "Temp"
+            spoofed_measurement.dump_measurement(dump_foldername = TEST_DUMP_FOLDERNAME)
+            #Twiddle the spoofed measurement to be different
+            spoofed_measurement.analyze_runs(lambda my_measurement, my_run: 0.0, "bar", overwrite_existing = True)
+            spoofed_measurement.measurement_analysis_results["horse"] = "horse of course"
+            spoofed_measurement.experiment_parameters["swallow_species"] = "European"
+            spoofed_measurement.measurement_parameters["has_soul"] = True
+            for run_id in spoofed_measurement.runs_dict:
+                current_run = spoofed_measurement.runs_dict[run_id] 
+                current_run.parameters["count_von_count"] = "ah ah ah"
+            #Test equality
+            spoofed_measurement.load_measurement(dump_foldername = TEST_DUMP_FOLDERNAME)
+            TestMeasurement._dump_and_load_measurement_validator(spoofed_measurement)
+            disconnected_measurement = TestMeasurement.initialize_measurement(connected_mode = False)
+            disconnected_measurement.load_measurement(dump_foldername = TEST_DUMP_FOLDERNAME)
+            TestMeasurement._dump_and_load_measurement_validator(disconnected_measurement)
+        finally:
+            shutil.rmtree(TEST_DUMP_FOLDERNAME)
+
+
+    @staticmethod
+    def _dump_and_load_measurement_spoofer():
         my_measurement = TestMeasurement.initialize_measurement()
         def analysis_function_scalar_zero(my_measurement, my_run):
             return 0.0
@@ -67,20 +92,23 @@ class TestMeasurement:
         my_measurement.analyze_runs(analysis_function_scalar_zero, "bar")
         my_measurement.analyze_runs(analysis_function_array_zero, "baz")
         my_measurement.measurement_analysis_results["horse"] = "noble animal"
-        try:
-            TEST_DUMP_FOLDERNAME = "Temp"
-            os.mkdir(TEST_DUMP_FOLDERNAME)
-            TEST_DUMP_FILENAME = "foo.json"
-            test_dump_pathname = os.path.join(TEST_DUMP_FOLDERNAME, TEST_DUMP_FILENAME)
-            my_measurement.dump_analysis(dump_pathname = test_dump_pathname)
-            my_measurement.analyze_runs(analysis_function_scalar_one, "bar", overwrite_existing = True)
-            my_measurement.measurement_analysis_results["horse"] = "horse of course"
-            my_measurement.load_analysis(dump_pathname = test_dump_pathname)
-        finally:
-            shutil.rmtree(TEST_DUMP_FOLDERNAME)
-        assert my_measurement.get_analysis_value_from_runs("bar") == [0.0]
-        assert my_measurement.get_analysis_value_from_runs("baz") == [np.array([0.0])]
+        my_measurement.experiment_parameters["swallow_species"] = "African"
+        my_measurement.measurement_parameters["has_soul"] = False
+        for i, run_id in enumerate(my_measurement.runs_dict):
+            current_run = my_measurement.runs_dict[run_id]
+            current_run.parameters["count_von_count"] = i
+        return my_measurement
+
+    @staticmethod 
+    def _dump_and_load_measurement_validator(my_measurement):
+        assert np.array_equal(my_measurement.get_analysis_value_from_runs("bar"), np.array([0.0])) 
+        assert np.array_equal(my_measurement.get_analysis_value_from_runs("baz"), np.array([np.array([0.0])]))
         assert my_measurement.measurement_analysis_results["horse"] == "noble animal"
+        assert my_measurement.experiment_parameters["swallow_species"] == "African" 
+        assert my_measurement.measurement_parameters["has_soul"] == False
+        for i, run_id in enumerate(my_measurement.runs_dict):
+            current_run = my_measurement.runs_dict[run_id] 
+            assert current_run.parameters["count_von_count"] == i
 
     @staticmethod
     def test_get_parameter_value_from_runs():
@@ -381,7 +409,7 @@ class TestRun:
 
     @staticmethod
     def test_load_image():
-        my_image = TestRun.my_run_without_memory.load_image(TEST_IMAGE_FILE_PATH)
+        my_image = TestRun.my_run_without_memory._load_image(TEST_IMAGE_FILE_PATH)
         assert check_sha_hash(my_image.data.tobytes(), TEST_IMAGE_ARRAY_SHA_256_HEX_STRING)
 
     @staticmethod

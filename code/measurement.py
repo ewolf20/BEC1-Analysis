@@ -26,53 +26,66 @@ RUN_MISMATCH_PATIENCE_TIME_SECS = 30
 
 class Measurement():
 
+    ANALYSIS_DUMPFILE_NAME = "analysis_dump.json"
+    PARAMETERS_DUMPFILE_NAME = "parameters_dump.json"
+
     """Initialization method.
     
     Parameters:
     
     measurement_directory_path: str, The path to a directory containing the labeled images to process.
+
     imaging_type: str, The type of imaging, e.g. top or side, low mag or high mag.
+
     experiment_parameters: dict {parname:value} of experiment-level parameters not saved within the run parameters, e.g. trapping frequencies
+
     image_format: str, the filetype of the images being processed
     hold_images_in_memory: bool, Whether images are kept loaded in memory, or loaded on an as-needed basis and then released.
+
     measurement_parameters: dict {parname:value} of measurement-level params, e.g. a list of run ids which are flagged as bad shots or 
     the coordinates of a background box.
+
     run_parameters_verbose: Whether the runs store the entire set of experiment parameters, or just those being scanned.
-    badshot_function: A badshot function, to be used by 
+
+    badshot_function: A badshot function, to be used in badshot labeling.
+
+    disconnected_mode: A boolean indicating whether the measurement is initialized in "connected mode", i.e. with access to the underlying 
+    measurement directory. If not in this mode, run images cannot be accessed, and various data are initialized by loading from a pre-existing dump. 
     """
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
-                    saved_analysis_filename = "measurement_run_analysis_dump.json", badshot_function = None, analyses_list = None, 
-                    global_run_filter = None, is_live = False):
-        if(not measurement_directory_path):
-            measurement_directory_path = os.getcwd()
-        self.measurement_directory_path = measurement_directory_path 
-        self.imaging_type = imaging_type
-        self.image_format = image_format
-        self.hold_images_in_memory = hold_images_in_memory
-        if(not experiment_parameters):
-            experiment_parameters_path = os.path.join(measurement_directory_path, "experiment_parameters.json")
-            with open(experiment_parameters_path, 'r') as json_file:
-                experiment_parameters_dict = json.load(json_file)
-                self.experiment_parameters = experiment_parameters_dict["Values"]
-        else:
-            self.experiment_parameters = experiment_parameters
+                    hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False,
+                    badshot_function = None, analyses_list = None, 
+                    global_run_filter = None, is_live = False, connected_mode = True):
         if(measurement_parameters):   
             self.measurement_parameters = measurement_parameters
         else:
             self.measurement_parameters = {}
-        self.run_parameters_verbose = run_parameters_verbose
         self.badshot_function = badshot_function
         self.badshot_checked_list = []
-        self.runs_dict = {}
-        self.is_live = is_live
-        self._update_runs_dict()
         if analyses_list is None:
             self.analyses_list = []
         self.measurement_analysis_results = {}
-        if use_saved_analysis:
-            self.load_analysis(saved_analysis_filename)
         self.global_run_filter = global_run_filter
+        self.runs_dict = {}
+        self.connected_mode = connected_mode
+        #Specific to connected mode
+        if connected_mode:
+            if(not measurement_directory_path):
+                measurement_directory_path = os.getcwd()
+            self.measurement_directory_path = measurement_directory_path 
+            self.imaging_type = imaging_type
+            self.image_format = image_format
+            self.hold_images_in_memory = hold_images_in_memory
+            if(not experiment_parameters):
+                experiment_parameters_path = os.path.join(measurement_directory_path, "experiment_parameters.json")
+                with open(experiment_parameters_path, 'r') as json_file:
+                    experiment_parameters_dict = json.load(json_file)
+                    self.experiment_parameters = experiment_parameters_dict["Values"]
+            else:
+                self.experiment_parameters = experiment_parameters
+            self.run_parameters_verbose = run_parameters_verbose
+            self.is_live = is_live
+            self._update_runs_dict()
 
     def set_badshot_function(self, badshot_function):
         self.badshot_function = badshot_function
@@ -160,23 +173,41 @@ class Measurement():
 
 
     """
-    Dumps the parameters of the run analysis_results dicts to a .json file.
+    JSON serialize the data in a measurement. 
     
-    When called, save a dictionary {run_ID, analysis_results} of the analysis results of each run in the current 
-    runs dict as a json file. Allows analyses to be recalled from previous sessions. 
+    When called, serialize most of the data from a measurement object, including each run's analysis_results and parameters dicts, as well as the 
+    measurement-wide measurement_analysis_results, measurement_parameters, and experiment_parameters dicts. The resulting folder contains an independent 
+    store of information capable of "reconstituting" all of the data in the measurement object.
     
-    NOTE: This method relies on the objects in analysis_results being JSON serializable, with a _single_ exception: because of 
-    their ubiquity, numpy arrays have been manually accommodated as well. To do this, a separate directory is created wherein the 
-    numpy arrays are saved as .npy files."""
+    NOTE: This method relies on the objects in the respective dictionaries being JSON serializable, with a _single_ exception: because of 
+    their ubiquity in the analysis_results dictionaries, numpy arrays have been manually accommodated as well. 
+    To do this, a separate directory is created wherein the numpy arrays are saved as .npy files.
+    
+    NOTE: This method only stores JSON serializable data, and e.g. does not restore saved live analysis functions, global run filters, or badshot functions.
+    These must be manually re-initialized if needed."""
 
-    def dump_analysis(self, dump_pathname = "analysis_dump.json"):
-        with open(dump_pathname, 'w') as dump_file:
-            dump_dict = {} 
-            dump_dict["Measurement"] = Measurement._digest_analysis_results("Measurement", dump_pathname, self.measurement_analysis_results)
+    def dump_measurement(self, dump_foldername = "dump_folder"):
+        if not os.path.exists(dump_foldername):
+            os.mkdir(dump_foldername)
+        analysis_dump_pathname = os.path.join(dump_foldername, Measurement.ANALYSIS_DUMPFILE_NAME)
+        with open(analysis_dump_pathname, 'w') as analysis_dump_file:
+            analysis_dump_dict = {} 
+            analysis_dump_dict["Measurement"] = Measurement._digest_analysis_results("Measurement", analysis_dump_pathname, self.measurement_analysis_results)
             for run_id in self.runs_dict:
                 current_run = self.runs_dict[run_id] 
-                dump_dict[str(run_id)] = Measurement._digest_analysis_results(str(run_id), dump_pathname, current_run.analysis_results)
-            json.dump(dump_dict, dump_file)
+                analysis_dump_dict[str(run_id)] = Measurement._digest_analysis_results(str(run_id), analysis_dump_pathname, current_run.analysis_results)
+            json.dump(analysis_dump_dict, analysis_dump_file)
+        #Default assumption is that parameters values will be vanilla JSON serializable.
+        parameters_dump_pathname = os.path.join(dump_foldername, Measurement.PARAMETERS_DUMPFILE_NAME)
+        with open(parameters_dump_pathname, 'w') as parameters_dump_file:
+            parameters_dump_dict = {} 
+            parameters_dump_dict["Measurement"] = self.measurement_parameters 
+            parameters_dump_dict["Experiment"] = self.experiment_parameters 
+            for run_id in self.runs_dict:
+                current_run = self.runs_dict[run_id] 
+                parameters_dump_dict[str(run_id)] = current_run.parameters 
+            json.dump(parameters_dump_dict, parameters_dump_file)
+
 
     @staticmethod
     def _digest_analysis_results(analysis_label, dump_pathname, analysis_results):
@@ -202,18 +233,42 @@ class Measurement():
 
 
 
+    """Load a measurement from the dump folder created by dump_measurement. Should be called after measurement is initialized, 
+    but before any other manipulations."""
 
-    def load_analysis(self, dump_pathname = "analysis_dump.json"):
-        with open(dump_pathname, 'r') as dump_file:
-            dump_dict = json.load(dump_file)
-            for key in dump_dict:
+    def load_measurement(self, dump_foldername = "dump_folder"):
+        parameters_dump_pathname = os.path.join(dump_foldername, Measurement.PARAMETERS_DUMPFILE_NAME)
+        with open(parameters_dump_pathname, 'r') as parameters_dump_file:
+            parameters_dump_dict = json.load(parameters_dump_file) 
+            for key in parameters_dump_dict:
+                current_parameters = parameters_dump_dict[key]
                 if key == "Measurement":
-                    self.measurement_analysis_results = Measurement._undigest_analysis_results(dump_dict[key]) 
+                    self.measurement_parameters = current_parameters 
+                elif key == "Experiment":
+                    print("Loading experiment params")
+                    self.experiment_parameters = current_parameters
+                    print(current_parameters)
+                else:
+                    run_id_as_integer = int(key) 
+                    if self.connected_mode:
+                        if run_id_as_integer in self.runs_dict:
+                            current_run = self.runs_dict[run_id_as_integer]
+                            current_run.parameters = current_parameters 
+                    else:
+                        current_run = Run(run_id_as_integer, None, parameters = current_parameters, connected_mode = False)
+                        self.runs_dict[run_id_as_integer] = current_run
+        analysis_dump_pathname = os.path.join(dump_foldername, Measurement.ANALYSIS_DUMPFILE_NAME)
+        with open(analysis_dump_pathname, 'r') as analysis_dump_file:
+            analysis_dump_dict = json.load(analysis_dump_file)
+            for key in analysis_dump_dict:
+                current_analysis_results = Measurement._undigest_analysis_results(analysis_dump_dict[key])
+                if key == "Measurement":
+                    self.measurement_analysis_results = current_analysis_results
                 else:
                     run_id_as_integer = int(key)
                     if run_id_as_integer in self.runs_dict:
                         current_run = self.runs_dict[run_id_as_integer] 
-                        current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[key])
+                        current_run.analysis_results = current_analysis_results
 
 
     @staticmethod 
@@ -305,9 +360,9 @@ class Measurement():
         ax = plt.gca()
         ax.imshow(my_image, cmap = 'gray')
         ax.set_title(title)
-        x_1 = None 
-        y_1 = None 
-        x_2 = None 
+        x_1 = None
+        y_1 = None
+        x_2 = None
         y_2 = None
         def line_select_callback(eclick, erelease):
             nonlocal x_1
@@ -708,8 +763,12 @@ class Run():
 
     analysis_results: A dict containing the results of analyses on the runs. Generally this will be empty at creation, unless runs are being 
         re-loaded from a previous measurement session.
+
+    connected_mode: A boolean indicating whether the run is initialized in connected mode. If not in this mode, access to the run images is unavailable; 
+    only the analysis_results and parameters objects are present. 
     """
-    def __init__(self, run_id, image_pathnames_dict, parameters, hold_images_in_memory = True, image_format = ".fits", analysis_results = None):
+    def __init__(self, run_id, image_pathnames_dict, parameters, hold_images_in_memory = True, image_format = ".fits", analysis_results = None, 
+                connected_mode = True):
         self.run_id = run_id
         self.parameters = parameters
         if(not analysis_results):
@@ -721,28 +780,35 @@ class Run():
         else:
             self.is_badshot = False
             self.analysis_results["badshot"] = False
-        self.hold_images_in_memory = hold_images_in_memory
-        self.image_dict = {}
-        if not image_format in IMAGE_FORMATS_LIST:
-            raise RuntimeError("Image format is not supported.")
-        self.image_format = image_format
-        for key in image_pathnames_dict:
-            image_pathname = image_pathnames_dict[key] 
-            if(hold_images_in_memory):
-                self.image_dict[key] = self.load_image(image_pathname)
-            else:
-                self.image_dict[key] = image_pathname
+        self.connected_mode = connected_mode
+        if connected_mode:
+        #Specific to connected mode
+            self.hold_images_in_memory = hold_images_in_memory
+            self.image_dict = {}
+            if not image_format in IMAGE_FORMATS_LIST:
+                raise RuntimeError("Image format is not supported.")
+            self.image_format = image_format
+            for key in image_pathnames_dict:
+                image_pathname = image_pathnames_dict[key] 
+                if(hold_images_in_memory):
+                    self.image_dict[key] = self._load_image(image_pathname)
+                else:
+                    self.image_dict[key] = image_pathname
 
 
     def get_image(self, image_name, memmap = False):
+        if not self.connected_mode:
+            raise RuntimeError("Access to run images unavailable when not in connected mode.")
         if(self.hold_images_in_memory):
             return self.image_dict[image_name]
         else:
-            return self.load_image(self.image_dict[image_name], memmap = memmap)
+            return self._load_image(self.image_dict[image_name], memmap = memmap)
 
     """
     Gives the first image in the run's imagedict; returns for any imaging type."""
     def get_default_image(self, memmap = False):
+        if not self.connected_mode:
+            raise RuntimeError("Access to run images unavailable when not in connected mode.")
         for image_name in self.image_dict:
             return self.get_image(image_name, memmap = memmap)
 
@@ -762,7 +828,7 @@ class Run():
     WARNING: An unscaled image is offset by -32768 thanks to unsigned integer issues. This 
     is safe for typical use, because this offset cancels when dark counts are subtracted.
     """
-    def load_image(self, image_pathname, memmap = False):
+    def _load_image(self, image_pathname, memmap = False):
         if(self.image_format == ".fits"):
             with fits.open(image_pathname, memmap = memmap, do_not_scale_image_data = memmap) as hdul:
                 return hdul[0].data
