@@ -352,13 +352,15 @@ class Measurement():
 
     """
     Alias to set_box('norm_box'), for convenience."""
-    def set_norm_box(self, run_to_use=None, image_to_use = None, box_coordinates = None):
-        self.set_box('norm_box', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates)
+    def set_norm_box(self, run_to_use=None, image_to_use = None, box_coordinates = None, overwrite_exisiting = True):
+        self.set_box('norm_box', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates, 
+                        overwrite_existing = overwrite_exisiting)
 
     """
     Alias to set_box('ROI'), for convenience."""
-    def set_ROI(self, run_to_use = None, image_to_use = None, box_coordinates = None):
-        self.set_box('ROI', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates)
+    def set_ROI(self, run_to_use = None, image_to_use = None, box_coordinates = None, overwrite_existing = True):
+        self.set_box('ROI', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates, 
+                        overwrite_existing = overwrite_existing)
 
     @staticmethod
     def _draw_box(my_image, label, title):
