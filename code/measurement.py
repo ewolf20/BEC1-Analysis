@@ -245,9 +245,7 @@ class Measurement():
                 if key == "Measurement":
                     self.measurement_parameters = current_parameters 
                 elif key == "Experiment":
-                    print("Loading experiment params")
                     self.experiment_parameters = current_parameters
-                    print(current_parameters)
                 else:
                     run_id_as_integer = int(key) 
                     if self.connected_mode:
@@ -352,9 +350,9 @@ class Measurement():
 
     """
     Alias to set_box('norm_box'), for convenience."""
-    def set_norm_box(self, run_to_use=None, image_to_use = None, box_coordinates = None, overwrite_exisiting = True):
+    def set_norm_box(self, run_to_use=None, image_to_use = None, box_coordinates = None, overwrite_existing = True):
         self.set_box('norm_box', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates, 
-                        overwrite_existing = overwrite_exisiting)
+                        overwrite_existing = overwrite_existing)
 
     """
     Alias to set_box('ROI'), for convenience."""

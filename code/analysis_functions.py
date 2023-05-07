@@ -157,7 +157,8 @@ def get_atom_densities_top_abs(my_measurement, my_run, state_index_A = 1, state_
 
 
 
-def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity"):
+def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity", 
+                                first_state_fudge = 1.0, second_state_fudge = 1.0):
     first_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, first_state_index)
     second_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, second_state_index)
     nominal_frequency_A = my_run.parameters["ImagFreq1"]
@@ -180,9 +181,9 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B,
                                                                 detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign, 
                                                                 cross_section_imaging_geometry_factor = top_cross_section_geometry_factor)
+    atom_density_first = atom_density_first * first_state_fudge
+    atom_density_second = atom_density_second * second_state_fudge
     return (atom_density_first, atom_density_second)
-
-
 
 def get_atom_densities_box_autocut(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                         first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
