@@ -35,3 +35,28 @@ def test_load_run_parameters_from_json():
     assert run_parameters_terse_checksum == RUN_PARAMS_TERSE_SHA_CHECKSUM
 
 
+def test_update_nested_json():
+    temp_filename = "temp_json.json"
+    temp_pathname = os.path.join("resources", temp_filename) 
+    try:
+        with open(temp_pathname, 'w') as json_file:
+            json.dump({}, json_file)
+        loading_functions.update_nested_json(temp_pathname, 'foo', 1)
+        try:
+            loading_functions.update_nested_json(temp_pathname, 'bar', 2, parent_keys = ['a', 'b'], create_new = False)
+        except KeyError:
+            pass 
+        else:
+            assert False
+        loading_functions.update_nested_json(temp_pathname, 'bar', 2, parent_keys = ['a', 'b'], create_new = True)
+        with open(temp_pathname, 'r') as json_file:
+            updated_dict = json.load(json_file)
+        assert len(updated_dict) == 2
+        assert updated_dict['foo'] == 1
+        assert 'a' in updated_dict 
+        assert 'b' in updated_dict['a']
+        assert updated_dict['a']['b']['bar'] == 2
+    finally:
+        os.remove(temp_pathname)
+
+
