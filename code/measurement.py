@@ -28,6 +28,7 @@ class Measurement():
 
     ANALYSIS_DUMPFILE_NAME = "analysis_dump.json"
     PARAMETERS_DUMPFILE_NAME = "parameters_dump.json"
+    DEFAULT_DUMP_FOLDER_NAME = "dump_folder"
 
     """Initialization method.
     
@@ -186,7 +187,9 @@ class Measurement():
     NOTE: This method only stores JSON serializable data, and e.g. does not restore saved live analysis functions, global run filters, or badshot functions.
     These must be manually re-initialized if needed."""
 
-    def dump_measurement(self, dump_foldername = "dump_folder"):
+    def dump_measurement(self, dump_foldername = None):
+        if dump_foldername is None:
+            dump_foldername = Measurement.DEFAULT_DUMP_FOLDER_NAME
         if not os.path.exists(dump_foldername):
             os.mkdir(dump_foldername)
         analysis_dump_pathname = os.path.join(dump_foldername, Measurement.ANALYSIS_DUMPFILE_NAME)
@@ -236,7 +239,9 @@ class Measurement():
     """Load a measurement from the dump folder created by dump_measurement. Should be called after measurement is initialized, 
     but before any other manipulations."""
 
-    def load_measurement(self, dump_foldername = "dump_folder"):
+    def load_measurement(self, dump_foldername = None):
+        if dump_foldername is None:
+            dump_foldername = Measurement.DEFAULT_DUMP_FOLDER_NAME
         parameters_dump_pathname = os.path.join(dump_foldername, Measurement.PARAMETERS_DUMPFILE_NAME)
         with open(parameters_dump_pathname, 'r') as parameters_dump_file:
             parameters_dump_dict = json.load(parameters_dump_file) 

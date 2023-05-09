@@ -388,8 +388,8 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
         bs_density_first = bs_density_first[y_min:y_max, x_min:x_max]
         bs_density_second = bs_density_second[y_min:y_max, x_min:x_max]
     #Current convention has the integration direction as the last index, i.e. the x-axis. 
-    integrated_density_first = np.sum(bs_density_first, axis = -1)
-    integrated_density_second = np.sum(bs_density_second, axis = -1)
+    integrated_density_first = np.sum(bs_density_first, axis = -1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    integrated_density_second = np.sum(bs_density_second, axis = -1) * my_measurement.experiment_parameters["top_um_per_pixel"]
     x_delta = my_measurement.experiment_parameters["top_um_per_pixel"]
     fft_results_first = data_fitting_functions.get_fft_peak(x_delta, integrated_density_first, order = order)
     frequency_first, amp_first, phase_first = fft_results_first 
