@@ -188,7 +188,7 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
 def get_atom_densities_box_autocut(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                         first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
                         b_field_condition = "unitarity",
-                        vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False, density_to_use = 2):
+                        vert_crop_point = 0.5, horiz_crop_point = 0.00, widths_free = False, density_to_use = 2):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_state_index, second_state_index, 
                                 first_stored_density_name, second_stored_density_name, b_field_condition, imaging_mode)
     if density_to_use == 1:
@@ -361,7 +361,7 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
                                         return_phases = False,
                                         first_stored_density_name = None, second_stored_density_name = None, 
                                         autocut = False, autocut_density_to_use = 2, autocut_widths_free = False, 
-                                        autocut_vert_crop_point = 0.5, autocut_horiz_crop_point = 0.01):
+                                        autocut_vert_crop_point = 0.5, autocut_horiz_crop_point = 0.00):
     if no_shake_density_name_first is None:
         no_shake_density_first = 0.0
     else:
@@ -553,7 +553,7 @@ def get_no_shake_average_profiles(my_measurement, first_state_index = 1, second_
 
 #UTILITY, POSSIBLY FOR EXTERNAL CALLING
 
-def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, horiz_crop_point = 0.01, widths_free = False):
+def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, horiz_crop_point = 0.00, widths_free = False):
     if not widths_free:
         horiz_radius = my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
         vert_width = my_measurement.experiment_parameters["box_length_pix"]
