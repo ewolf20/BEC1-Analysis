@@ -1,6 +1,5 @@
 import hashlib
 import os
-from random import sample 
 import sys
 
 from astropy.io import fits
@@ -218,10 +217,13 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
     SAMPLE_AXICON_DIAMETER_PIX = 189
     SAMPLE_AXICON_LENGTH_PIX = 250
     SAMPLE_TILT_DEG = 6.3
+    SAMPLE_SIDE_TILT_DEG = 10
+    SAMPLE_SIDE_ASPECT_RATIO = 1.4
     axicon_diameter_um = SAMPLE_UM_PER_PIXEL * SAMPLE_AXICON_DIAMETER_PIX
     sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
     hybrid_trap_harmonic_positions, hybrid_trap_harmonic_data = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(sample_hybrid_trap_data, 
-                                                                SAMPLE_TILT_DEG, SAMPLE_AXICON_DIAMETER_PIX, SAMPLE_AXICON_LENGTH_PIX, SAMPLE_UM_PER_PIXEL)
+                                                                SAMPLE_TILT_DEG, SAMPLE_AXICON_DIAMETER_PIX, SAMPLE_AXICON_LENGTH_PIX,
+                                                                SAMPLE_SIDE_TILT_DEG, SAMPLE_SIDE_ASPECT_RATIO, SAMPLE_UM_PER_PIXEL)
     filtered_hybrid_trap_harmonic_data = scipy.signal.savgol_filter(hybrid_trap_harmonic_data, 15, 2)
     max_index = np.argmax(hybrid_trap_harmonic_data) 
     max_value = hybrid_trap_harmonic_data[max_index]
@@ -235,6 +237,16 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
     max_position = hybrid_trap_harmonic_positions[max_index] 
     assert(np.abs(max_position) < 10) 
     assert(np.abs((center_snippet_average_3d_density - max_value) / center_snippet_average_3d_density < 1e-1))
+
+
+def test_get_hybrid_cross_section_um():
+    SAMPLE_SIDE_ANGLE_DEG = 45
+    SAMPLE_SIDE_ASPECT_RATIO = 2 
+    SAMPLE_TOP_RADIUS_UM = 100
+    #From hand-evaluation of the formula
+    EXPECTED_CROSS_SECTION_UM2 = 25132.74123
+    cross_section = image_processing_functions.get_hybrid_cross_section_um(SAMPLE_TOP_RADIUS_UM, SAMPLE_SIDE_ANGLE_DEG, SAMPLE_SIDE_ASPECT_RATIO)
+    assert np.isclose(cross_section, EXPECTED_CROSS_SECTION_UM2)
 
 
     

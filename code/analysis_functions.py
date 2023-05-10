@@ -284,11 +284,13 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, first_
     axicon_tilt_deg = my_measurement.experiment_parameters["axicon_tilt_deg"]
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     axicon_length_pix = my_measurement.experiment_parameters["hybrid_trap_typical_length_pix"]
+    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
+    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     positions_first, densities_first = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(atom_density_first, axicon_tilt_deg, 
-                                        axicon_diameter_pix, axicon_length_pix, um_per_pixel)
+                                        axicon_diameter_pix, axicon_length_pix, axicon_side_angle_deg, axicon_side_aspect_ratio, um_per_pixel)
     positions_second, densities_second = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(atom_density_second, axicon_tilt_deg, 
-                                        axicon_diameter_pix, axicon_length_pix, um_per_pixel)
+                                        axicon_diameter_pix, axicon_length_pix, axicon_side_angle_deg, axicon_side_aspect_ratio, um_per_pixel)
     if autocut:
         first_start_index, first_stop_index = science_functions.hybrid_trap_autocut(densities_first)
         positions_first = positions_first[first_start_index:first_stop_index]
@@ -310,7 +312,10 @@ def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1
                                                                     second_stored_density_name = second_stored_density_name)
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
-    trap_cross_section_um = np.pi * np.square(um_per_pixel * axicon_diameter_pix / 2)
+    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
+    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
+    top_radius_um = um_per_pixel * axicon_diameter_pix / 2
+    trap_cross_section_um = image_processing_functions.get_hybrid_cross_section_um(top_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
     trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
     #Autocut False because it's already been done...
     average_energy_first = science_functions.get_hybrid_trap_average_energy(positions_first, densities_first, trap_cross_section_um,

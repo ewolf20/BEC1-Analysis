@@ -377,7 +377,8 @@ def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, d
 
 
 def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix,
-                                                 um_per_pixel, center = None, rotate_data = True):
+                                                axicon_side_angle_deg, side_aspect_ratio,
+                                                um_per_pixel, center = None, rotate_data = True):
     if(center is None):
         center = data_fitting_functions.hybrid_trap_center_finder(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix)
     if(rotate_data and axicon_tilt_deg != 0.0):
@@ -387,7 +388,7 @@ def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axi
         image_to_use = hybrid_trap_density_image
     x_center, y_center = center
     hybrid_trap_radius_um = um_per_pixel * axicon_diameter_pix / 2.0
-    hybrid_trap_cross_sectional_area_um = np.pi * np.square(hybrid_trap_radius_um)
+    hybrid_trap_cross_sectional_area_um = get_hybrid_cross_section_um(hybrid_trap_radius_um, axicon_side_angle_deg, side_aspect_ratio)
     radial_axis_index = 1
     hybrid_trap_radial_integrated_density = um_per_pixel * np.sum(image_to_use, axis = radial_axis_index)
     hybrid_trap_3D_density_harmonic_axis = hybrid_trap_radial_integrated_density / hybrid_trap_cross_sectional_area_um 
@@ -398,6 +399,23 @@ def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axi
     amp, center, gamma, offset = popt
     refitted_harmonic_axis_positions_um = harmonic_axis_positions_um - center
     return (refitted_harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
+
+
+"""
+Convenience function for getting the actual areal cross section of the tilted oval of the hybrid trap.
+Note that the tilt angle is the angle made by the semimajor axis of the oval to the plane that the top imaging can see."""
+def get_hybrid_cross_section_um(top_radius_um, side_angle_deg, side_aspect_ratio):
+    side_angle_rad = side_angle_deg * np.pi / 180 
+    theta = side_angle_rad
+    semiminor_to_semimajor_ratio = 1.0 / side_aspect_ratio
+    s = semiminor_to_semimajor_ratio
+    #Slightly nontrivial geometry formula
+    seen_radius_to_semimajor_ratio = np.cos(theta) * np.sqrt(1 + np.square(s * np.tan(theta)))
+    semimajor_radius_um = top_radius_um / seen_radius_to_semimajor_ratio
+    semiminor_radius_um = semiminor_to_semimajor_ratio * semimajor_radius_um 
+    cross_section_um = np.pi * semimajor_radius_um * semiminor_radius_um
+    return cross_section_um
+
 
 def _rotate_and_crop_hybrid_image(image, center, rotation_angle_deg, x_crop_width = np.inf, y_crop_width = np.inf):
     x_center, y_center = center 
