@@ -5,7 +5,7 @@ from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
 from scipy.special import zeta, gamma
 
-from . import statistics_functions, numerical_functions, loading_functions
+from . import statistics_functions, numerical_functions, loading_functions, image_processing_functions
 
 
 
@@ -197,8 +197,8 @@ def get_fermi_energy_hz_from_density(atom_density_m):
 
 #FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
 
-def get_box_fermi_energy_from_counts(atom_counts, box_radius_um, box_length_um):
-    box_volume_m = np.pi * np.square(box_radius_um) * box_length_um * 1e-18
+def get_box_fermi_energy_from_counts(atom_counts, box_cross_section_um, box_length_um):
+    box_volume_m = box_cross_section_um * box_length_um * 1e-18
     atom_density_m = atom_counts / box_volume_m
     return get_fermi_energy_hz_from_density(atom_density_m)
 

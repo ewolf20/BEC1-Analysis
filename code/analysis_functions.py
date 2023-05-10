@@ -405,6 +405,32 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_state_index =
     else:
         return (amp_first, phase_first, amp_second, phase_second)
 
+
+
+def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_state_index = 1, second_state_index = 3, imaging_mode = "polrot", 
+                                b_field_condition = "unitarity", first_stored_density_name = None, second_stored_density_name = None):
+    if imaging_mode == "polrot":
+        counts_first, counts_second = get_atom_counts_top_polrot(my_measurement, my_run, first_state_index=first_state_index, 
+                                                    second_state_index = second_state_index, first_stored_density_name=first_stored_density_name, 
+                                                    second_stored_density_name=second_stored_density_name, b_field_condition=b_field_condition) 
+    elif imaging_mode == "abs":
+        counts_first, counts_second = get_atom_counts_top_AB_abs(my_measurement, my_run, first_state_index = first_state_index, 
+                                                    second_state_index = second_state_index, first_stored_density_name=first_stored_density_name, 
+                                                    second_stored_density_name = second_stored_density_name, b_field_condition = b_field_condition)
+    axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
+    box_length_pix = my_measurement.experiment_parameters["box_length_pix"]
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    box_length_um = box_length_pix * um_per_pixel
+    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
+    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
+    box_radius_um = um_per_pixel * axicon_diameter_pix / 2 
+    cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
+    first_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_first, cross_section_um, box_length_um)
+    second_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_second, cross_section_um, box_length_um)
+    return (first_fermi_energy_hz, second_fermi_energy_hz)
+
+
+
 #RAPID RAMP
 
 """
