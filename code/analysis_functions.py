@@ -90,21 +90,17 @@ def get_atom_density_side_li_lf(my_measurement, my_run):
                                                             cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
     return atom_density_image
 
-def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None):
+def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None, b_field_condition = "unitarity"):
     if state_index is None:
         raise RuntimeError("The state of the imaging must be specified.")
     
     my_run_image_array = my_run.get_image('Side', memmap = True) 
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
     side_cross_section_geometry_factor = my_measurement.experiment_parameters["li_side_sigma_multiplier"]
-    if state_index == 1:
-        nominal_resonance_frequency = my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"]
-    elif state_index == 2:
-        nominal_resonance_frequency = my_measurement.experiment_parameters["state_2_unitarity_res_freq_MHz"]
-    elif state_index == 3:
-        nominal_resonance_frequency = my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]
+    nominal_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, state_index)
+    hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
     nominal_frequency = my_run.parameters["ImagFreq0"]
-    detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
+    detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency) + hf_lock_frequency_adjustment
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
                                                             norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning,
                                                             cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
@@ -237,8 +233,8 @@ def get_atom_count_side_li_lf(my_measurement, my_run, stored_density_name = None
     return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area)
 
 
-def get_atom_count_side_li_hf(my_measurement, my_run, state_index = 1, stored_density_name = None):
-    atom_density = _load_density_side_li_hf(my_measurement, my_run, state_index, stored_density_name)
+def get_atom_count_side_li_hf(my_measurement, my_run, state_index = 1, stored_density_name = None, b_field_condition = "unitarity"):
+    atom_density = _load_density_side_li_hf(my_measurement, my_run, state_index, stored_density_name, b_field_condition)
     pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
     return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area)
 
@@ -584,7 +580,7 @@ def _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_f
         lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_unitarity_resonance_value"]
     elif b_field_condition == "rapid_ramp":
         lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_rr_resonance_value"]
-    elif b_field_condition == "zero crossing":
+    elif b_field_condition == "zero_crossing":
         lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_zero_crossing_resonance_value"]
     lock_frequency_multiplier = my_measurement.experiment_parameters["hf_lock_frequency_multiplier"]
     lock_setpoint = my_measurement.experiment_parameters["hf_lock_setpoint"]
@@ -626,9 +622,9 @@ def _load_density_top_B_abs(my_measurement, my_run, state_index, stored_density_
     return atom_density
 
 
-def _load_density_side_li_hf(my_measurement, my_run, state_index, stored_density_name):
+def _load_density_side_li_hf(my_measurement, my_run, state_index, stored_density_name, b_field_condition):
     if stored_density_name is None:
-        atom_density = get_atom_density_side_li_hf(my_measurement, my_run, state_index=state_index)
+        atom_density = get_atom_density_side_li_hf(my_measurement, my_run, state_index=state_index, b_field_condition = b_field_condition)
     else:
         atom_density = my_run.analysis_results[stored_density_name]
     return atom_density
