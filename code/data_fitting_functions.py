@@ -68,6 +68,49 @@ def lorentzian(x, amp, center, gamma):
     return amp * 1.0 / (np.square(2.0 * (x - center) / gamma) + 1)
 
 
+def fit_hydrodynamic_imaginary_lorentzian(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None,
+                                    filter_outliers = False, report_inliers = False):
+    #Cast to guarantee we can use array syntax
+    x_vals = np.array(x_vals) 
+    y_vals = np.array(y_vals)
+    if(not errors is None):
+        errors = np.array(errors)
+    #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
+    data_average = np.average(y_vals)
+    peak_index = np.argmax(np.abs(y_vals)) 
+    peak_height = y_vals[peak_index] 
+    peak_freq = y_vals[peak_index]
+    if amp_guess is None:
+        amp_guess = (peak_height - data_average) / peak_freq
+    if center_guess is None:
+        center_guess = peak_freq
+    if gamma_guess is None:
+        x_range = max(x_vals) - min(x_vals) 
+        gamma_guess = x_range / 2
+    params_init = [amp_guess, center_guess, gamma_guess]
+    results = curve_fit(hydrodynamic_imaginary_lorentzian, x_vals, y_vals, p0 = params_init, sigma = errors)
+    if(filter_outliers):
+        popt, pcov = results
+        inlier_indices = _filter_1d_outliers(x_vals, y_vals, hydrodynamic_imaginary_lorentzian, 
+                                                            popt)
+        x_vals = x_vals[inlier_indices] 
+        y_vals = y_vals[inlier_indices] 
+        if(errors):
+            errors = errors[inlier_indices]
+        results = curve_fit(hydrodynamic_imaginary_lorentzian, x_vals, y_vals, p0 = popt, sigma = errors)
+    if(report_inliers):
+        return (results, inlier_indices) 
+    else:
+        return results
+
+#In hydrodynamics, the imaginary part of the response is not a lorentzian; 
+#rather, Im(X)/omega is. This fits the imaginary part of X accordingly.
+def hydrodynamic_imaginary_lorentzian(omega, amp, center, gamma):
+    return amp * omega / (1 + np.square(2.0 * (omega - center) / gamma))
+
+
+
+
 
 def fit_two_dimensional_gaussian(image_to_fit, center = None, amp = None, width_sigmas = None, offset = None, errors = None):
     image_indices_grid = np.indices(image_to_fit.shape)
