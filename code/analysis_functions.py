@@ -4,6 +4,42 @@ from scipy import ndimage
 
 from . import data_fitting_functions, image_processing_functions, science_functions
 
+
+#RAW IMAGES (Convenience functions for getting the raw pixel data from shots, cropped within an ROI)
+
+def get_raw_pixels_side(my_measurement, my_run, crop_roi = False):
+    my_run_image_array = my_run.get_image("Side", memmap = False)
+    if crop_roi:
+        roi = my_measurement.measurement_parameters["ROI"] 
+        x_min, y_min, x_max, y_max = roi 
+        my_run_image_array_cropped = my_run_image_array[:, y_min:y_max, x_min:x_max]
+        return (*my_run_image_array_cropped,)
+    else:
+        return (*my_run_image_array,)
+    
+
+def get_raw_pixels_top_A(my_measurement, my_run, crop_roi = False):
+    my_run_image_array = my_run.get_image("TopA", memmap = False)
+    if crop_roi:
+        roi = my_measurement.measurement_parameters["ROI"] 
+        x_min, y_min, x_max, y_max = roi 
+        my_run_image_array_cropped = my_run_image_array[:, y_min:y_max, x_min:x_max]
+        return (*my_run_image_array_cropped,)
+    else:
+        return (*my_run_image_array,)
+    
+
+def get_raw_pixels_top_B(my_measurement, my_run, crop_roi = False):
+    my_run_image_array = my_run.get_image("TopB", memmap = False)
+    if crop_roi:
+        roi = my_measurement.measurement_parameters["ROI"] 
+        x_min, y_min, x_max, y_max = roi 
+        my_run_image_array_cropped = my_run_image_array[:, y_min:y_max, x_min:x_max]
+        return (*my_run_image_array_cropped,)
+    else:
+        return (*my_run_image_array,)
+
+
 #ABS IMAGES (Sometimes called 'Fake OD')
 
 def get_abs_image_side(my_measurement, my_run):

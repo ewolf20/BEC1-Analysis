@@ -36,6 +36,19 @@ def get_sha_hash_string(my_bytes):
     m.update(my_bytes) 
     return m.hexdigest()
 
+
+def test_get_pixel_variance():
+    rng_seed = 1337 
+    ARRAY_SIZE = 300
+    EXPECTED_VARIANCE = 1.01004351474
+    rng = np.random.default_rng(seed = rng_seed)
+    normals = rng.standard_normal(size = (ARRAY_SIZE, ARRAY_SIZE))
+    variance_array = image_processing_functions.get_pixel_variance(normals)
+    average_variance = np.average(variance_array) 
+    assert np.isclose(average_variance, EXPECTED_VARIANCE)
+
+
+
 def test_subcrop():
     overall_image_array = np.arange(25).reshape((5, 5))
     first_crop_coordinates = [1, 1, 4, 4]

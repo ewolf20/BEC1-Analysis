@@ -10,6 +10,23 @@ from . import data_fitting_functions
 
 
 """
+Returns the local variance in a 2d input array.
+
+Given a 2d input array and a square size kernel_size, computes the local variance of the pixels 
+within a square centered on each pixel in the array and of size kernel_size."""
+
+def get_pixel_variance(input_image, kernel_size = 3):
+    kernel = (1.0 / np.square(kernel_size)) * np.ones((kernel_size, kernel_size))
+    locally_averaged_image = ndimage.convolve(input_image, kernel)
+    #Technically incorrect procedure, but ad hoc numerically verified to give pretty damn close 
+    #to an unbiased answer for uniformly-centered randomly distributed input
+    diff_image = input_image - locally_averaged_image 
+    diff_squared_image = np.square(diff_image) 
+    variance_kernel = 1.0 / (np.square(kernel_size) - 1) * np.ones((kernel_size, kernel_size))
+    variance_array = ndimage.convolve(diff_squared_image, variance_kernel) 
+    return variance_array
+
+"""
 Convenience function for sub-cropping boxes.
 
 Given an array image_array which represents a crop of a larger overall image into coordinates 
