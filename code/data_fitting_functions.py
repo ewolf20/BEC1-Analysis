@@ -604,10 +604,15 @@ def crop_box(atom_densities, vert_crop_point = 0.5, horiz_crop_point = 0.01, hor
         h_amp, h_center = horiz_popt 
         h_radius = horiz_radius
     h_crop_min, h_crop_max = _semicircle_crop_helper(h_center, h_radius, crop_point = horiz_crop_point)
+    h_crop_diff = np.rint(h_crop_max - h_crop_min).astype(int)
     h_crop_min = np.rint(h_crop_min).astype(int)
+    if h_crop_min < 0:
+        warnings.warn("The horizontal crop minimum is outside the image window.")
     h_crop_min = np.max((0, h_crop_min))
     #Force the rounding to be insensitive to the relative positions of h_crop_min and h_crop_max
-    h_crop_max = h_crop_min + np.rint(h_crop_max - h_crop_min).astype(int)
+    h_crop_max = h_crop_min + h_crop_diff
+    if h_crop_max > y_int_len - 1:
+        warnings.warn("The horizontal crop maximum is outside the image window.")
     h_crop_max = np.min((y_int_len - 1, h_crop_max))
     if vert_width is None:
         vert_fit_results = fit_error_function_rectangle(x_integrated_indices, x_integrated_atom_densities)
@@ -620,10 +625,15 @@ def crop_box(atom_densities, vert_crop_point = 0.5, horiz_crop_point = 0.01, hor
         v_amp, v_center, v_edge_width = vert_popt 
         v_width = vert_width
     v_crop_min, v_crop_max = _error_function_rectangle_crop_helper(v_width, v_center, v_edge_width, crop_point = vert_crop_point)
+    v_crop_diff = np.rint(v_crop_max - v_crop_min).astype(int)
     v_crop_min = np.rint(v_crop_min).astype(int)
+    if v_crop_min < 0:
+        warnings.warn("The vertical crop minimum is outside the image window.")
     v_crop_min = np.max((0, v_crop_min))
     #Force the difference between the two to be insensitive to the relative position of v_crop_min and v_crop_max
-    v_crop_max = v_crop_min + np.rint(v_crop_max - v_crop_min).astype(int)
+    v_crop_max = v_crop_min + v_crop_diff
+    if v_crop_max > x_int_len - 1:
+        warnings.warn("The vertical crop maximum is outside the image window.")
     v_crop_max = np.min((x_int_len - 1, v_crop_max))
     return (h_crop_min, v_crop_min, h_crop_max, v_crop_max)
 
