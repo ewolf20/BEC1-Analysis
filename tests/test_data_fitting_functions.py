@@ -36,18 +36,23 @@ def test_fit_lorentzian():
     assert np.all(np.isclose(no_offset_popt, EXPECTED_NO_OFFSET_POPT))
 
 
-def test_fit_hydrodynamic_imaginary_lorentzian():
+def test_fit_lorentzian_times_freq():
     normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
     normal_randoms_rescaled = normal_randoms / 5 
     x_vals = np.linspace(0, 5, 100) 
     CENTER = 0.5
     GAMMA = 1.07
     AMP = 3.5
-    y_vals = data_fitting_functions.hydrodynamic_imaginary_lorentzian(x_vals, AMP, CENTER, GAMMA) + normal_randoms_rescaled
-    fit_results = data_fitting_functions.fit_hydrodynamic_imaginary_lorentzian(x_vals, y_vals) 
+    y_vals = data_fitting_functions.lorentzian_times_freq(x_vals, AMP, CENTER, GAMMA) + normal_randoms_rescaled
+    fit_results = data_fitting_functions.fit_lorentzian_times_freq(x_vals, y_vals) 
     popt, pcov = fit_results 
     EXPECTED_POPT = np.array([3.48214247, 0.47819892, 1.095833])
     assert np.all(np.isclose(popt, EXPECTED_POPT))
+    amp, center, gamma = popt 
+    amp_to_peak_conversion = data_fitting_functions.get_lorentzian_times_freq_amp_to_peak_conversion_factor(center, gamma)
+    EXPECTED_AMP_TO_PEAK_CONVERSION = 0.60272303
+    assert np.isclose(amp_to_peak_conversion, EXPECTED_AMP_TO_PEAK_CONVERSION)
+
 
 GAUSSIAN_X_PIXEL_NUM = 490 
 GAUSSIAN_Y_PIXEL_NUM = 500     
