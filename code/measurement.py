@@ -388,12 +388,15 @@ class Measurement():
         return((x_1, x_2, y_1, y_2))
 
     
-    def check_box(self, label, run_to_use = 0):
+    def check_box(self, label, run_to_use = 0, image_to_use = None):
         for i, key in enumerate(self.runs_dict):
             if(i == run_to_use):
                 my_run = self.runs_dict[key] 
                 break 
-        my_image_array = my_run.get_default_image()
+        if image_to_use is None:
+            my_image_array = my_run.get_default_image()
+        else:
+            my_image_array = my_run.get_image(image_to_use)
         my_with_atoms_image = my_image_array[0]
         box_coordinates = self.measurement_parameters[label]
         x_min, y_min, x_max, y_max = box_coordinates
