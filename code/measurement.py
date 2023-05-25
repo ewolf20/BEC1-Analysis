@@ -26,53 +26,67 @@ RUN_MISMATCH_PATIENCE_TIME_SECS = 30
 
 class Measurement():
 
+    ANALYSIS_DUMPFILE_NAME = "analysis_dump.json"
+    PARAMETERS_DUMPFILE_NAME = "parameters_dump.json"
+    DEFAULT_DUMP_FOLDER_NAME = "dump_folder"
+
     """Initialization method.
     
     Parameters:
     
     measurement_directory_path: str, The path to a directory containing the labeled images to process.
+
     imaging_type: str, The type of imaging, e.g. top or side, low mag or high mag.
+
     experiment_parameters: dict {parname:value} of experiment-level parameters not saved within the run parameters, e.g. trapping frequencies
+
     image_format: str, the filetype of the images being processed
     hold_images_in_memory: bool, Whether images are kept loaded in memory, or loaded on an as-needed basis and then released.
+
     measurement_parameters: dict {parname:value} of measurement-level params, e.g. a list of run ids which are flagged as bad shots or 
     the coordinates of a background box.
+
     run_parameters_verbose: Whether the runs store the entire set of experiment parameters, or just those being scanned.
-    badshot_function: A badshot function, to be used by 
+
+    badshot_function: A badshot function, to be used in badshot labeling.
+
+    disconnected_mode: A boolean indicating whether the measurement is initialized in "connected mode", i.e. with access to the underlying 
+    measurement directory. If not in this mode, run images cannot be accessed, and various data are initialized by loading from a pre-existing dump. 
     """
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False, use_saved_analysis = False, 
-                    saved_analysis_filename = "measurement_run_analysis_dump.json", badshot_function = None, analyses_list = None, 
-                    global_run_filter = None, is_live = False):
-        if(not measurement_directory_path):
-            measurement_directory_path = os.getcwd()
-        self.measurement_directory_path = measurement_directory_path 
-        self.imaging_type = imaging_type
-        self.image_format = image_format
-        self.hold_images_in_memory = hold_images_in_memory
-        if(not experiment_parameters):
-            experiment_parameters_path = os.path.join(measurement_directory_path, "experiment_parameters.json")
-            with open(experiment_parameters_path, 'r') as json_file:
-                experiment_parameters_dict = json.load(json_file)
-                self.experiment_parameters = experiment_parameters_dict["Values"]
-        else:
-            self.experiment_parameters = experiment_parameters
+                    hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False,
+                    badshot_function = None, analyses_list = None, 
+                    global_run_filter = None, is_live = False, connected_mode = True):
         if(measurement_parameters):   
             self.measurement_parameters = measurement_parameters
         else:
             self.measurement_parameters = {}
-        self.run_parameters_verbose = run_parameters_verbose
         self.badshot_function = badshot_function
         self.badshot_checked_list = []
-        self.runs_dict = {}
-        self.is_live = is_live
-        self._update_runs_dict()
         if analyses_list is None:
             self.analyses_list = []
         self.measurement_analysis_results = {}
-        if use_saved_analysis:
-            self.load_analysis(saved_analysis_filename)
         self.global_run_filter = global_run_filter
+        self.runs_dict = {}
+        self.connected_mode = connected_mode
+        #Specific to connected mode
+        if connected_mode:
+            if(not measurement_directory_path):
+                measurement_directory_path = os.getcwd()
+            self.measurement_directory_path = measurement_directory_path 
+            self.imaging_type = imaging_type
+            self.image_format = image_format
+            self.hold_images_in_memory = hold_images_in_memory
+            if(not experiment_parameters):
+                experiment_parameters_path = os.path.join(measurement_directory_path, "experiment_parameters.json")
+                with open(experiment_parameters_path, 'r') as json_file:
+                    experiment_parameters_dict = json.load(json_file)
+                    self.experiment_parameters = experiment_parameters_dict["Values"]
+            else:
+                self.experiment_parameters = experiment_parameters
+            self.run_parameters_verbose = run_parameters_verbose
+            self.is_live = is_live
+            self._update_runs_dict()
 
     def set_badshot_function(self, badshot_function):
         self.badshot_function = badshot_function
@@ -160,23 +174,43 @@ class Measurement():
 
 
     """
-    Dumps the parameters of the run analysis_results dicts to a .json file.
+    JSON serialize the data in a measurement. 
     
-    When called, save a dictionary {run_ID, analysis_results} of the analysis results of each run in the current 
-    runs dict as a json file. Allows analyses to be recalled from previous sessions. 
+    When called, serialize most of the data from a measurement object, including each run's analysis_results and parameters dicts, as well as the 
+    measurement-wide measurement_analysis_results, measurement_parameters, and experiment_parameters dicts. The resulting folder contains an independent 
+    store of information capable of "reconstituting" all of the data in the measurement object.
     
-    NOTE: This method relies on the objects in analysis_results being JSON serializable, with a _single_ exception: because of 
-    their ubiquity, numpy arrays have been manually accommodated as well. To do this, a separate directory is created wherein the 
-    numpy arrays are saved as .npy files."""
+    NOTE: This method relies on the objects in the respective dictionaries being JSON serializable, with a _single_ exception: because of 
+    their ubiquity in the analysis_results dictionaries, numpy arrays have been manually accommodated as well. 
+    To do this, a separate directory is created wherein the numpy arrays are saved as .npy files.
+    
+    NOTE: This method only stores JSON serializable data, and e.g. does not restore saved live analysis functions, global run filters, or badshot functions.
+    These must be manually re-initialized if needed."""
 
-    def dump_analysis(self, dump_pathname = "analysis_dump.json"):
-        with open(dump_pathname, 'w') as dump_file:
-            dump_dict = {} 
-            dump_dict["Measurement"] = Measurement._digest_analysis_results("Measurement", dump_pathname, self.measurement_analysis_results)
+    def dump_measurement(self, dump_foldername = None):
+        if dump_foldername is None:
+            dump_foldername = Measurement.DEFAULT_DUMP_FOLDER_NAME
+        if not os.path.exists(dump_foldername):
+            os.mkdir(dump_foldername)
+        analysis_dump_pathname = os.path.join(dump_foldername, Measurement.ANALYSIS_DUMPFILE_NAME)
+        with open(analysis_dump_pathname, 'w') as analysis_dump_file:
+            analysis_dump_dict = {} 
+            analysis_dump_dict["Measurement"] = Measurement._digest_analysis_results("Measurement", analysis_dump_pathname, self.measurement_analysis_results)
             for run_id in self.runs_dict:
                 current_run = self.runs_dict[run_id] 
-                dump_dict[str(run_id)] = Measurement._digest_analysis_results(str(run_id), dump_pathname, current_run.analysis_results)
-            json.dump(dump_dict, dump_file)
+                analysis_dump_dict[str(run_id)] = Measurement._digest_analysis_results(str(run_id), analysis_dump_pathname, current_run.analysis_results)
+            json.dump(analysis_dump_dict, analysis_dump_file)
+        #Default assumption is that parameters values will be vanilla JSON serializable.
+        parameters_dump_pathname = os.path.join(dump_foldername, Measurement.PARAMETERS_DUMPFILE_NAME)
+        with open(parameters_dump_pathname, 'w') as parameters_dump_file:
+            parameters_dump_dict = {} 
+            parameters_dump_dict["Measurement"] = self.measurement_parameters 
+            parameters_dump_dict["Experiment"] = self.experiment_parameters 
+            for run_id in self.runs_dict:
+                current_run = self.runs_dict[run_id] 
+                parameters_dump_dict[str(run_id)] = current_run.parameters 
+            json.dump(parameters_dump_dict, parameters_dump_file)
+
 
     @staticmethod
     def _digest_analysis_results(analysis_label, dump_pathname, analysis_results):
@@ -202,18 +236,42 @@ class Measurement():
 
 
 
+    """Load a measurement from the dump folder created by dump_measurement. Should be called after measurement is initialized, 
+    but before any other manipulations."""
 
-    def load_analysis(self, dump_pathname = "analysis_dump.json"):
-        with open(dump_pathname, 'r') as dump_file:
-            dump_dict = json.load(dump_file)
-            for key in dump_dict:
+    def load_measurement(self, dump_foldername = None):
+        if dump_foldername is None:
+            dump_foldername = Measurement.DEFAULT_DUMP_FOLDER_NAME
+        parameters_dump_pathname = os.path.join(dump_foldername, Measurement.PARAMETERS_DUMPFILE_NAME)
+        with open(parameters_dump_pathname, 'r') as parameters_dump_file:
+            parameters_dump_dict = json.load(parameters_dump_file) 
+            for key in parameters_dump_dict:
+                current_parameters = parameters_dump_dict[key]
                 if key == "Measurement":
-                    self.measurement_analysis_results = Measurement._undigest_analysis_results(dump_dict[key]) 
+                    self.measurement_parameters = current_parameters 
+                elif key == "Experiment":
+                    self.experiment_parameters = current_parameters
+                else:
+                    run_id_as_integer = int(key) 
+                    if self.connected_mode:
+                        if run_id_as_integer in self.runs_dict:
+                            current_run = self.runs_dict[run_id_as_integer]
+                            current_run.parameters = current_parameters 
+                    else:
+                        current_run = Run(run_id_as_integer, None, parameters = current_parameters, connected_mode = False)
+                        self.runs_dict[run_id_as_integer] = current_run
+        analysis_dump_pathname = os.path.join(dump_foldername, Measurement.ANALYSIS_DUMPFILE_NAME)
+        with open(analysis_dump_pathname, 'r') as analysis_dump_file:
+            analysis_dump_dict = json.load(analysis_dump_file)
+            for key in analysis_dump_dict:
+                current_analysis_results = Measurement._undigest_analysis_results(analysis_dump_dict[key])
+                if key == "Measurement":
+                    self.measurement_analysis_results = current_analysis_results
                 else:
                     run_id_as_integer = int(key)
                     if run_id_as_integer in self.runs_dict:
                         current_run = self.runs_dict[run_id_as_integer] 
-                        current_run.analysis_results = Measurement._undigest_analysis_results(dump_dict[key])
+                        current_run.analysis_results = current_analysis_results
 
 
     @staticmethod 
@@ -259,8 +317,13 @@ class Measurement():
     until a box is selected on one.
     
     image_to_use: The name of the image to use for setting the box position. If not specified, the default image for the run is used.
+
+    overwrite_existing: If False, the box will only be set if the key label does not exist in self.measurement_parameters; otherwise, 
+    nothing is done.
     """
-    def set_box(self, label, run_to_use = None, image_to_use = None, box_coordinates = None):
+    def set_box(self, label, run_to_use = None, image_to_use = None, box_coordinates = None, overwrite_existing = True):
+        if not overwrite_existing and label in self.measurement_parameters:
+            return None
         if(not box_coordinates):
             if run_to_use is None:
                 id_try_list = list(self.runs_dict) 
@@ -292,22 +355,24 @@ class Measurement():
 
     """
     Alias to set_box('norm_box'), for convenience."""
-    def set_norm_box(self, run_to_use=None, image_to_use = None, box_coordinates = None):
-        self.set_box('norm_box', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates)
+    def set_norm_box(self, run_to_use=None, image_to_use = None, box_coordinates = None, overwrite_existing = True):
+        self.set_box('norm_box', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates, 
+                        overwrite_existing = overwrite_existing)
 
     """
     Alias to set_box('ROI'), for convenience."""
-    def set_ROI(self, run_to_use = None, image_to_use = None, box_coordinates = None):
-        self.set_box('ROI', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates)
+    def set_ROI(self, run_to_use = None, image_to_use = None, box_coordinates = None, overwrite_existing = True):
+        self.set_box('ROI', run_to_use = run_to_use, image_to_use = image_to_use, box_coordinates = box_coordinates, 
+                        overwrite_existing = overwrite_existing)
 
     @staticmethod
     def _draw_box(my_image, label, title):
         ax = plt.gca()
         ax.imshow(my_image, cmap = 'gray')
         ax.set_title(title)
-        x_1 = None 
-        y_1 = None 
-        x_2 = None 
+        x_1 = None
+        y_1 = None
+        x_2 = None
         y_2 = None
         def line_select_callback(eclick, erelease):
             nonlocal x_1
@@ -323,12 +388,15 @@ class Measurement():
         return((x_1, x_2, y_1, y_2))
 
     
-    def check_box(self, label, run_to_use = 0):
+    def check_box(self, label, run_to_use = 0, image_to_use = None):
         for i, key in enumerate(self.runs_dict):
             if(i == run_to_use):
                 my_run = self.runs_dict[key] 
                 break 
-        my_image_array = my_run.get_default_image()
+        if image_to_use is None:
+            my_image_array = my_run.get_default_image()
+        else:
+            my_image_array = my_run.get_image(image_to_use)
         my_with_atoms_image = my_image_array[0]
         box_coordinates = self.measurement_parameters[label]
         x_min, y_min, x_max, y_max = box_coordinates
@@ -346,33 +414,55 @@ class Measurement():
     Given a value name value_name, returns a list with the value of that parameter for each run. 
     
     Params:
+
+    Value name: A string or tuple of strings identifying the values to be returned. If a single string is passed, method returns 
+    an array/list of values; if a tuple is passed, a tuple of arrays/lists is returned, one for each value.
     
     Ignore badshots: If True, does not return the parameter value for runs which are flagged as bad shots. 
     
-    run_filter: As with analyze_runs, if passed, only returns parameter values for which the function run_filter returns True."""
+    run_filter: As with analyze_runs, if passed, only returns parameter values for which the function run_filter returns True.
+    
+    Numpyfy: If True, returned object is a numpy array of the queried values. Otherwise, a list is returned."""
     def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None, numpyfy = True):
         filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
-        return_list = []
-        for run_id in filtered_dict:
-            current_run = self.runs_dict[run_id] 
-            return_list.append(current_run.parameters[value_name])
-        if not numpyfy:
-            return return_list
+        value_name_is_tuple = isinstance(value_name, tuple)
+        value_names_tuple = Measurement._condition_string_tuple(value_name)
+        combined_values_list = []
+        for value_name in value_names_tuple:
+            values_list = []
+            for run_id in filtered_dict:
+                current_run = self.runs_dict[run_id] 
+                values_list.append(current_run.parameters[value_name])
+            if not numpyfy:
+                combined_values_list.append(values_list)
+            else:
+                combined_values_list.append(np.array(values_list))
+        if value_name_is_tuple:
+            return tuple(combined_values_list) 
         else:
-            return np.array(return_list)
+            return combined_values_list[0]
+        
 
 
     def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None, numpyfy = True):
         filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=value_name)
-        return_list = []
-        for run_id in filtered_dict:
-            current_run = filtered_dict[run_id]
-            return_list.append(current_run.analysis_results[value_name])
-        if not numpyfy:
-            return return_list
+        value_name_is_tuple = isinstance(value_name, tuple)
+        value_names_tuple = Measurement._condition_string_tuple(value_name)
+        combined_values_list = []
+        for value_name in value_names_tuple:
+            values_list = []
+            for run_id in filtered_dict:
+                current_run = filtered_dict[run_id]
+                values_list.append(current_run.analysis_results[value_name])
+            if not numpyfy:
+                combined_values_list.append(values_list)
+            else:
+                combined_values_list.append(np.array(values_list))
+        if value_name_is_tuple:
+            return tuple(combined_values_list) 
         else:
-            return np.array(return_list)
+            return combined_values_list[0] 
     
     """Convenience function which returns a pair of parameter values and analysis results. Convenient for plotting, and also convenient where 
     some runs have errors in the analysis."""
@@ -380,17 +470,25 @@ class Measurement():
                                                     run_filter = None, numpyfy = True):
         filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=analysis_value_name)
-        param_list = []
-        analysis_result_list = []
+        parameter_value_names_tuple = Measurement._condition_string_tuple(parameter_name)
+        analysis_value_names_tuple = Measurement._condition_string_tuple(analysis_value_name)
+        combined_param_values_list = [[] for x in range(len(parameter_value_names_tuple))]
+        combined_analysis_result_list = [[] for x in range(len(analysis_value_names_tuple))]
         for run_id in filtered_dict:
             current_run = filtered_dict[run_id] 
-            param_list.append(current_run.parameters[parameter_name])
-            analysis_result_list.append(current_run.analysis_results[analysis_value_name])
-        if not numpyfy:
-            return (param_list, analysis_result_list)
-        else:
-            return (np.array(param_list), np.array(analysis_result_list))
-
+            for param_value_name, param_list in zip(
+                                        parameter_value_names_tuple, 
+                                        combined_param_values_list):
+                param_list.append(current_run.parameters[param_value_name])
+            for analysis_value_name, analysis_list in zip(
+                                                        analysis_value_names_tuple, 
+                                                        combined_analysis_result_list):
+                analysis_list.append(current_run.analysis_results[analysis_value_name])
+        if numpyfy:
+            combined_param_values_list = [np.array(l) for l in combined_param_values_list]
+            combined_analysis_result_list = [np.array(l) for l in combined_analysis_result_list]
+        return (*combined_param_values_list, *combined_analysis_result_list)
+        
     """
     Performs arbitrary user-specified analysis on the underlying runs dict. 
     
@@ -476,27 +574,39 @@ class Measurement():
     Given a result_name, return a filter function which returns True for all runs where run.analysis_results[result_name] 
     is within a confidence interval of the mean specified by confidence_interval, using the Student T test. 
 
+    Params:
+
+    result_name: a string or tuple of strings indicating the analysis result which is to be filtered on. If a tuple is passed, 
+    the filter function returned is True only when the T test is passed for all strings in result_name
+
     If run filter is specified, only those runs for which run_filter returns True will be examined, and the filter 
     which is returned will also incorporate the stipulated run_filter.
 
-    If return_interval is True, returns (filter_function, confidence_range), where confidence_range = (lower_bound, upper_bound)
+    If return_interval is True, returns a tuple (filter_function, confidence_range_1, confidence_range_2, ...), 
+    where confidence_range_i = (lower_bound_i, upper_bound_i) for each result_name_i in the passed result_name. 
     """
     def get_outlier_filter(self, result_name, confidence_interval = 0.95, return_interval = False, run_filter = None, 
                             ignore_errors = True, ignore_badshots = True, iterative = True):
-        ids, values = self.get_parameter_analysis_value_pair_from_runs("id", result_name, ignore_badshots = ignore_badshots,
+        result_name_tuple = Measurement._condition_string_tuple(result_name)
+        overall_valid_ids = self.get_parameter_value_from_runs("id", ignore_badshots = ignore_badshots, run_filter = run_filter)
+        interval_tuples_list = []
+        for current_result_name in result_name_tuple:
+            ids, values = self.get_parameter_analysis_value_pair_from_runs("id", current_result_name, ignore_badshots = ignore_badshots,
                                                      ignore_errors = ignore_errors, run_filter = run_filter, numpyfy = True)
-        inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = (1 - confidence_interval) / 2, iterative = iterative)
-        inlier_ids = ids[inlier_indices]
+            inlier_indices = statistics_functions.filter_mean_outliers(values, alpha = (1 - confidence_interval) / 2, iterative = iterative)
+            inlier_ids = ids[inlier_indices]
+            inlier_values = values[inlier_indices]
+            min_inlier_value = np.min(inlier_values, initial = np.inf) 
+            max_inlier_value = np.max(inlier_values, initial = -np.inf)
+            interval_tuples_list.append((min_inlier_value, max_inlier_value))
+            overall_valid_ids = np.intersect1d(overall_valid_ids, inlier_ids)
         def inlier_run_filter(my_measurement, my_run):
-            return my_run.parameters["id"] in inlier_ids
+            return my_run.parameters["id"] in overall_valid_ids
         combined_run_filter = Measurement._condition_run_filter((inlier_run_filter, run_filter))
         if not return_interval:
             return combined_run_filter
         else:
-            inlier_values = values[inlier_indices] 
-            min_value = np.min(inlier_values) 
-            max_value = np.max(inlier_values) 
-            return (combined_run_filter, (min_value, max_value))
+            return (combined_run_filter, *interval_tuples_list)
     
 
     def add_to_live_analyses(self, analysis_function, result_varnames, fun_kwargs = None, run_filter = None):
@@ -559,17 +669,23 @@ class Measurement():
         conditioned_run_filter = Measurement._condition_run_filter(run_filter)
         conditioned_global_run_filter = Measurement._condition_run_filter(self.global_run_filter)
         conditioned_overall_run_filter = Measurement._condition_run_filter((conditioned_run_filter, conditioned_global_run_filter))
+        if ignore_errors:
+            conditioned_analysis_err_check_name_tuple = Measurement._condition_string_tuple(analysis_value_err_check_name)
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
+            filter_run = False
             if ignore_badshots and current_run.is_badshot:
-                continue 
-            if not conditioned_overall_run_filter(self, current_run):
-                continue 
-            if ignore_errors:
-                analysis_result = current_run.analysis_results[analysis_value_err_check_name]
-                if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
-                    continue
-            filtered_dict[run_id] = current_run
+                filter_run = True 
+            if filter_run or not conditioned_overall_run_filter(self, current_run):
+                filter_run = True 
+            if not filter_run and ignore_errors:
+                for err_check_name in conditioned_analysis_err_check_name_tuple:
+                    analysis_result = current_run.analysis_results[err_check_name]
+                    if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
+                        filter_run = True
+                        break
+            if not filter_run:
+                filtered_dict[run_id] = current_run
         return filtered_dict 
 
 
@@ -590,6 +706,15 @@ class Measurement():
                 return combined_filter_func
             except TypeError:
                 return run_filter
+
+
+    #Helper function for functions which take inputs of either strings or tuples of strings
+    @staticmethod
+    def _condition_string_tuple(string_or_tuple):
+        if isinstance(string_or_tuple, tuple):
+            return string_or_tuple 
+        else:
+            return (string_or_tuple,)
 
 
     def _label_badshots_default(self, override_existing_badshots = False):
@@ -651,8 +776,12 @@ class Run():
 
     analysis_results: A dict containing the results of analyses on the runs. Generally this will be empty at creation, unless runs are being 
         re-loaded from a previous measurement session.
+
+    connected_mode: A boolean indicating whether the run is initialized in connected mode. If not in this mode, access to the run images is unavailable; 
+    only the analysis_results and parameters objects are present. 
     """
-    def __init__(self, run_id, image_pathnames_dict, parameters, hold_images_in_memory = True, image_format = ".fits", analysis_results = None):
+    def __init__(self, run_id, image_pathnames_dict, parameters, hold_images_in_memory = True, image_format = ".fits", analysis_results = None, 
+                connected_mode = True):
         self.run_id = run_id
         self.parameters = parameters
         if(not analysis_results):
@@ -664,28 +793,35 @@ class Run():
         else:
             self.is_badshot = False
             self.analysis_results["badshot"] = False
-        self.hold_images_in_memory = hold_images_in_memory
-        self.image_dict = {}
-        if not image_format in IMAGE_FORMATS_LIST:
-            raise RuntimeError("Image format is not supported.")
-        self.image_format = image_format
-        for key in image_pathnames_dict:
-            image_pathname = image_pathnames_dict[key] 
-            if(hold_images_in_memory):
-                self.image_dict[key] = self.load_image(image_pathname)
-            else:
-                self.image_dict[key] = image_pathname
+        self.connected_mode = connected_mode
+        if connected_mode:
+        #Specific to connected mode
+            self.hold_images_in_memory = hold_images_in_memory
+            self.image_dict = {}
+            if not image_format in IMAGE_FORMATS_LIST:
+                raise RuntimeError("Image format is not supported.")
+            self.image_format = image_format
+            for key in image_pathnames_dict:
+                image_pathname = image_pathnames_dict[key] 
+                if(hold_images_in_memory):
+                    self.image_dict[key] = self._load_image(image_pathname)
+                else:
+                    self.image_dict[key] = image_pathname
 
 
     def get_image(self, image_name, memmap = False):
+        if not self.connected_mode:
+            raise RuntimeError("Access to run images unavailable when not in connected mode.")
         if(self.hold_images_in_memory):
             return self.image_dict[image_name]
         else:
-            return self.load_image(self.image_dict[image_name], memmap = memmap)
+            return self._load_image(self.image_dict[image_name], memmap = memmap)
 
     """
     Gives the first image in the run's imagedict; returns for any imaging type."""
     def get_default_image(self, memmap = False):
+        if not self.connected_mode:
+            raise RuntimeError("Access to run images unavailable when not in connected mode.")
         for image_name in self.image_dict:
             return self.get_image(image_name, memmap = memmap)
 
@@ -705,7 +841,7 @@ class Run():
     WARNING: An unscaled image is offset by -32768 thanks to unsigned integer issues. This 
     is safe for typical use, because this offset cancels when dark counts are subtracted.
     """
-    def load_image(self, image_pathname, memmap = False):
+    def _load_image(self, image_pathname, memmap = False):
         if(self.image_format == ".fits"):
             with fits.open(image_pathname, memmap = memmap, do_not_scale_image_data = memmap) as hdul:
                 return hdul[0].data

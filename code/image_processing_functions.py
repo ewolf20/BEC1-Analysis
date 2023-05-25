@@ -10,6 +10,23 @@ from . import data_fitting_functions
 
 
 """
+Returns the local variance in a 2d input array.
+
+Given a 2d input array and a square size kernel_size, computes the local variance of the pixels 
+within a square centered on each pixel in the array and of size kernel_size."""
+
+def get_pixel_variance(input_image, kernel_size = 3):
+    kernel = (1.0 / np.square(kernel_size)) * np.ones((kernel_size, kernel_size))
+    locally_averaged_image = ndimage.convolve(input_image, kernel)
+    #Technically incorrect procedure, but ad hoc numerically verified to give pretty damn close 
+    #to an unbiased answer for uniformly-centered randomly distributed input
+    diff_image = input_image - locally_averaged_image 
+    diff_squared_image = np.square(diff_image) 
+    variance_kernel = 1.0 / (np.square(kernel_size) - 1) * np.ones((kernel_size, kernel_size))
+    variance_array = ndimage.convolve(diff_squared_image, variance_kernel) 
+    return variance_array
+
+"""
 Convenience function for sub-cropping boxes.
 
 Given an array image_array which represents a crop of a larger overall image into coordinates 
@@ -377,26 +394,45 @@ def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, d
 
 
 def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix,
-                                                 um_per_pixel, center = None, rotate_data = True):
+                                                axicon_side_angle_deg, side_aspect_ratio,
+                                                um_per_pixel, center = None, rotate_data = True):
     if(center is None):
         center = data_fitting_functions.hybrid_trap_center_finder(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix)
-    if(rotate_data):
-        image_to_use, rotated_center = _rotate_and_crop_hybrid_image(hybrid_trap_density_image, center, axicon_tilt_deg)    
-        rotated_x_center, rotated_y_center = rotated_center
-        hybrid_trap_radius_um = um_per_pixel * axicon_diameter_pix / 2.0
-        hybrid_trap_cross_sectional_area_um = np.pi * np.square(hybrid_trap_radius_um)
-        radial_axis_index = 1
-        hybrid_trap_radial_integrated_density = um_per_pixel * np.sum(image_to_use, axis = radial_axis_index)
-        hybrid_trap_3D_density_harmonic_axis = hybrid_trap_radial_integrated_density / hybrid_trap_cross_sectional_area_um 
-        harmonic_axis_positions_um = um_per_pixel * (np.arange(len(image_to_use)) - rotated_y_center)
-        #Fit lorentzian to the 1D-integrated data to improve center-finding fidelity
-        results = data_fitting_functions.fit_lorentzian_with_offset(harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
-        popt, pcov = results
-        amp, center, gamma, offset = popt
-        refitted_harmonic_axis_positions_um = harmonic_axis_positions_um - center
-        return (refitted_harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
+    if(rotate_data and axicon_tilt_deg != 0.0):
+        image_to_use, new_center = _rotate_and_crop_hybrid_image(hybrid_trap_density_image, center, axicon_tilt_deg)
+        center = new_center 
     else:
-        raise NotImplementedError("Hybrid analysis without rotating data not yet implemented")
+        image_to_use = hybrid_trap_density_image
+    x_center, y_center = center
+    hybrid_trap_radius_um = um_per_pixel * axicon_diameter_pix / 2.0
+    hybrid_trap_cross_sectional_area_um = get_hybrid_cross_section_um(hybrid_trap_radius_um, axicon_side_angle_deg, side_aspect_ratio)
+    radial_axis_index = 1
+    hybrid_trap_radial_integrated_density = um_per_pixel * np.sum(image_to_use, axis = radial_axis_index)
+    hybrid_trap_3D_density_harmonic_axis = hybrid_trap_radial_integrated_density / hybrid_trap_cross_sectional_area_um 
+    harmonic_axis_positions_um = um_per_pixel * (np.arange(len(image_to_use)) - y_center)
+    #Fit lorentzian to the 1D-integrated data to improve center-finding fidelity
+    results = data_fitting_functions.fit_lorentzian_with_offset(harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
+    popt, pcov = results
+    amp, center, gamma, offset = popt
+    refitted_harmonic_axis_positions_um = harmonic_axis_positions_um - center
+    return (refitted_harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
+
+
+"""
+Convenience function for getting the actual areal cross section of the tilted oval of the hybrid trap.
+Note that the tilt angle is the angle made by the semimajor axis of the oval to the plane that the top imaging can see."""
+def get_hybrid_cross_section_um(top_radius_um, side_angle_deg, side_aspect_ratio):
+    side_angle_rad = side_angle_deg * np.pi / 180 
+    theta = side_angle_rad
+    semiminor_to_semimajor_ratio = 1.0 / side_aspect_ratio
+    s = semiminor_to_semimajor_ratio
+    #Slightly nontrivial geometry formula
+    seen_radius_to_semimajor_ratio = np.cos(theta) * np.sqrt(1 + np.square(s * np.tan(theta)))
+    semimajor_radius_um = top_radius_um / seen_radius_to_semimajor_ratio
+    semiminor_radius_um = semiminor_to_semimajor_ratio * semimajor_radius_um 
+    cross_section_um = np.pi * semimajor_radius_um * semiminor_radius_um
+    return cross_section_um
+
 
 def _rotate_and_crop_hybrid_image(image, center, rotation_angle_deg, x_crop_width = np.inf, y_crop_width = np.inf):
     x_center, y_center = center 

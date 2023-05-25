@@ -63,6 +63,44 @@ def load_experiment_parameters_from_folder(folder_path):
         return json.load(json_file)
 
 
+
+"""
+Convenience method for manipulating nested JSON files. 
+
+Given a json file located at pathname, adds a key-value pair to the file. If parent_keys is specified, 
+navigates down through a hierarchy of dicts with respective keys in parent keys before adding the key-value pair.
+
+Parameters:
+
+create_new: If True, the method will create new dicts under the keys in parent keys if they are not present.
+
+parent_keys: Iterable [key1, key2, ...] of keys. If passed, the key-value pair is added into the json file as follows:
+{
+    key_1: {
+        key_2:{
+            key:value
+        }
+    }
+}"""
+def update_nested_json(pathname, key, value, parent_keys = None, create_new = False):
+    if parent_keys is None:
+        parent_keys = []
+    with open(pathname, 'r') as json_file:
+        pre_existing_dict = json.load(json_file)
+    modified_dict = pre_existing_dict
+    for parent_key in parent_keys:
+        if parent_key in modified_dict:
+            modified_dict = modified_dict[parent_key]
+        elif create_new:
+            modified_dict[parent_key] = {} 
+            modified_dict = modified_dict[parent_key]
+        else:
+            raise KeyError("Parent key not in json")
+    modified_dict[key] = value
+    with open(pathname, 'w') as json_file:
+        json.dump(pre_existing_dict, json_file)
+
+
 def load_unitary_EOS():
     UNITARY_EOS_FILENAME = "Experimental_Unitary_Fermi_Gas_EOS.csv"
     with pkg_resources.path(r, UNITARY_EOS_FILENAME) as eos_path:
