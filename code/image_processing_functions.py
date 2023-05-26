@@ -456,6 +456,19 @@ def _rotate_and_crop_hybrid_image(image, center, rotation_angle_deg, x_crop_widt
     final_y_center = rotated_y_center - cropped_y_min
     return (cropped_rotated_image, (final_x_center, final_y_center)) 
 
+
+
+def get_saturation_counts_from_camera_parameters(pixel_length_at_atoms_m, imaging_time_s, camera_count_to_photon_factor, linewidth_Hz, 
+                                                res_cross_section_m, saturation_multiplier = 1.0):
+    atomic_pixel_area = np.square(pixel_length_at_atoms_m)
+    photon_current_to_saturation_conversion_factor_mks = 2 * res_cross_section_m / (2 * np.pi * linewidth_Hz)
+    fudged_photon_current_to_saturation_conversion_mks = photon_current_to_saturation_conversion_factor_mks * saturation_multiplier
+    counts_to_photon_current_conversion_factor_mks = (1.0 / atomic_pixel_area) * (1.0 / imaging_time_s) * camera_count_to_photon_factor
+    saturation_counts = 1.0 / (counts_to_photon_current_conversion_factor_mks * fudged_photon_current_to_saturation_conversion_mks)
+    return saturation_counts
+
+
+
 def _get_linewidth_from_species(species):
     LI6_NATURAL_LINEWIDTH_MHZ = 5.87
     NA23_NATURAL_LINEWIDTH_MHZ = 9.79

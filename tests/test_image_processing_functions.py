@@ -262,5 +262,23 @@ def test_get_hybrid_cross_section_um():
     assert np.isclose(cross_section, EXPECTED_CROSS_SECTION_UM2)
 
 
+def test_get_saturation_counts_from_camera_parameters():
+    SAMPLE_CAMERA_COUNTS_TO_PHOTONS_FACTOR = 1.2
+    SAMPLE_PIXEL_LENGTH_M = 1e-6 
+    SAMPLE_IMAGING_TIME_S = 1e-4
+    SAMPLE_LINEWIDTH_Hz = 1e6 
+    SAMPLE_RES_CROSS_SECTION_M = 1e-13
+    sample_saturation_counts = image_processing_functions.get_saturation_counts_from_camera_parameters(SAMPLE_PIXEL_LENGTH_M, SAMPLE_IMAGING_TIME_S, 
+                                                                                                    SAMPLE_CAMERA_COUNTS_TO_PHOTONS_FACTOR, 
+                                                                                                    SAMPLE_LINEWIDTH_Hz, SAMPLE_RES_CROSS_SECTION_M)
+    #Verified to be the correct result for this set of input parameters
+    EXPECTED_SAMPLE_SATURATION_COUNTS = 2618.00
+    assert np.isclose(sample_saturation_counts, EXPECTED_SAMPLE_SATURATION_COUNTS)
+
+
+
+
+
+
     
 
