@@ -565,7 +565,11 @@ present at the atoms actually reach the camera - in polrot imaging, when there a
 camera, thanks to a right circular polarizer. 
 
 These two factors are omitted because, for all of the imaging schemes we use so far, they cancel out - they are both 1 in absorption, and both 0.5 in 
-polarization rotation. They should, however, in general be taken into account."""
+polarization rotation. They should, however, in general be taken into account.
+
+In a similar vein, it is generically not appropriate to speak of _the_ saturation intensity for images where multiple atomic transitions contribute to the 
+produced image - the cross sections, hence saturations, will generally be different. However, for our case, all transitions are sufficiently close 
+to cycling as to make this unnecessary to consider."""
 
 def get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True):
     lithium_linewidth_MHz = image_processing_functions._get_linewidth_from_species("6Li")

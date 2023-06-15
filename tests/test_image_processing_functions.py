@@ -159,6 +159,53 @@ def test_polrot_images_function():
     assert np.all(np.abs(saved_image_B - image_B) < 1e-6)
 
 
+def test_python_polrot_image_function():
+    REF_OD_1 = 1.2 
+    REF_OD_2 = 3.6
+    REF_LINEWIDTH = 3 
+    REF_DETUNING_1A = 5
+    REF_DETUNING_1B = 7
+    REF_DETUNING_2A = 9
+    REF_DETUNING_2B = 11 
+    REF_INTENSITY_A = 0.7
+    REF_INTENSITY_B = 1.6
+    REF_INTENSITY_SAT = 2 
+    REF_PHASE_SIGN = 1.0
+
+    EXPECTED_RESULT_A = 1.3071046
+    EXPECTED_RESULT_B = 1.2745582
+
+    calculated_result_A, calculated_result_B = image_processing_functions.python_polrot_image_function(
+                    (REF_OD_1, REF_OD_2), REF_DETUNING_1A, REF_DETUNING_1B, REF_DETUNING_2A, REF_DETUNING_2B, 
+                    REF_LINEWIDTH, REF_INTENSITY_A, REF_INTENSITY_B, REF_INTENSITY_SAT, REF_PHASE_SIGN
+    )
+    assert np.isclose(EXPECTED_RESULT_A, calculated_result_A) 
+    assert np.isclose(EXPECTED_RESULT_B, calculated_result_B)
+
+def test_python_and_jit_polrot_image_function_agreement():
+    REF_OD_1 = 1.2 
+    REF_OD_2 = 3.6
+    REF_LINEWIDTH = 3 
+    REF_DETUNING_1A = 5
+    REF_DETUNING_1B = 7
+    REF_DETUNING_2A = 9
+    REF_DETUNING_2B = 11 
+    REF_INTENSITY_A = 0.7
+    REF_INTENSITY_B = 1.6
+    REF_INTENSITY_SAT = 2 
+    REF_PHASE_SIGN = 1.0
+
+    calculated_result_A_python, calculated_result_B_python = image_processing_functions.python_polrot_image_function(
+                    (REF_OD_1, REF_OD_2), REF_DETUNING_1A, REF_DETUNING_1B, REF_DETUNING_2A, REF_DETUNING_2B, 
+                    REF_LINEWIDTH, REF_INTENSITY_A, REF_INTENSITY_B, REF_INTENSITY_SAT, REF_PHASE_SIGN
+    )
+
+    calculated_result_A_compiled, calculated_result_B_compiled = image_processing_functions._compiled_python_polrot_image_function(
+                    (REF_OD_1, REF_OD_2), REF_DETUNING_1A, REF_DETUNING_1B, REF_DETUNING_2A, REF_DETUNING_2B, 
+                    REF_LINEWIDTH, REF_INTENSITY_A, REF_INTENSITY_B, REF_INTENSITY_SAT, REF_PHASE_SIGN
+    )
+
+
 def test_get_atom_density_from_polrot_images():
     fake_image_A, fake_image_B = _generate_fake_polrot_images()
     reconstructed_density_1, reconstructed_density_2 = image_processing_functions.get_atom_density_from_polrot_images(fake_image_A, fake_image_B, 

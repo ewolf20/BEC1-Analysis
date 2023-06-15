@@ -221,7 +221,7 @@ def _compiled_python_polrot_image_function(od_naughts, detuning_1A, detuning_1B,
     od_naught_1, od_naught_2 = od_naughts 
     od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
     od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
-    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_B, intensity_sat) 
+    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_A, intensity_sat) 
     od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
     phi_A = (-od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth ) * phase_sign
     phi_B = (-od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth ) * phase_sign
@@ -237,7 +237,7 @@ def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_
     od_naught_1, od_naught_2 = od_naughts 
     od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
     od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
-    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_B, intensity_sat) 
+    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_A, intensity_sat) 
     od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
     phi_A = (-od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth ) * phase_sign
     phi_B = (-od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth ) * phase_sign
@@ -250,7 +250,7 @@ def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_
 
 @jit(nopython = True)
 def od_lorentzian(detuning, linewidth, intensity, intensity_sat):
-    return 1.0 / (1 + np.square(2 * detuning / linewidth) + np.square(intensity / intensity_sat))
+    return 1.0 / (1 + np.square(2 * detuning / linewidth) + intensity / intensity_sat)
 
 def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None, res_cross_section = None, phase_sign = 1.0, 
                                 species = '6Li', num_samps = 1000, abs_min = 0.0, abs_max = 2.0):
