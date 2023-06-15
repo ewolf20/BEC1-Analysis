@@ -468,8 +468,8 @@ def get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, first_s
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
     atom_density_second = ndimage.rotate(atom_density_second, rr_angle, reshape = False)
     #The non-harmonic axis is the x axis in our experiments...
-    integrated_atom_density_first = np.sum(atom_density_first, axis = -1)
-    integrated_atom_density_second = np.sum(atom_density_second, axis = -1)
+    integrated_atom_density_first = np.sum(atom_density_first, axis = -1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    integrated_atom_density_second = np.sum(atom_density_second, axis = -1) * my_measurement.experiment_parameters["top_um_per_pixel"]
     return (integrated_atom_density_first, integrated_atom_density_second)
 
 
@@ -551,6 +551,45 @@ def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, hori
         box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
                             vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point)
     return box_crop 
+
+
+"""
+Convenience function for obtaining saturation camera counts for a run; dividing the without atoms image by this number gives saturation parameter. Pulls 
+from both measurement and run to put together all the necessary pieces, including optionally an ad-hoc fudge based on Ramsey-method calibration 
+of saturation intensity.
+
+REMARK: There are in principle two ingredients missing from the calculation. Different imaging methods may in principle have different fractions 
+of the total light intensity at the location of the atoms actually interact with them - in polrot imaging, half of the light on the atoms is the 
+"wrong polarization" and highly off-resonant, for instance. Likewise, different imaging methods may have different amounts of the light intensity
+present at the atoms actually reach the camera - in polrot imaging, when there are no atoms, only half of the light intensity at the atoms reaches the 
+camera, thanks to a right circular polarizer. 
+
+These two factors are omitted because, for all of the imaging schemes we use so far, they cancel out - they are both 1 in absorption, and both 0.5 in 
+polarization rotation. They should, however, in general be taken into account."""
+
+def get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True):
+    lithium_linewidth_MHz = image_processing_functions._get_linewidth_from_species("6Li")
+    lithium_linewidth_Hz = lithium_linewidth_MHz * 1e6
+    lithium_bare_res_cross_section_um = image_processing_functions._get_res_cross_section_from_species("6Li")
+    lithium_bare_res_cross_section_m = lithium_bare_res_cross_section_um * 1e-12
+    top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
+    lithium_top_geo_adjusted_res_cross_section_m = lithium_bare_res_cross_section_m * top_cross_section_geometry_factor
+    top_um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    top_m_per_pixel = top_um_per_pixel * 1e-6
+    camera_quantum_efficiency = my_measurement.experiment_parameters["top_camera_quantum_efficiency"] 
+    camera_counts_per_photoelectron = my_measurement.experiment_parameters["top_camera_counts_per_photoelectron"]
+    camera_count_to_photon_factor = 1.0 / (camera_counts_per_photoelectron * camera_quantum_efficiency) 
+    camera_post_atom_photon_transmission = my_measurement.experiment_parameters["top_camera_post_atom_photon_transmission"]
+    if apply_ramsey_fudge:
+        camera_saturation_fudge = (1.0 / camera_post_atom_photon_transmission) * my_measurement.experiment_parameters["top_camera_saturation_ramsey_fudge"]
+    else:
+        camera_saturation_fudge = (1.0 / camera_post_atom_photon_transmission)
+    imaging_time_us = my_run.parameters["ImageTime"]
+    imaging_time_s = imaging_time_us * 1e-6 
+    saturation_counts = image_processing_functions.get_saturation_counts_from_camera_parameters(top_m_per_pixel, imaging_time_s, camera_count_to_photon_factor, 
+                                                                            lithium_linewidth_Hz, lithium_top_geo_adjusted_res_cross_section_m, 
+                                                                            saturation_multiplier = camera_saturation_fudge)
+    return saturation_counts
 
 #UTILITY, NOT INTENDED FOR EXTERNAL CALLING
 def _get_resonance_frequency_from_state_index(my_measurement, state_index):
