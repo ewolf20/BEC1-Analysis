@@ -190,7 +190,7 @@ def get_atom_densities_top_abs(my_measurement, my_run, state_index_A = 1, state_
 
 
 def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity", 
-                                first_state_fudge = 1.0, second_state_fudge = 1.0):
+                                first_state_fudge = 1.0, second_state_fudge = 1.0, use_saturation = True):
     first_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, first_state_index)
     second_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, second_state_index)
     nominal_frequency_A = my_run.parameters["ImagFreq1"]
@@ -210,9 +210,19 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
                                                                 norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])
     abs_image_B = image_processing_functions.get_absorption_image(image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
                                                     norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])
+    if use_saturation:
+        intensities_A = image_processing_functions.safe_subtract(image_array_A[1] - image_array_A[2])
+        intensities_B = image_processing_functions.safe_subtract(image_array_B[1] - image_array_B[2])
+        intensities_sat = get_saturation_counts_top(my_measurement, my_run)
+    else:
+        intensities_A = None 
+        intensities_B = None 
+        intensities_sat = None
     atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B,
                                                                 detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign, 
-                                                                cross_section_imaging_geometry_factor = top_cross_section_geometry_factor)
+                                                                cross_section_imaging_geometry_factor = top_cross_section_geometry_factor,
+                                                                intensities_A = intensities_A, intensities_B = intensities_B,  
+                                                                intensities_sat = intensities_sat)
     atom_density_first = atom_density_first * first_state_fudge
     atom_density_second = atom_density_second * second_state_fudge
     return (atom_density_first, atom_density_second)
