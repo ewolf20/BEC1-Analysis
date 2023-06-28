@@ -190,7 +190,7 @@ def get_atom_densities_top_abs(my_measurement, my_run, state_index_A = 1, state_
 
 
 def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity", 
-                                first_state_fudge = 1.0, second_state_fudge = 1.0, use_saturation = True):
+                                first_state_fudge = 1.0, second_state_fudge = 1.0, use_saturation = True, average_saturation = False):
     first_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, first_state_index)
     second_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, second_state_index)
     nominal_frequency_A = my_run.parameters["ImagFreq1"]
@@ -210,14 +210,21 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
                                                                 norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])
     abs_image_B = image_processing_functions.get_absorption_image(image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
                                                     norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])
-    if use_saturation:
-        intensities_A = image_processing_functions.safe_subtract(image_array_A[1] - image_array_A[2])
-        intensities_B = image_processing_functions.safe_subtract(image_array_B[1] - image_array_B[2])
-        intensities_sat = get_saturation_counts_top(my_measurement, my_run)
-    else:
+    if not use_saturation:        
         intensities_A = None 
         intensities_B = None 
         intensities_sat = None
+    else:
+        intensities_sat = get_saturation_counts_top(my_measurement, my_run)
+        intensities_A = image_processing_functions.get_without_atoms_counts(image_array_A, 
+                                                                ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+        intensities_B = image_processing_functions.get_without_atoms_counts(image_array_B, 
+                                                                ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+        if average_saturation:
+            intensities_A = np.average(intensities_A) 
+            intensities_B = np.average(intensities_B)
     atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B,
                                                                 detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign, 
                                                                 cross_section_imaging_geometry_factor = top_cross_section_geometry_factor,
@@ -231,7 +238,7 @@ def get_atom_densities_box_autocut(my_measurement, my_run, vert_crop_point = 0.5
                                    first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
                                    **get_density_kwargs):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
-                                                    imaging_mode, get_density_kwargs)
+                                                    imaging_mode, **get_density_kwargs)
     if density_to_use == 1:
         crop_density = density_1 
     elif density_to_use == 2:
@@ -249,7 +256,7 @@ def get_atom_densities_box_autocut(my_measurement, my_run, vert_crop_point = 0.5
 def get_x_integrated_atom_densities_top_double(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                     imaging_mode = "polrot", **get_density_kwargs):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
-                                                    imaging_mode, get_density_kwargs)
+                                                    imaging_mode, **get_density_kwargs)
     density_1_x_integrated = np.sum(density_1, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
     density_2_x_integrated = np.sum(density_2, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
     return (density_1_x_integrated, density_2_x_integrated)
@@ -258,7 +265,7 @@ def get_x_integrated_atom_densities_top_double(my_measurement, my_run, first_sto
 def get_y_integrated_atom_densities_top_double(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                         imaging_mode = "polrot", **get_density_kwargs):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
-                                                    imaging_mode, get_density_kwargs)
+                                                    imaging_mode, **get_density_kwargs)
     density_1_x_integrated = np.sum(density_1, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
     density_2_x_integrated = np.sum(density_2, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
     return (density_1_x_integrated, density_2_x_integrated)
@@ -270,39 +277,46 @@ If passed, the functions assume that the atom density is stored as an analysis r
 object, under the name stored_density_name. This is to allow patterns where multiple analyses which rely on 
 the atom number density can be run without re-calculating it (typically the slowest part of any analysis)."""
 
+def _get_atom_count_from_density(pixel_length_um, atom_density):
+    pixel_area_um = np.square(pixel_length_um)
+    return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area_um)
+
+
 def get_atom_count_side_li_lf(my_measurement, my_run, stored_density_name = None):
     atom_density = _load_density_side_li_lf(my_measurement, my_run, stored_density_name)
-    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"]) 
-    return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area)
+    pixel_length_um = my_measurement.experiment_parameters["side_low_mag_um_per_pixel"]
+    return _get_atom_count_from_density(pixel_length_um, atom_density)
 
 
-def get_atom_count_side_li_hf(my_measurement, my_run, state_index = 1, stored_density_name = None, b_field_condition = "unitarity"):
-    atom_density = _load_density_side_li_hf(my_measurement, my_run, state_index, stored_density_name, b_field_condition)
-    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
-    return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area)
+def get_atom_count_side_li_hf(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
+    atom_density = _load_density_side_li_hf(my_measurement, my_run, stored_density_name, **get_density_kwargs)
+    pixel_length_um = my_measurement.experiment_parameters["side_high_mag_um_per_pixel"]
+    return _get_atom_count_from_density(pixel_length_um, atom_density)
 
 
-def get_atom_count_top_A_abs(my_measurement, my_run, state_index = 1, stored_density_name = None, b_field_condition = "unitarity"):
-    atom_density = _load_density_top_A_abs(my_measurement, my_run, state_index, stored_density_name, b_field_condition)
-    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
-    return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area) 
+def get_atom_count_top_A_abs(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
+    atom_density = _load_density_top_A_abs(my_measurement, my_run, stored_density_name, **get_density_kwargs)
+    pixel_length_um = my_measurement.experiment_parameters["top_um_per_pixel"]
+    return _get_atom_count_from_density(pixel_length_um, atom_density)
 
-def get_atom_count_top_B_abs(my_measurement, my_run, state_index = 3, stored_density_name = None, b_field_condition = "unitarity"):
-    atom_density = _load_density_top_B_abs(my_measurement, my_run, state_index, stored_density_name, b_field_condition)
-    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
-    return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area)
+def get_atom_count_top_B_abs(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
+    atom_density = _load_density_top_B_abs(my_measurement, my_run, stored_density_name, **get_density_kwargs)
+    pixel_length_um = my_measurement.experiment_parameters["top_um_per_pixel"]
+    return _get_atom_count_from_density(pixel_length_um, atom_density)
 
-def get_atom_counts_top_AB_abs(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                                first_stored_density_name = None, second_stored_density_name = None, b_field_condition = "unitarity"):
-    return (get_atom_count_top_A_abs(my_measurement, my_run, state_index = first_state_index, stored_density_name=first_stored_density_name, 
-                                    b_field_condition = b_field_condition), 
-            get_atom_count_top_B_abs(my_measurement, my_run, state_index = second_state_index, stored_density_name=second_stored_density_name,
-                                    b_field_condition = b_field_condition))
+def get_atom_counts_top_AB_abs(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
+                               **get_density_kwargs):
+    atom_density_A, atom_density_B = _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
+                                                                    **get_density_kwargs)
+    pixel_length_um = my_measurement.experiment_parameters["top_um_per_pixel"] 
+    counts_A = _get_atom_count_from_density(pixel_length_um, atom_density_A) 
+    counts_B = _get_atom_count_from_density(pixel_length_um, atom_density_B)
+    return (counts_A, counts_B)
 
-def get_atom_counts_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, first_stored_density_name = None, 
-                                second_stored_density_name = None, b_field_condition = "unitarity"):
-    atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, first_state_index, second_state_index, 
-                                                first_stored_density_name, second_stored_density_name, b_field_condition)
+def get_atom_counts_top_polrot(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
+                               **get_density_kwargs):
+    atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, 
+                                                first_stored_density_name, second_stored_density_name, **get_density_kwargs)
     pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
     atom_count_first = image_processing_functions.atom_count_pixel_sum(atom_density_first, pixel_area)
     atom_count_second = image_processing_functions.atom_count_pixel_sum(atom_density_second, pixel_area)
@@ -315,10 +329,9 @@ def get_atom_counts_top_polrot(my_measurement, my_run, first_state_index = 1, se
 def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = True, 
                                                   first_stored_density_name = None, second_stored_density_name = None, 
                                                   imaging_mode = "polrot", **get_density_kwargs):
-    HYBRID_TRAP_B_FIELD_CONDITION = "unitarity"
     atom_density_first, atom_density_second = _load_densities_top_double(
                                                 my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
-                                                imaging_mode, get_density_kwargs)
+                                                imaging_mode, **get_density_kwargs)
     axicon_tilt_deg = my_measurement.experiment_parameters["axicon_tilt_deg"]
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     axicon_length_pix = my_measurement.experiment_parameters["hybrid_trap_typical_length_pix"]
@@ -393,7 +406,7 @@ this would involve a new call for every run to be analyzed. This could be worked
 to explicitly evaluate the density names first"""
 def get_box_shake_fourier_amplitudes(my_measurement, my_run, return_phases = False, autocut = False, autocut_density_to_use = 2, 
                                      autocut_widths_free = False, autocut_vert_crop_point = 0.5, autocut_horiz_crop_point = 0.00, 
-                                     no_shake_density_name_first = None, no_shake_density_name_second = None, 
+                                     no_shake_density_name_first = None, order = None, no_shake_density_name_second = None, 
                                      first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot", 
                                      **get_density_kwargs):
     if no_shake_density_name_first is None:
@@ -419,7 +432,7 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, return_phases = Fal
     else:
         atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, 
                                                     first_stored_density_name, second_stored_density_name, imaging_mode, 
-                                                    get_density_kwargs)
+                                                    **get_density_kwargs)
     bs_density_first = atom_density_first - no_shake_density_first 
     bs_density_second = atom_density_second - no_shake_density_second
     #Current convention has the integration direction as the last index, i.e. the x-axis. 
@@ -437,16 +450,16 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, return_phases = Fal
 
 
 
-def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_state_index = 1, second_state_index = 3, imaging_mode = "polrot", 
-                                b_field_condition = "unitarity", first_stored_density_name = None, second_stored_density_name = None):
+def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
+                                               imaging_mode = "polrot", **get_density_kwargs):
     if imaging_mode == "polrot":
-        counts_first, counts_second = get_atom_counts_top_polrot(my_measurement, my_run, first_state_index=first_state_index, 
-                                                    second_state_index = second_state_index, first_stored_density_name=first_stored_density_name, 
-                                                    second_stored_density_name=second_stored_density_name, b_field_condition=b_field_condition) 
+        counts_first, counts_second = get_atom_counts_top_polrot(my_measurement, my_run, first_stored_density_name = first_stored_density_name, 
+                                                                 second_stored_density_name = second_stored_density_name, 
+                                                                 **get_density_kwargs) 
     elif imaging_mode == "abs":
-        counts_first, counts_second = get_atom_counts_top_AB_abs(my_measurement, my_run, first_state_index = first_state_index, 
-                                                    second_state_index = second_state_index, first_stored_density_name=first_stored_density_name, 
-                                                    second_stored_density_name = second_stored_density_name, b_field_condition = b_field_condition)
+        counts_first, counts_second = get_atom_counts_top_AB_abs(my_measurement, my_run, first_stored_density_name = first_stored_density_name, 
+                                                                 second_stored_density_name = second_stored_density_name, 
+                                                                 **get_density_kwargs)
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     box_length_pix = my_measurement.experiment_parameters["box_length_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
@@ -472,7 +485,7 @@ def get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, first_s
         get_density_kwargs["b_field_condition"] = RR_B_FIELD_CONDITION
     atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run,
                                                 first_stored_density_name, second_stored_density_name, imaging_mode, 
-                                                get_density_kwargs)
+                                                **get_density_kwargs)
     #Rotate images 
     rr_angle = my_measurement.experiment_parameters["rr_tilt_deg"]
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
@@ -516,7 +529,7 @@ def get_rr_condensate_fractions_box(my_measurement, my_run, first_stored_density
     if not "b_field_condition" in get_density_kwargs:
         get_density_kwargs["b_field_condition"] = "rapid_ramp"
     atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, 
-                                                                        second_stored_density_name, imaging_mode, get_density_kwargs)
+                                                                        second_stored_density_name, imaging_mode, **get_density_kwargs)
     #Rotate images
     rr_angle = my_measurement.experiment_parameters["rr_tilt_deg"]
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
@@ -640,17 +653,44 @@ def _load_densities_polrot(my_measurement, my_run, first_stored_density_name, se
 
 
 
+"""
+Convenience function for loading a pair of densities from top double imaging.
+
+Given a measurement and run, loads the atom densities from top double imaging, wrapping the cases of different imaging modes 
+as well as the possibility that the densities have been precomputed and stored.
+
+Parameters:
+
+my_measurement, my_run: The Measurement and Run objects, respectively, for which the computation is done 
+
+first/second_stored_density_name: keys under which the precomputed atom density has been stored in my_run.analysis_results. 
+If None, the density is computed from scratch (see Remark, below)
+
+imaging_mode: The type of imaging used to generate the images from which atomic density is computed. Currently accepts 'polrot' 
+and 'abs'.
+
+**get_density_kwargs: All of the kwargs which are to be passed to the function which computes the density from an image.
 
 
+Remark: As currently set up, there is unnecessary computation done in the corner case where, for absorption imaging, one 
+set of atomic densities has been precomputed while the other has not. This is an unusual situation, and the computation is deemend
+an acceptable trade-off to simplify the code - otherwise, the density kwargs need to be massaged to work for both top double and top A and B 
+separately."""
 def _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, imaging_mode, 
-                               get_density_kwargs):
+                               **get_density_kwargs):
     if imaging_mode == "polrot":
         return _load_densities_polrot(my_measurement, my_run, first_stored_density_name, 
                             second_stored_density_name, **get_density_kwargs)
     elif imaging_mode == "abs":
-        density_1 = _load_density_top_A_abs(my_measurement, my_run, first_stored_density_name, **get_density_kwargs)
-        density_2 = _load_density_top_B_abs(my_measurement, my_run, second_stored_density_name, **get_density_kwargs)
-        return (density_1, density_2)
+        return _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name)
+
+def _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name, **get_density_kwargs):
+    if first_stored_density_name is None or second_stored_density_name is None:
+        density_A, density_B = get_atom_densities_top_abs(my_measurement, my_run, **get_density_kwargs)
+    else:
+        density_A = my_run.analysis_results[first_stored_density_name] 
+        density_B = my_run.analysis_results[second_stored_density_name]
+    return (density_A, density_B)
 
 def _load_density_top_A_abs(my_measurement, my_run, stored_density_name, **get_density_kwargs):
     if stored_density_name is None:
@@ -681,6 +721,5 @@ def _load_density_side_li_lf(my_measurement, my_run, stored_density_name):
     else:
         atom_density = my_run.analysis_results[stored_density_name]
     return atom_density
-
 
 

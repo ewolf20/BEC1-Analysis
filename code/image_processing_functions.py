@@ -57,6 +57,17 @@ def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, c
     absorption_image = _clean_absorption_image(absorption_image, strategy = clean_strategy)
     return absorption_image
 
+
+"""
+
+Returns dark-subtracted, norm-box-adjusted counts in the without atoms image, suitable for use as a marker of saturation intensity."""
+
+def get_without_atoms_counts(image_stack, ROI = None, norm_box_coordinates = None):
+    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates)
+    _, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI)
+    norm_adjusted_dark_subtracted_image_without_atoms = dark_subtracted_image_without_atoms * with_without_light_ratio
+    return norm_adjusted_dark_subtracted_image_without_atoms
+
 def _roi_crop_helper(image_stack, ROI = None):
     image_with_atoms = image_stack[0] 
     image_without_atoms = image_stack[1] 
@@ -333,16 +344,22 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
     geometry_adjusted_cross_section = res_cross_section * cross_section_imaging_geometry_factor
-    if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
+    if ((intensities_A is None or intensities_B is None or intensities_sat is None)
+        and not (intensities_A is None and intensities_B is None and intensities_sat is None)):
         raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
     if(np.abs(phase_sign) != 1.0):
         raise ValueError("The phase sign must be +-1.")
     atom_densities_list_1 = []
     atom_densities_list_2 = []
-    if not intensities_A:
+    if intensities_A is None:
         intensities_A = np.zeros(abs_image_A.shape)
         intensities_B = np.zeros(abs_image_A.shape)
         intensities_sat = np.inf * np.ones(abs_image_A.shape)
+    else:
+        broadcast_intensity_shape = abs_image_A.shape
+        intensities_A = np.broadcast_to(intensities_A, broadcast_intensity_shape)
+        intensities_B = np.broadcast_to(intensities_B, broadcast_intensity_shape)
+        intensities_sat = np.broadcast_to(intensities_sat, broadcast_intensity_shape)
     map_iterator = zip(abs_image_A.flatten(), abs_image_B.flatten(), generator_factory(detuning_1A), 
                         generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
                         generator_factory(linewidth), generator_factory(geometry_adjusted_cross_section), intensities_A.flatten(), 
