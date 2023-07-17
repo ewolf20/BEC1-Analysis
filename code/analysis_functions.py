@@ -115,10 +115,9 @@ def get_od_images_top_double(my_measurement, my_run):
 #PIXEL SUMS
 
 def get_od_pixel_sum_na_catch(my_measurement, my_run):
-    my_run_image_array = my_run.get_image('Catch', memmap = True) 
-    my_run_od_image = image_processing_functions.get_absorption_od_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
-    return my_run_od_image
+    my_run_abs_image = get_od_image_na_catch(my_measurement, my_run)
+    pixel_sum = image_processing_functions.pixel_sum(my_run_abs_image)
+    return pixel_sum
 
 def get_od_pixel_sum_side(my_measurement, my_run):
     my_run_abs_image = get_od_image_side(my_measurement, my_run)
