@@ -7,6 +7,16 @@ from . import data_fitting_functions, image_processing_functions, science_functi
 
 #RAW IMAGES (Convenience functions for getting the raw pixel data from shots, cropped within an ROI)
 
+def get_raw_pixels_na_catch(my_measurement, my_run, crop_roi = False):
+    my_run_image_array = my_run.get_image("Catch", memmap = False) 
+    if crop_roi:
+        roi = my_measurement.measurement_parameters["ROI"] 
+        x_min, y_min, x_max, y_max = roi
+        my_run_image_array_cropped = my_run_image_array[:, y_min:y_max, x_min:x_max] 
+        return (*my_run_image_array_cropped,)
+    else:
+        return (*my_run_image_array,)
+
 def get_raw_pixels_side(my_measurement, my_run, crop_roi = False):
     my_run_image_array = my_run.get_image("Side", memmap = False)
     if crop_roi:
@@ -42,6 +52,12 @@ def get_raw_pixels_top_B(my_measurement, my_run, crop_roi = False):
 
 #ABS IMAGES (Sometimes called 'Fake OD')
 
+def get_abs_image_na_catch(my_measurement, my_run):
+    my_run_image_array = my_run.get_image('Catch', memmap = True) 
+    my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    return my_run_abs_image
+
 def get_abs_image_side(my_measurement, my_run):
     my_run_image_array = my_run.get_image('Side', memmap = True) 
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
@@ -65,6 +81,12 @@ def get_abs_images_top_double(my_measurement, my_run):
     return (get_abs_image_top_A(my_measurement, my_run), get_abs_image_top_B(my_measurement, my_run))
 
 #OD IMAGES
+
+def get_od_image_na_catch(my_measurement, my_run):
+    my_run_image_array = my_run.get_image('Catch', memmap = True) 
+    my_run_od_image = image_processing_functions.get_absorption_od_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+    return my_run_od_image
 
 def get_od_image_side(my_measurement, my_run):
     my_run_image_array = my_run.get_image('Side', memmap = True) 
@@ -91,6 +113,11 @@ def get_od_images_top_double(my_measurement, my_run):
     return (od_image_A, od_image_B)
 
 #PIXEL SUMS
+
+def get_od_pixel_sum_na_catch(my_measurement, my_run):
+    my_run_abs_image = get_od_image_na_catch(my_measurement, my_run)
+    pixel_sum = image_processing_functions.pixel_sum(my_run_abs_image)
+    return pixel_sum
 
 def get_od_pixel_sum_side(my_measurement, my_run):
     my_run_abs_image = get_od_image_side(my_measurement, my_run)

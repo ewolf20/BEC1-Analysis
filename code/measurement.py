@@ -13,9 +13,10 @@ from .image_processing_functions import get_absorption_image
 from . import loading_functions, statistics_functions
 
 IMAGE_FORMATS_LIST = ['.fits']
-IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag']
+IMAGING_TYPES_LIST = ['top_double', 'side_low_mag', 'side_high_mag', 'na_catch']
 MEASUREMENT_IMAGE_NAME_DICT = {'top_double': ['TopA', 'TopB'],
-                                'side_low_mag':['Side'], 'side_high_mag':['Side']}
+                                'side_low_mag':['Side'], 'side_high_mag':['Side'], 
+                                'na_catch':['Catch']}
 FILENAME_DATETIME_FORMAT_STRING = "%Y-%m-%d--%H-%M-%S"
 PARAMETERS_DATETIME_FORMAT_STRING = "%Y-%m-%dT%H:%M:%SZ"
 PARAMETERS_RUN_TIME_NAME = "runtime"
