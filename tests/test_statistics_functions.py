@@ -1,4 +1,5 @@
 import os
+from sre_constants import RANGE
 import sys 
 
 import matplotlib.pyplot as plt
@@ -74,7 +75,6 @@ def test_monte_carlo_error_propagation():
 def test_mean_location_test():
     random_normals = np.load("resources/Sample_Normal_Randoms.npy")
     random_normals_length = len(random_normals)
-    #Random normals contains 100 normal deviates of standard deviation 1
     assert not statistics_functions.mean_location_test(random_normals, 0)
     assert statistics_functions.mean_location_test(random_normals + 1.0, 0) 
     assert not statistics_functions.mean_location_test(random_normals + 0.3, 0.3) 
@@ -125,4 +125,37 @@ def test_filter_mean_outliers():
     assert len(inlier_indices_iterative) == len(randoms) - 2 
     assert not SUPER_OUTLIER_INDEX in inlier_indices_iterative
     assert not OUTLIER_INDEX in inlier_indices_iterative
+
+
+
+def test_average_over_like_x():
+    randoms = _load_random_normals()
+    RANGE_LENGTH = 10
+    assert len(randoms) % RANGE_LENGTH == 0
+    x_vals = np.repeat(np.arange(RANGE_LENGTH), len(randoms) // RANGE_LENGTH)
+    offset_randoms = randoms + 3 * x_vals
+    unique_x_vals, average_y_vals = statistics_functions.average_over_like_x(x_vals, offset_randoms, return_deviations = False, return_error_of_mean = False)
+    assert np.array_equal(unique_x_vals, np.arange(RANGE_LENGTH))
+    EXPECTED_Y_AVERAGE_VALS = np.array([-6.59214014e-03, 2.52218476e+00, 6.16827372e+00, 9.11775992e+00,
+                                    1.20192817e+01,  1.50737530e+01,  1.78039561e+01,  2.09544976e+01,
+                                    2.40639429e+01,  2.68503367e+01])
+    assert np.all(np.isclose(average_y_vals, EXPECTED_Y_AVERAGE_VALS))
+    *_, y_deviations = statistics_functions.average_over_like_x(x_vals, offset_randoms, return_deviations = True, return_error_of_mean = False)
+    EXPECTED_Y_DEVIATION_VALS = np.array([1.17118523, 0.97547752, 0.92421303, 0.90790253, 0.68763213, 1.0387802,
+                                            0.60376971, 1.08057771, 0.81931116, 0.76054765])
+    assert np.all(np.isclose(y_deviations, EXPECTED_Y_DEVIATION_VALS))
+    *_, y_errors_of_mean = statistics_functions.average_over_like_x(x_vals, offset_randoms, return_deviations = False, return_error_of_mean = True)
+    EXPECTED_Y_ERROR_OF_MEAN_VALS = np.array([0.35135557, 0.29264325, 0.27726391, 0.27237076, 0.20628964, 0.31163406,
+                                                0.18113091, 0.32417331, 0.24579335, 0.2281643])
+    assert np.all(np.isclose(y_errors_of_mean, EXPECTED_Y_ERROR_OF_MEAN_VALS))
+
+    
+
+
+#Random normals contains 100 normal deviates of standard deviation 1
+def _load_random_normals():
+    random_normal_path = os.path.join("resources", "Sample_Normal_Randoms.npy") 
+    randoms = np.load(random_normal_path)
+    assert len(randoms) == 100
+    return np.load(random_normal_path)
     
