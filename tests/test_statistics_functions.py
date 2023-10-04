@@ -145,10 +145,44 @@ def test_average_over_like_x():
                                             0.60376971, 1.08057771, 0.81931116, 0.76054765])
     assert np.all(np.isclose(y_deviations, EXPECTED_Y_DEVIATION_VALS))
     *_, y_errors_of_mean = statistics_functions.average_over_like_x(x_vals, offset_randoms, return_deviations = False, return_error_of_mean = True)
-    EXPECTED_Y_ERROR_OF_MEAN_VALS = np.array([0.35135557, 0.29264325, 0.27726391, 0.27237076, 0.20628964, 0.31163406,
-                                                0.18113091, 0.32417331, 0.24579335, 0.2281643])
+    EXPECTED_Y_ERROR_OF_MEAN_VALS = EXPECTED_Y_DEVIATION_VALS / np.sqrt(len(randoms) // RANGE_LENGTH)
     assert np.all(np.isclose(y_errors_of_mean, EXPECTED_Y_ERROR_OF_MEAN_VALS))
+    X_REPEATS_2D = 5
+    x_vals_2d = np.repeat(np.arange(RANGE_LENGTH), X_REPEATS_2D)
+    randoms_reshaped = randoms.reshape(X_REPEATS_2D * RANGE_LENGTH, len(randoms) // (X_REPEATS_2D * RANGE_LENGTH))
+    unique_x_vals_2d, average_y_vals_2d, deviations_2d, errors_of_mean_2d = statistics_functions.average_over_like_x(
+                                                                            x_vals_2d, randoms_reshaped, return_deviations = True,
+                                                                              return_error_of_mean = True)
+    assert np.array_equal(unique_x_vals_2d, np.arange(RANGE_LENGTH))
+    EXPECTED_2D_Y_AVERAGES = np.array([
+        [ 0.65580764, -0.66899192],
+        [-0.71966297, -0.23596751],
+        [ 0.2738427,   0.06270474],
+        [-0.25239047,  0.4879103 ],
+        [-0.30428683,  0.34285026],
+        [ 0.04340743,  0.10409856],
+        [-0.20038237, -0.1917054 ],
+        [ 0.54197035, -0.63297514],
+        [-0.38303987,  0.51092559],
+        [-0.34759999,  0.04827336]])
+    assert np.all(np.isclose(average_y_vals_2d, EXPECTED_2D_Y_AVERAGES))
+    EXPECTED_2D_DEVIATIONS = np.array([
+        [0.94532353, 1.04675603],
+        [1.25175811, 0.6541236 ],
+        [1.01851094, 0.92555676],
+        [0.54399093, 1.10281067],
+        [0.74028922, 0.50409893],
+        [0.45206284, 1.49037973],
+        [0.74483831, 0.51514953],
+        [0.94499783, 0.93347575],
+        [0.73847547, 0.6822971 ],
+        [0.72190149, 0.82606571]
+    ])
+    assert np.all(np.isclose(deviations_2d, EXPECTED_2D_DEVIATIONS))
+    EXPECTED_2D_ERRORS_OF_MEAN = EXPECTED_2D_DEVIATIONS / np.sqrt(X_REPEATS_2D)
+    assert np.all(np.isclose(errors_of_mean_2d, EXPECTED_2D_ERRORS_OF_MEAN))
 
+    
     
 
 
