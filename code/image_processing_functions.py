@@ -57,6 +57,17 @@ def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, c
     absorption_image = _clean_absorption_image(absorption_image, strategy = clean_strategy)
     return absorption_image
 
+
+"""
+
+Returns dark-subtracted, norm-box-adjusted counts in the without atoms image, suitable for use as a marker of saturation intensity."""
+
+def get_without_atoms_counts(image_stack, ROI = None, norm_box_coordinates = None):
+    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates)
+    _, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI)
+    norm_adjusted_dark_subtracted_image_without_atoms = dark_subtracted_image_without_atoms * with_without_light_ratio
+    return norm_adjusted_dark_subtracted_image_without_atoms
+
 def _roi_crop_helper(image_stack, ROI = None):
     image_with_atoms = image_stack[0] 
     image_without_atoms = image_stack[1] 
@@ -255,7 +266,7 @@ def _compiled_python_polrot_image_function(od_naughts, detuning_1A, detuning_1B,
     od_naught_1, od_naught_2 = od_naughts 
     od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
     od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
-    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_B, intensity_sat) 
+    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_A, intensity_sat) 
     od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
     phi_A = (-od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth ) * phase_sign
     phi_B = (-od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth ) * phase_sign
@@ -271,7 +282,7 @@ def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_
     od_naught_1, od_naught_2 = od_naughts 
     od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
     od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
-    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_B, intensity_sat) 
+    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_A, intensity_sat) 
     od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
     phi_A = (-od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth ) * phase_sign
     phi_B = (-od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth ) * phase_sign
@@ -284,7 +295,7 @@ def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_
 
 @jit(nopython = True)
 def od_lorentzian(detuning, linewidth, intensity, intensity_sat):
-    return 1.0 / (1 + np.square(2 * detuning / linewidth) + np.square(intensity / intensity_sat))
+    return 1.0 / (1 + np.square(2 * detuning / linewidth) + intensity / intensity_sat)
 
 def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None, res_cross_section = None, phase_sign = 1.0, 
                                 species = '6Li', num_samps = 1000, abs_min = 0.0, abs_max = 2.0):
@@ -367,16 +378,22 @@ def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, d
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
     geometry_adjusted_cross_section = res_cross_section * cross_section_imaging_geometry_factor
-    if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
+    if ((intensities_A is None or intensities_B is None or intensities_sat is None)
+        and not (intensities_A is None and intensities_B is None and intensities_sat is None)):
         raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
     if(np.abs(phase_sign) != 1.0):
         raise ValueError("The phase sign must be +-1.")
     atom_densities_list_1 = []
     atom_densities_list_2 = []
-    if not intensities_A:
+    if intensities_A is None:
         intensities_A = np.zeros(abs_image_A.shape)
         intensities_B = np.zeros(abs_image_A.shape)
         intensities_sat = np.inf * np.ones(abs_image_A.shape)
+    else:
+        broadcast_intensity_shape = abs_image_A.shape
+        intensities_A = np.broadcast_to(intensities_A, broadcast_intensity_shape)
+        intensities_B = np.broadcast_to(intensities_B, broadcast_intensity_shape)
+        intensities_sat = np.broadcast_to(intensities_sat, broadcast_intensity_shape)
     map_iterator = zip(abs_image_A.flatten(), abs_image_B.flatten(), generator_factory(detuning_1A), 
                         generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
                         generator_factory(linewidth), generator_factory(geometry_adjusted_cross_section), intensities_A.flatten(), 
@@ -489,6 +506,19 @@ def _rotate_and_crop_hybrid_image(image, center, rotation_angle_deg, x_crop_widt
     final_x_center = rotated_x_center - cropped_x_min
     final_y_center = rotated_y_center - cropped_y_min
     return (cropped_rotated_image, (final_x_center, final_y_center)) 
+
+
+
+def get_saturation_counts_from_camera_parameters(pixel_length_at_atoms_m, imaging_time_s, camera_count_to_photon_factor, linewidth_Hz, 
+                                                res_cross_section_m, saturation_multiplier = 1.0):
+    atomic_pixel_area = np.square(pixel_length_at_atoms_m)
+    photon_current_to_saturation_conversion_factor_mks = 2 * res_cross_section_m / (2 * np.pi * linewidth_Hz)
+    fudged_photon_current_to_saturation_conversion_mks = photon_current_to_saturation_conversion_factor_mks * saturation_multiplier
+    counts_to_photon_current_conversion_factor_mks = (1.0 / atomic_pixel_area) * (1.0 / imaging_time_s) * camera_count_to_photon_factor
+    saturation_counts = 1.0 / (counts_to_photon_current_conversion_factor_mks * fudged_photon_current_to_saturation_conversion_mks)
+    return saturation_counts
+
+
 
 def _get_linewidth_from_species(species):
     LI6_NATURAL_LINEWIDTH_MHZ = 5.87
