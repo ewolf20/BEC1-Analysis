@@ -315,7 +315,7 @@ x_data is assumed to be one-dimensional. If y_data is multi-dimensional - e.g. a
 over the first axis, assumed to correspond to x.
 
 Returns: A tuple (unique_x_data, y_averages, [y_deviations], [y_errors_of_mean]), with bracketed arguments optional depending on kwargs"""
-def average_over_like_x(x_data, y_data, return_deviations = True, return_error_of_mean = False):
+def average_over_like_x(x_data, y_data, return_deviations = False, return_error_of_mean = False):
     unique_x_data = np.unique(x_data) 
     unique_y_data = np.array([np.average(y_data[x_data == x_val], axis = 0) for x_val in unique_x_data])
     return_list = [unique_x_data, unique_y_data]
