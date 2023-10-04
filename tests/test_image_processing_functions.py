@@ -309,6 +309,42 @@ def test_get_hybrid_cross_section_um():
     assert np.isclose(cross_section, EXPECTED_CROSS_SECTION_UM2)
 
 
+def test_bin_data():
+    DATA_LENGTH_1D = 24
+    BIN_SIZE_1D_EVEN = 3
+    BIN_SIZE_1D_UNEVEN = 5
+    def validate_data_1d(data_length, bin_size, rebinned_data):
+        expected_rebinned_data = (bin_size - 1) / 2 + bin_size * np.arange(data_length // bin_size)
+        assert np.array_equal(rebinned_data, expected_rebinned_data)
+    data_to_bin_1d = np.arange(DATA_LENGTH_1D) 
+    rebinned_data_even = image_processing_functions.bin_data(data_to_bin_1d, BIN_SIZE_1D_EVEN)
+    validate_data_1d(DATA_LENGTH_1D, BIN_SIZE_1D_EVEN, rebinned_data_even)
+    rebinned_data_uneven = image_processing_functions.bin_data(data_to_bin_1d, BIN_SIZE_1D_UNEVEN)
+    validate_data_1d(DATA_LENGTH_1D, BIN_SIZE_1D_UNEVEN, rebinned_data_uneven)
+    DATA_LENGTH_2D = 96
+    DATA_SHAPE_2D = (8, 12)
+    data_to_bin_2d = np.arange(DATA_LENGTH_2D).reshape(DATA_SHAPE_2D)
+    data_shape_2d = data_to_bin_2d.shape
+    BIN_SIZE_2D_SINGLE_EVEN = 2 
+    BIN_SIZE_2D_SINGLE_UNEVEN = 5
+    BIN_SIZE_2D_TUPLE_EVEN = (2, 3) 
+    BIN_SIZE_2D_TUPLE_UNEVEN = (3, 5)
+    def validate_data_2d(data_shape, bin_shape, rebinned_data):
+        data_dim_0, data_dim_1 = data_shape 
+        bin_dim_0, bin_dim_1 = bin_shape 
+        constant_offset = (bin_dim_0 - 1) / 2 * data_dim_1 + (bin_dim_1 - 1)/2 
+        base_array = np.expand_dims(bin_dim_0 * data_dim_1 * np.arange(data_dim_0 // bin_dim_0), axis = 1) + bin_dim_1 * np.arange(data_dim_1 // bin_dim_1)
+        expected_rebinned_data = constant_offset + base_array 
+        assert np.array_equal(rebinned_data, expected_rebinned_data) 
+    rebinned_data_2d_single_even = image_processing_functions.bin_data(data_to_bin_2d, BIN_SIZE_2D_SINGLE_EVEN)
+    validate_data_2d(data_shape_2d, (BIN_SIZE_2D_SINGLE_EVEN, BIN_SIZE_2D_SINGLE_EVEN), rebinned_data_2d_single_even)
+    rebinned_data_2d_single_uneven = image_processing_functions.bin_data(data_to_bin_2d, BIN_SIZE_2D_SINGLE_UNEVEN)
+    validate_data_2d(data_shape_2d, (BIN_SIZE_2D_SINGLE_UNEVEN, BIN_SIZE_2D_SINGLE_UNEVEN), rebinned_data_2d_single_uneven)
+    rebinned_data_2d_tuple_even = image_processing_functions.bin_data(data_to_bin_2d, BIN_SIZE_2D_TUPLE_EVEN)
+    validate_data_2d(data_shape_2d, BIN_SIZE_2D_TUPLE_EVEN, rebinned_data_2d_tuple_even)
+    rebinned_data_2d_tuple_uneven = image_processing_functions.bin_data(data_to_bin_2d, BIN_SIZE_2D_TUPLE_UNEVEN) 
+    validate_data_2d(data_shape_2d, BIN_SIZE_2D_TUPLE_UNEVEN, rebinned_data_2d_tuple_uneven) 
+    
 def test_get_saturation_counts_from_camera_parameters():
     SAMPLE_CAMERA_COUNTS_TO_PHOTONS_FACTOR = 1.2
     SAMPLE_PIXEL_LENGTH_M = 1e-6 

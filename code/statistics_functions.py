@@ -303,3 +303,26 @@ def _studentized_residual_test(t, degrees_of_freedom, alpha):
     #Scipy betainc is the _regularized_ incomplete beta function
     probability_of_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
     return probability_of_occurrence > alpha
+
+
+"""
+Given corresponding sets of x_data and y_data, average y data for points with identical x data.
+
+If return_deviations is True, returns a set of deviations associated with each sample at a given x value.
+If return_error_of_mean is True, returns the errors of the mean associated with each sample, assuming normally-distributed data. 
+
+x_data is assumed to be one-dimensional. If y_data is multi-dimensional - e.g. a stack of images - then averages etc. are performed only 
+over the first axis, assumed to correspond to x.
+
+Returns: A tuple (unique_x_data, y_averages, [y_deviations], [y_errors_of_mean]), with bracketed arguments optional depending on kwargs"""
+def average_over_like_x(x_data, y_data, return_deviations = False, return_error_of_mean = False):
+    unique_x_data = np.unique(x_data) 
+    unique_y_data = np.array([np.average(y_data[x_data == x_val], axis = 0) for x_val in unique_x_data])
+    return_list = [unique_x_data, unique_y_data]
+    if return_deviations:
+        deviations = np.array([np.std(y_data[x_data == x_val], ddof = 1, axis = 0) for x_val in unique_x_data]) 
+        return_list.append(deviations) 
+    if return_error_of_mean:
+        errors_of_mean = np.array([np.std(y_data[x_data == x_val], ddof = 1, axis = 0) / np.sqrt(np.count_nonzero(x_data == x_val)) for x_val in unique_x_data])
+        return_list.append(errors_of_mean) 
+    return tuple(return_list)

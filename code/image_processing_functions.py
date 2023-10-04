@@ -131,7 +131,41 @@ def _clean_absorption_image(abs_image, strategy = 'default'):
         return np.clip(nan_cleaned_image, 0, ABSORPTION_LIMIT)
     elif(strategy == 'none'):
         return abs_image
+    
 
+"""Rebin a dataset, taking averages over regions of specified size. 
+
+Given a numpy array image_to_bin, take averages over regions of dimension specified by bin dimension, then return 
+a smaller array of binned pixels.
+
+Parameters:
+data_to_bin: Numpy array to be rebinned
+bin_dimensions: Either an int or tuple of ints specifying the size of bins to use. If a tuple of ints, it should be of the same 
+    length as image_to_bin.shape; if a single int, this size is used along each bin dimension. If the ith element of bin_dimensions 
+    does not evenly divide the ith element of data_to_bin.shape, the data is truncated along this axis.
+
+"""
+def bin_data(data_to_bin, bin_dimensions):
+    data_dimensions = data_to_bin.shape
+    num_data_dimensions = len(data_dimensions)
+    if isinstance(bin_dimensions, int):
+        bin_dimensions = tuple([bin_dimensions] * num_data_dimensions)
+    if not len(bin_dimensions) == len(data_to_bin.shape):
+        raise ValueError("The length of the bin dimensions does not agree with the data to be binned.")
+    #Truncate array to correct size in each dimension, then reshape to 2 * num_data_dimensions, with
+    slice_list = []
+    reshape_dimension_list = []
+    for bin_dimension, data_dimension in zip(bin_dimensions, data_dimensions):
+        truncated_data_dimension = data_dimension - (data_dimension % bin_dimension)
+        slice_list.append(slice(0, truncated_data_dimension))
+        reshape_dimension_list.append(truncated_data_dimension // bin_dimension) 
+        reshape_dimension_list.append(bin_dimension)
+    slice_tuple = tuple(slice_list)
+    reshape_dimension_tuple = tuple(reshape_dimension_list)
+    truncated_data = data_to_bin[slice_tuple] 
+    reshaped_truncated_data = truncated_data.reshape(reshape_dimension_tuple)
+    averaging_axis_tuple = tuple(np.arange(1, 2 * num_data_dimensions, 2)) 
+    return np.average(reshaped_truncated_data, axis = averaging_axis_tuple)
 
 """
 Returns an od image (i.e. -ln(abs_image)) for a given image stack. Essentially wraps -ln(get_absorption_image) with some extra cleaning."""
