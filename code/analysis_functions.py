@@ -7,72 +7,79 @@ from . import data_fitting_functions, image_processing_functions, science_functi
 
 #RAW IMAGES (Convenience functions for getting the raw pixel data from shots, cropped within an ROI)
 
-def get_raw_pixels_na_catch(my_measurement, my_run, crop_roi = False):
-    my_run_image_array = my_run.get_image("Catch", memmap = False) 
+#WARNING: For efficiency reasons related to memory mapping, combined with code simplicity,
+#these functions violate the contract of returning multiple results (here, the different frames), 
+#as a tuple. Instead, they return numpy arrays. This does not interfere with the 'contract' of measurement.py, 
+#which currently only requires an iterable.
+
+#WARNING: For similar efficiency reasons, the parameter
+
+def get_raw_pixels_na_catch(my_measurement, my_run, crop_roi = False, memmap = False):
+    my_run_image_array = my_run.get_image("Catch", memmap = memmap) 
     if crop_roi:
         roi = my_measurement.measurement_parameters["ROI"] 
         x_min, y_min, x_max, y_max = roi
         my_run_image_array_cropped = my_run_image_array[:, y_min:y_max, x_min:x_max] 
-        return (*my_run_image_array_cropped,)
+        return my_run_image_array_cropped
     else:
-        return (*my_run_image_array,)
+        return my_run_image_array
 
-def get_raw_pixels_side(my_measurement, my_run, crop_roi = False):
-    my_run_image_array = my_run.get_image("Side", memmap = False)
+def get_raw_pixels_side(my_measurement, my_run, crop_roi = False, memmap = False):
+    my_run_image_array = my_run.get_image("Side", memmap = memmap)
     if crop_roi:
         roi = my_measurement.measurement_parameters["ROI"] 
         x_min, y_min, x_max, y_max = roi 
         my_run_image_array_cropped = my_run_image_array[:, y_min:y_max, x_min:x_max]
-        return (*my_run_image_array_cropped,)
+        return my_run_image_array_cropped
     else:
-        return (*my_run_image_array,)
+        return my_run_image_array
     
 
-def get_raw_pixels_top_A(my_measurement, my_run, crop_roi = False):
-    my_run_image_array = my_run.get_image("TopA", memmap = False)
+def get_raw_pixels_top_A(my_measurement, my_run, crop_roi = False, memmap = False):
+    my_run_image_array = my_run.get_image("TopA", memmap = memmap)
     if crop_roi:
         roi = my_measurement.measurement_parameters["ROI"] 
         x_min, y_min, x_max, y_max = roi 
         my_run_image_array_cropped = my_run_image_array[:, y_min:y_max, x_min:x_max]
-        return (*my_run_image_array_cropped,)
+        return my_run_image_array_cropped
     else:
-        return (*my_run_image_array,)
+        return my_run_image_array
     
 
-def get_raw_pixels_top_B(my_measurement, my_run, crop_roi = False):
-    my_run_image_array = my_run.get_image("TopB", memmap = False)
+def get_raw_pixels_top_B(my_measurement, my_run, crop_roi = False, memmap = False):
+    my_run_image_array = my_run.get_image("TopB", memmap = memmap)
     if crop_roi:
         roi = my_measurement.measurement_parameters["ROI"] 
         x_min, y_min, x_max, y_max = roi 
         my_run_image_array_cropped = my_run_image_array[:, y_min:y_max, x_min:x_max]
-        return (*my_run_image_array_cropped,)
+        return my_run_image_array_cropped
     else:
-        return (*my_run_image_array,)
+        return my_run_image_array
 
 
 #ABS IMAGES (Sometimes called 'Fake OD')
 
 def get_abs_image_na_catch(my_measurement, my_run):
-    my_run_image_array = my_run.get_image('Catch', memmap = True) 
+    my_run_image_array = get_raw_pixels_na_catch(my_measurement, my_run, memmap = True)
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     return my_run_abs_image
 
 def get_abs_image_side(my_measurement, my_run):
-    my_run_image_array = my_run.get_image('Side', memmap = True) 
+    my_run_image_array = get_raw_pixels_side(my_measurement, my_run, memmap = True)
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     return my_run_abs_image
 
 
 def get_abs_image_top_A(my_measurement, my_run):
-    my_run_image_array_A = my_run.get_image('TopA', memmap = True) 
+    my_run_image_array_A = get_raw_pixels_top_A(my_measurement, my_run, memmap = True)
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array_A, ROI = my_measurement.measurement_parameters["ROI"], 
                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     return my_run_abs_image
 
 def get_abs_image_top_B(my_measurement, my_run):
-    my_run_image_array_B = my_run.get_image('TopB', memmap = True) 
+    my_run_image_array_B = get_raw_pixels_top_B(my_measurement, my_run, memmap = True)
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     return my_run_abs_image
@@ -83,26 +90,26 @@ def get_abs_images_top_double(my_measurement, my_run):
 #OD IMAGES
 
 def get_od_image_na_catch(my_measurement, my_run):
-    my_run_image_array = my_run.get_image('Catch', memmap = True) 
+    my_run_image_array = get_raw_pixels_na_catch(my_measurement, my_run, memmap = True)
     my_run_od_image = image_processing_functions.get_absorption_od_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
                                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     return my_run_od_image
 
 def get_od_image_side(my_measurement, my_run):
-    my_run_image_array = my_run.get_image('Side', memmap = True) 
+    my_run_image_array = get_raw_pixels_side(my_measurement, my_run, memmap = True)
     my_run_od_image = image_processing_functions.get_absorption_od_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
                                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     return my_run_od_image
 
 def get_od_image_top_A(my_measurement, my_run):
-    my_run_image_array_A = my_run.get_image('TopA', memmap = True) 
+    my_run_image_array_A = get_raw_pixels_top_A(my_measurement, my_run, memmap = True)
     my_run_od_image_A = image_processing_functions.get_absorption_od_image(my_run_image_array_A, ROI = my_measurement.measurement_parameters["ROI"], 
                                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     return my_run_od_image_A
 
 
 def get_od_image_top_B(my_measurement, my_run):
-    my_run_image_array_B = my_run.get_image('TopB', memmap = True) 
+    my_run_image_array_B = get_raw_pixels_top_B(my_measurement, my_run, memmap = True)
     my_run_od_image_B = image_processing_functions.get_absorption_od_image(my_run_image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
                                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
     return my_run_od_image_B
@@ -142,7 +149,7 @@ def get_od_pixel_sums_top_double(my_measurement, my_run):
 #ATOM DENSITIES
 
 def get_atom_density_side_li_lf(my_measurement, my_run):
-    my_run_image_array = my_run.get_image('Side', memmap = True) 
+    my_run_image_array = get_raw_pixels_side(my_measurement, my_run, memmap = True)
     frequency_multiplier = my_measurement.experiment_parameters["li_lf_freq_multiplier"]
     nominal_resonance_frequency = my_measurement.experiment_parameters["li_lf_res_freq"]
     nominal_frequency = my_run.parameters["LFImgFreq"]
@@ -157,7 +164,7 @@ def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None, b_fi
     if state_index is None:
         raise RuntimeError("The state of the imaging must be specified.")
     
-    my_run_image_array = my_run.get_image('Side', memmap = True) 
+    my_run_image_array = get_raw_pixels_side(my_measurement, my_run, memmap = True) 
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
     side_cross_section_geometry_factor = my_measurement.experiment_parameters["li_side_sigma_multiplier"]
     nominal_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, state_index)
@@ -183,7 +190,7 @@ def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_
 
 
     #Process
-    my_run_image_array = my_run.get_image('TopA', memmap = True) 
+    my_run_image_array = get_raw_pixels_top_A(my_measurement, my_run, memmap = True)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
                                                             norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
                                                             cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
@@ -196,7 +203,7 @@ def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_
     hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
     top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency) + hf_lock_frequency_adjustment
-    my_run_image_array = my_run.get_image('TopB', memmap = True) 
+    my_run_image_array = get_raw_pixels_top_B(my_measurement, my_run, memmap = True)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
                                                             norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
                                                             cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
@@ -223,8 +230,8 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     detuning_2B = frequency_multiplier * (nominal_frequency_B - second_state_resonance_frequency) + hf_lock_frequency_adjustment
     top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
     polrot_phase_sign = my_measurement.experiment_parameters["polrot_phase_sign"]
-    image_array_A = my_run.get_image('TopA', memmap = True)
-    image_array_B = my_run.get_image('TopB', memmap = True)
+    image_array_A = get_raw_pixels_top_A(my_measurement, my_run, memmap = True)
+    image_array_B = get_raw_pixels_top_B(my_measurement, my_run, memmap = True)
     abs_image_A = image_processing_functions.get_absorption_image(image_array_A, 
                                                                 ROI = my_measurement.measurement_parameters["ROI"], 
                                                                 norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])

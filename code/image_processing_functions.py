@@ -143,11 +143,16 @@ data_to_bin: Numpy array to be rebinned
 bin_dimensions: Either an int or tuple of ints specifying the size of bins to use. If a tuple of ints, it should be of the same 
     length as image_to_bin.shape; if a single int, this size is used along each bin dimension. If the ith element of bin_dimensions 
     does not evenly divide the ith element of data_to_bin.shape, the data is truncated along this axis.
+Omitted axes: If specified, any axis appearing in omitted_axes is not rebinned over. Useful for rebinning only certain axes of an array. 
 
 """
-def bin_data(data_to_bin, bin_dimensions):
+def bin_data(data_to_bin, bin_dimensions, omitted_axes = None):
+    num_data_dimensions = len(data_to_bin.shape)
+    if omitted_axes is None:
+        omitted_axes = ()
+    #Move all omitted axes to the back end of the array
+    omitted_axes_positions = tuple((num_data_dimensions - 1) - np.arange(len(omitted_axes)))
     data_dimensions = data_to_bin.shape
-    num_data_dimensions = len(data_dimensions)
     if isinstance(bin_dimensions, int):
         bin_dimensions = tuple([bin_dimensions] * num_data_dimensions)
     if not len(bin_dimensions) == len(data_to_bin.shape):
