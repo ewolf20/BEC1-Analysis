@@ -31,6 +31,10 @@ class Measurement():
     PARAMETERS_DUMPFILE_NAME = "parameters_dump.json"
     DEFAULT_DUMP_FOLDER_NAME = "dump_folder"
 
+    MEASUREMENT_FOLDER_RUN_PARAMS_FILENAME = "run_params_dump.json"
+    MEASUREMENT_FOLDER_EXPERIMENT_PARAMS_FILENAME = "experiment_parameters.json" 
+
+
     """Initialization method.
     
     Parameters:
@@ -79,7 +83,7 @@ class Measurement():
             self.image_format = image_format
             self.hold_images_in_memory = hold_images_in_memory
             if(not experiment_parameters):
-                experiment_parameters_path = os.path.join(measurement_directory_path, "experiment_parameters.json")
+                experiment_parameters_path = os.path.join(measurement_directory_path, Measurement.MEASUREMENT_FOLDER_EXPERIMENT_PARAMS_FILENAME)
                 with open(experiment_parameters_path, 'r') as json_file:
                     experiment_parameters_dict = json.load(json_file)
                     self.experiment_parameters = experiment_parameters_dict["Values"]
@@ -97,8 +101,7 @@ class Measurement():
 
 
     def _get_run_ids_and_parameters_from_measurement_folder(self):
-        DATA_DUMP_PARAMS_FILENAME = "run_params_dump.json" 
-        path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, DATA_DUMP_PARAMS_FILENAME)
+        path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, Measurement.MEASUREMENT_FOLDER_RUN_PARAMS_FILENAME)
         run_parameters_list = loading_functions.load_run_parameters_from_json(path_to_dump_file_in_measurement_folder, 
                                                                     make_raw_parameters_terse = (not self.run_parameters_verbose), 
                                                                     have_patience = self.is_live)
