@@ -59,7 +59,7 @@ class Measurement():
     measurement directory. If not in this mode, run images cannot be accessed, and various data are initialized by loading from a pre-existing dump. 
     """
     def __init__(self, measurement_directory_path = None, imaging_type = 'top_double', experiment_parameters = None, image_format = ".fits", 
-                    hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = False,
+                    hold_images_in_memory = False, measurement_parameters = None, run_parameters_verbose = True,
                     badshot_function = None, analyses_list = None, 
                     global_run_filter = None, is_live = False, connected_mode = True):
         if(measurement_parameters):   
@@ -327,7 +327,7 @@ class Measurement():
     """
     def set_box(self, label, run_to_use = None, image_to_use = None, box_coordinates = None, overwrite_existing = True):
         if not overwrite_existing and label in self.measurement_parameters:
-            return None
+            return
         if(not box_coordinates):
             if run_to_use is None:
                 id_try_list = list(self.runs_dict) 
