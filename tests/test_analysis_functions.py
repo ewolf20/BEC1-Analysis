@@ -41,10 +41,7 @@ DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (150, 150)
 
 def _get_raw_pixels_test_helper(type_name, function_to_test):
     try:
-        measurement_pathname, my_measurement = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI)
-        for run_id in my_measurement.runs_dict:
-            my_run = my_measurement.runs_dict[run_id] 
-            break 
+        measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI)
         returned_array_no_roi = function_to_test(my_measurement, my_run, crop_roi = False) 
         returned_array_roi = function_to_test(my_measurement, my_run, crop_roi = True) 
 
@@ -112,6 +109,70 @@ def test_get_raw_pixels_top_B():
     _get_raw_pixels_test_helper(type_name, function_to_test)
 
 
+def _get_abs_image_test_helper(type_name, function_to_test):
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
+                                                        norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        absorption_image = function_to_test(my_measurement, my_run)
+        default_absorption_image = get_default_absorption_image()
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        cropped_default_absorption_image = default_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+        assert np.all(np.isclose(cropped_default_absorption_image, absorption_image, rtol = 1e-3))
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+def test_get_abs_image_na_catch():
+    type_name = "na_catch"
+    function_to_test = analysis_functions.get_abs_image_na_catch
+    _get_abs_image_test_helper(type_name, function_to_test)
+
+def test_get_abs_image_side():
+    type_name = "side_low_mag"
+    function_to_test = analysis_functions.get_abs_image_side
+    _get_abs_image_test_helper(type_name, function_to_test)
+
+def test_get_abs_image_top_A():
+    type_name = "top_double"
+    function_to_test = analysis_functions.get_abs_image_top_A
+    _get_abs_image_test_helper(type_name, function_to_test)
+
+def test_get_abs_image_top_B():
+    type_name = "top_double" 
+    function_to_test = analysis_functions.get_abs_image_top_B
+    _get_abs_image_test_helper(type_name, function_to_test)
+
+
+def _get_od_image_test_helper(type_name, function_to_test):
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
+                                                                 norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        od_image = function_to_test(my_measurement, my_run) 
+        default_od_image = -np.log(get_default_absorption_image())
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        cropped_default_od_image = default_od_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+        assert np.all(np.isclose(cropped_default_od_image, od_image, rtol = 1e-3))
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+def test_get_od_image_na_catch():
+    type_name = "na_catch"
+    function_to_test = analysis_functions.get_od_image_na_catch
+    _get_od_image_test_helper(type_name, function_to_test) 
+
+def test_get_od_image_side():
+    type_name = "side_low_mag"
+    function_to_test = analysis_functions.get_od_image_side 
+    _get_od_image_test_helper(type_name, function_to_test)
+
+def test_get_od_image_top_A():
+    type_name = "top_double" 
+    function_to_test = analysis_functions.get_od_image_top_A 
+    _get_od_image_test_helper(type_name, function_to_test)
+
+def test_get_od_image_top_B():
+    type_name = "top_double" 
+    function_to_test = analysis_functions.get_od_image_top_B 
+    _get_od_image_test_helper(type_name, function_to_test)
 
 
 
@@ -131,7 +192,10 @@ def create_measurement(type_name, image_stack = None, run_param_values= None, ex
         my_measurement.set_ROI(box_coordinates = ROI)
     if not norm_box is None:
         my_measurement.set_norm_box(box_coordinates = norm_box)
-    return (measurement_pathname, my_measurement)
+    for run_id in my_measurement.runs_dict:
+        my_run = my_measurement.runs_dict[run_id] 
+        break
+    return (measurement_pathname, my_measurement, my_run)
 
 
 def create_side_low_mag_measurement(image_stack = None, run_param_values = None, experiment_param_values = None, ROI = None, norm_box = None):
