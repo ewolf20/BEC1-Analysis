@@ -29,7 +29,7 @@ BASE_DARK_LEVEL = 100
 
 DEFAULT_ABSORPTION = 1.0/np.e
 DEFAULT_ABS_IMAGE_SHAPE = (512, 512)     
-DEFAULT_ABS_SQUARE_WIDTH = 128
+DEFAULT_ABS_SQUARE_WIDTH = 127
 DEFAULT_ABS_SQUARE_CENTER_INDICES = (256, 256)
 
 DEFAULT_ABSORPTION_IMAGE_ROI = [170, 170, 340, 340]
@@ -57,7 +57,7 @@ def _get_raw_pixels_test_helper(type_name, function_to_test):
         expected_dark_sum = np.prod(DEFAULT_ABS_IMAGE_SHAPE) * float(BASE_DARK_LEVEL)
         #Not exact because of rounding
         expected_with_atoms_sum = (np.prod(DEFAULT_ABS_IMAGE_SHAPE) * float(BASE_LIGHT_LEVEL + BASE_DARK_LEVEL)
-         - np.square(DEFAULT_ABS_SQUARE_WIDTH - 1) * (1.0 - DEFAULT_ABSORPTION) * BASE_LIGHT_LEVEL)
+         - np.square(DEFAULT_ABS_SQUARE_WIDTH) * (1.0 - DEFAULT_ABSORPTION) * BASE_LIGHT_LEVEL)
 
         assert np.isclose(np.sum(without_atoms_no_roi.astype(float)), expected_without_atoms_sum)
         assert np.isclose(np.sum(dark_no_roi.astype(float)), expected_dark_sum)
@@ -77,7 +77,7 @@ def _get_raw_pixels_test_helper(type_name, function_to_test):
         expected_dark_sum_roi = np.prod(DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE) * float(BASE_DARK_LEVEL)
         #Not exact because of rounding
         expected_with_atoms_sum_roi = (np.prod(DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE) * float(BASE_LIGHT_LEVEL + BASE_DARK_LEVEL)
-         - np.square(DEFAULT_ABS_SQUARE_WIDTH - 1) * (1.0 - DEFAULT_ABSORPTION) * BASE_LIGHT_LEVEL)
+         - np.square(DEFAULT_ABS_SQUARE_WIDTH) * (1.0 - DEFAULT_ABSORPTION) * BASE_LIGHT_LEVEL)
 
         assert np.isclose(np.sum(without_atoms_roi.astype(float)), expected_without_atoms_sum_roi)
         assert np.isclose(np.sum(dark_roi.astype(float)), expected_dark_sum_roi)
@@ -175,6 +175,37 @@ def test_get_od_image_top_B():
     _get_od_image_test_helper(type_name, function_to_test)
 
 
+def _get_od_pixel_sum_test_helper(type_name, function_to_test):
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
+                                                                          norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        pixel_sum = function_to_test(my_measurement, my_run) 
+        expected_pixel_sum = np.square(DEFAULT_ABS_SQUARE_WIDTH)
+        assert np.isclose(expected_pixel_sum, pixel_sum, rtol = 1e-3)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
+def test_get_od_pixel_sum_na_catch():
+    type_name = "na_catch" 
+    function_to_test = analysis_functions.get_od_pixel_sum_na_catch
+    _get_od_pixel_sum_test_helper(type_name, function_to_test)
+
+def test_get_od_pixel_sum_side():
+    type_name = "side_low_mag" 
+    function_to_test = analysis_functions.get_od_pixel_sum_side
+    _get_od_pixel_sum_test_helper(type_name, function_to_test) 
+
+def test_get_od_pixel_sum_top_A():
+    type_name = "top_double" 
+    function_to_test = analysis_functions.get_od_pixel_sum_top_A 
+    _get_od_pixel_sum_test_helper(type_name, function_to_test)
+
+def test_get_od_pixel_sum_top_B():
+    type_name = "top_double" 
+    function_to_test = analysis_functions.get_od_pixel_sum_top_A 
+    _get_od_pixel_sum_test_helper(type_name, function_to_test)
+
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
     if image_stack is None:
@@ -226,8 +257,8 @@ def get_default_absorption_image():
     y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
     default_absorption_image = np.where(
         np.logical_and(
-            np.abs(y_indices - center_y_index) < DEFAULT_ABS_SQUARE_WIDTH //2, 
-            np.abs(x_indices - center_x_index) < DEFAULT_ABS_SQUARE_WIDTH // 2
+            np.abs(y_indices - center_y_index) < (DEFAULT_ABS_SQUARE_WIDTH + 1) //2, 
+            np.abs(x_indices - center_x_index) < (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
         ),
         1.0/np.e, 
         1.0
