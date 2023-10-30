@@ -206,6 +206,15 @@ def test_get_od_pixel_sum_top_B():
     function_to_test = analysis_functions.get_od_pixel_sum_top_A 
     _get_od_pixel_sum_test_helper(type_name, function_to_test)
 
+def _get_atom_density_test_helper_resonant(type_name, function_to_test, cross_section):
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
+                                                                          norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        atom_densities = function_to_test(my_measurement, cross_section)
+        expected_densities = get_default_absorption_image() / cross_section 
+        cropped_expected_densities =
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
     if image_stack is None:
@@ -252,7 +261,7 @@ def create_catch_measurement(image_stack = None, run_param_values = None, experi
 #Generate a test image, suitable for use in most analysis functions
 #The image pattern is a square, with -ln(abs) = 1 for a grid of pixels centered 
 #on the origin and -ln(abs) = 0 for all others.
-def get_default_absorption_image():
+def get_default_absorption_image(crop_to_roi = False):
     center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
     y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
     default_absorption_image = np.where(
@@ -263,7 +272,10 @@ def get_default_absorption_image():
         1.0/np.e, 
         1.0
     )
-    return default_absorption_image
+    if not crop_to_roi: rt
+        return default_absorption_image
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax =
 
 #Create a dummy measurement folder with a single (simulated) image, 
 #plus experiment_parameters.json file and run_params_dump.json file.
