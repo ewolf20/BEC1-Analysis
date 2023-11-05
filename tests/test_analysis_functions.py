@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
-from BEC1_Analysis.code import measurement
+from BEC1_Analysis.code import measurement, image_processing_functions
 from BEC1_Analysis.code import analysis_functions
 
 
@@ -37,6 +37,21 @@ DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (170, 170)
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [10, 10, 160, 160]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (150, 150)
 
+
+#Dummy values to inject into code instead of the multiplicative and additive identities, to make sure 
+#that subtractions have the right signs, divisions are done appropriately, etc. 
+L33T_DUMMY = 1.337
+PI_DUMMY = 3.14
+E_DUMMY = 2.718
+SQRT_2_DUMMY = 1.414
+SQRT_3_DUMMY = 1.732
+SQRT_5_DUMMY = 2.236
+SQRT_6_DUMMY = 2.449
+SQRT_7_DUMMY = 2.646
+SQRT_10_DUMMY = 3.162
+SQRT_11_DUMMY = 3.317
+SQRT_13_DUMMY = 3.606
+SQRT_14_DUMMY = 3.742
 
 
 def _get_raw_pixels_test_helper(type_name, function_to_test):
@@ -114,9 +129,7 @@ def _get_abs_image_test_helper(type_name, function_to_test):
         measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
                                                         norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
         absorption_image = function_to_test(my_measurement, my_run)
-        default_absorption_image = get_default_absorption_image()
-        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
-        cropped_default_absorption_image = default_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+        cropped_default_absorption_image = get_default_absorption_image(crop_to_roi = True)
         assert np.all(np.isclose(cropped_default_absorption_image, absorption_image, rtol = 1e-3))
     finally:
         shutil.rmtree(measurement_pathname)
@@ -147,9 +160,7 @@ def _get_od_image_test_helper(type_name, function_to_test):
         measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
                                                                  norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
         od_image = function_to_test(my_measurement, my_run) 
-        default_od_image = -np.log(get_default_absorption_image())
-        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
-        cropped_default_od_image = default_od_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+        cropped_default_od_image = -np.log(get_default_absorption_image(crop_to_roi = True))
         assert np.all(np.isclose(cropped_default_od_image, od_image, rtol = 1e-3))
     finally:
         shutil.rmtree(measurement_pathname)
@@ -206,15 +217,78 @@ def test_get_od_pixel_sum_top_B():
     function_to_test = analysis_functions.get_od_pixel_sum_top_A 
     _get_od_pixel_sum_test_helper(type_name, function_to_test)
 
-def _get_atom_density_test_helper_resonant(type_name, function_to_test, cross_section):
+
+li_6_res_cross_section = image_processing_functions._get_res_cross_section_from_species("6Li")
+li_6_linewidth = image_processing_functions._get_linewidth_from_species("6Li")
+
+def _get_atom_density_test_helper(type_name, function_to_test, cross_section, experiment_param_values = None, 
+                                           run_param_values = None):
     try:
         measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
-                                                                          norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
-        atom_densities = function_to_test(my_measurement, cross_section)
-        expected_densities = get_default_absorption_image() / cross_section 
-        cropped_expected_densities =
+                                                                          norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX,
+                                                                        experiment_param_values = experiment_param_values, 
+                                                                        run_param_values = run_param_values)
+        atom_densities = function_to_test(my_measurement, my_run)
+        cropped_expected_densities = -np.log(get_default_absorption_image(crop_to_roi = True)) / cross_section 
+        assert np.all(np.isclose(atom_densities, cropped_expected_densities, rtol = 1e-3))
     finally:
         shutil.rmtree(measurement_pathname)
+
+
+def test_get_atom_density_side_li_lf():
+    experiment_param_values = {
+        "li_lf_freq_multiplier":L33T_DUMMY,
+        "li_lf_res_freq":PI_DUMMY,
+        "li_side_sigma_multiplier":E_DUMMY
+    }
+    run_param_values_resonant = {
+        "LFImgFreq":PI_DUMMY
+    }
+    run_param_values_detuned = {
+        "LFImgFreq":li_6_linewidth / L33T_DUMMY + PI_DUMMY
+    }
+    dummy_rescaled_cross_section = li_6_res_cross_section * E_DUMMY
+    _get_atom_density_test_helper("side_low_mag", analysis_functions.get_atom_density_side_li_lf, dummy_rescaled_cross_section, 
+                                           experiment_param_values = experiment_param_values, run_param_values = run_param_values_resonant)
+    detuned_effective_cross_section = dummy_rescaled_cross_section / 5
+    _get_atom_density_test_helper("side_low_mag", analysis_functions.get_atom_density_side_li_lf, detuned_effective_cross_section, 
+                                  experiment_param_values = experiment_param_values, run_param_values = run_param_values_detuned)
+
+
+def _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition):
+    if b_field_condition == "unitarity":
+        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_unitarity_resonance_value"]
+    elif b_field_condition == "rapid_ramp":
+        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_rr_resonance_value"]
+    elif b_field_condition == "zero_crossing":
+        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_zero_crossing_resonance_value"]
+    lock_frequency_multiplier = my_measurement.experiment_parameters["hf_lock_frequency_multiplier"]
+    lock_setpoint = my_measurement.experiment_parameters["hf_lock_setpoint"]
+    return lock_frequency_multiplier * (lock_setpoint - lock_value_for_nominal_resonance)
+def test_get_atom_density_side_li_hf():
+    experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": L33T_DUMMY,
+        "state_2_unitarity_res_freq_MHz":E_DUMMY,
+        "state_3_unitarity_res_freq_MHz":PI_DUMMY,
+        "hf_lock_unitarity_resonance_value":SQRT_2_DUMMY,
+        "hf_lock_rr_resonance_value":SQRT_3_DUMMY,
+        "hf_lock_zero_crossing_resonance_value":SQRT_5_DUMMY,
+        "hf_lock_setpoint":SQRT_7_DUMMY,
+        "hf_lock_frequency_multiplier":SQRT_10_DUMMY,
+        "li_side_sigma_multiplier":SQRT_11_DUMMY, 
+        "li_hf_freq_multiplier":SQRT_13_DUMMY
+    }
+    dummy_rescaled_cross_section = li_6_res_cross_section * SQRT_11_DUMMY
+    on_res_unitarity_nominal_frequency = (
+        experiment_param_values["state_1_unitarity_res_freq_MHz"] - 
+        experiment_param_values["hf_lock_frequency_multiplier"]/experiment_param_values["li_hf_freq_multiplier"] * 
+        (experiment_param_values["hf_lock_setpoint"] - "hf_lock_unitarity_")
+    )
+    run_param_values_on_res_unitarity = {
+        "ImagFreq0":(experiment_param_values["hf_lock_setpoint"] )
+    }
+
+
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
     if image_stack is None:
@@ -272,10 +346,11 @@ def get_default_absorption_image(crop_to_roi = False):
         1.0/np.e, 
         1.0
     )
-    if not crop_to_roi: rt
+    if not crop_to_roi:
         return default_absorption_image
     else:
-        roi_xmin, roi_ymin, roi_xmax, roi_ymax =
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return default_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
 
 #Create a dummy measurement folder with a single (simulated) image, 
 #plus experiment_parameters.json file and run_params_dump.json file.
