@@ -222,13 +222,15 @@ li_6_res_cross_section = image_processing_functions._get_res_cross_section_from_
 li_6_linewidth = image_processing_functions._get_linewidth_from_species("6Li")
 
 def _get_atom_density_test_helper(type_name, function_to_test, cross_section, experiment_param_values = None, 
-                                           run_param_values = None):
+                                           run_param_values = None, fun_kwargs = None):
+    if fun_kwargs is None:
+        fun_kwargs = {}
     try:
         measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
                                                                           norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX,
                                                                         experiment_param_values = experiment_param_values, 
                                                                         run_param_values = run_param_values)
-        atom_densities = function_to_test(my_measurement, my_run)
+        atom_densities = function_to_test(my_measurement, my_run, **fun_kwargs)
         cropped_expected_densities = -np.log(get_default_absorption_image(crop_to_roi = True)) / cross_section 
         assert np.all(np.isclose(atom_densities, cropped_expected_densities, rtol = 1e-3))
     finally:
@@ -255,18 +257,11 @@ def test_get_atom_density_side_li_lf():
                                   experiment_param_values = experiment_param_values, run_param_values = run_param_values_detuned)
 
 
-def _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition):
-    if b_field_condition == "unitarity":
-        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_unitarity_resonance_value"]
-    elif b_field_condition == "rapid_ramp":
-        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_rr_resonance_value"]
-    elif b_field_condition == "zero_crossing":
-        lock_value_for_nominal_resonance = my_measurement.experiment_parameters["hf_lock_zero_crossing_resonance_value"]
-    lock_frequency_multiplier = my_measurement.experiment_parameters["hf_lock_frequency_multiplier"]
-    lock_setpoint = my_measurement.experiment_parameters["hf_lock_setpoint"]
-    return lock_frequency_multiplier * (lock_setpoint - lock_value_for_nominal_resonance)
-def test_get_atom_density_side_li_hf():
-    experiment_param_values = {
+
+
+def _get_hf_atom_density_test_helper(measurement_type, function_to_test, run_param_keys):
+
+    hf_atom_density_experiment_param_values = {
         "state_1_unitarity_res_freq_MHz": L33T_DUMMY,
         "state_2_unitarity_res_freq_MHz":E_DUMMY,
         "state_3_unitarity_res_freq_MHz":PI_DUMMY,
@@ -276,17 +271,123 @@ def test_get_atom_density_side_li_hf():
         "hf_lock_setpoint":SQRT_7_DUMMY,
         "hf_lock_frequency_multiplier":SQRT_10_DUMMY,
         "li_side_sigma_multiplier":SQRT_11_DUMMY, 
+        "li_top_sigma_multiplier":SQRT_14_DUMMY,
         "li_hf_freq_multiplier":SQRT_13_DUMMY
     }
-    dummy_rescaled_cross_section = li_6_res_cross_section * SQRT_11_DUMMY
-    on_res_unitarity_nominal_frequency = (
-        experiment_param_values["state_1_unitarity_res_freq_MHz"] - 
-        experiment_param_values["hf_lock_frequency_multiplier"]/experiment_param_values["li_hf_freq_multiplier"] * 
-        (experiment_param_values["hf_lock_setpoint"] - "hf_lock_unitarity_")
+
+    on_res_unitarity_nominal_frequency_1 = (
+        hf_atom_density_experiment_param_values["state_1_unitarity_res_freq_MHz"] - 
+        hf_atom_density_experiment_param_values["hf_lock_frequency_multiplier"]/hf_atom_density_experiment_param_values["li_hf_freq_multiplier"] * 
+        (hf_atom_density_experiment_param_values["hf_lock_setpoint"] - hf_atom_density_experiment_param_values["hf_lock_unitarity_resonance_value"])
     )
-    run_param_values_on_res_unitarity = {
-        "ImagFreq0":(experiment_param_values["hf_lock_setpoint"] )
-    }
+    on_res_unitarity_nominal_frequency_2 = (
+        hf_atom_density_experiment_param_values["state_2_unitarity_res_freq_MHz"] - 
+        hf_atom_density_experiment_param_values["hf_lock_frequency_multiplier"]/hf_atom_density_experiment_param_values["li_hf_freq_multiplier"] * 
+        (hf_atom_density_experiment_param_values["hf_lock_setpoint"] - hf_atom_density_experiment_param_values["hf_lock_unitarity_resonance_value"]) 
+    )
+    on_res_unitarity_nominal_frequency_3 = (
+        hf_atom_density_experiment_param_values["state_3_unitarity_res_freq_MHz"] - 
+        hf_atom_density_experiment_param_values["hf_lock_frequency_multiplier"]/hf_atom_density_experiment_param_values["li_hf_freq_multiplier"] * 
+        (hf_atom_density_experiment_param_values["hf_lock_setpoint"] - hf_atom_density_experiment_param_values["hf_lock_unitarity_resonance_value"]) 
+    )
+
+    on_res_rapid_ramp_nominal_frequency_1 = (
+        hf_atom_density_experiment_param_values["state_1_unitarity_res_freq_MHz"] - 
+        hf_atom_density_experiment_param_values["hf_lock_frequency_multiplier"]/hf_atom_density_experiment_param_values["li_hf_freq_multiplier"] * 
+        (hf_atom_density_experiment_param_values["hf_lock_setpoint"] - hf_atom_density_experiment_param_values["hf_lock_rr_resonance_value"])
+    )
+
+    on_res_zero_crossing_nominal_frequency_1 = (
+        hf_atom_density_experiment_param_values["state_1_unitarity_res_freq_MHz"] - 
+        hf_atom_density_experiment_param_values["hf_lock_frequency_multiplier"]/hf_atom_density_experiment_param_values["li_hf_freq_multiplier"] * 
+        (hf_atom_density_experiment_param_values["hf_lock_setpoint"] - hf_atom_density_experiment_param_values["hf_lock_zero_crossing_resonance_value"])
+    )
+
+    off_res_unitarity_nominal_frequency_1 = on_res_unitarity_nominal_frequency_1 + li_6_linewidth / hf_atom_density_experiment_param_values["li_hf_freq_multiplier"]
+
+
+
+    if measurement_type == "side_high_mag":
+        dummy_rescaled_cross_section = li_6_res_cross_section * hf_atom_density_experiment_param_values["li_side_sigma_multiplier"]
+    elif measurement_type == "top_double":
+        dummy_rescaled_cross_section = li_6_res_cross_section * hf_atom_density_experiment_param_values["li_top_sigma_multiplier"]
+
+
+    run_param_values_on_res_unitarity_1 = {} 
+    run_param_values_on_res_unitarity_2 = {} 
+    run_param_values_on_res_unitarity_3 = {} 
+    run_param_values_on_res_zero_crossing_1 = {} 
+    run_param_values_on_res_rapid_ramp_1 = {}
+    run_param_values_off_res_unitarity_1 = {}
+    for run_param_key in run_param_keys:
+        run_param_values_on_res_unitarity_1[run_param_key] = on_res_unitarity_nominal_frequency_1
+        run_param_values_on_res_unitarity_2[run_param_key] = on_res_unitarity_nominal_frequency_2
+        run_param_values_on_res_unitarity_3[run_param_key] = on_res_unitarity_nominal_frequency_3
+        run_param_values_on_res_zero_crossing_1[run_param_key] = on_res_zero_crossing_nominal_frequency_1
+        run_param_values_on_res_rapid_ramp_1[run_param_key] = on_res_rapid_ramp_nominal_frequency_1
+        run_param_values_off_res_unitarity_1[run_param_key] = off_res_unitarity_nominal_frequency_1
+
+    #Test getting different states
+    _get_atom_density_test_helper(measurement_type, function_to_test, dummy_rescaled_cross_section, 
+                                  experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values_on_res_unitarity_1, 
+                                  fun_kwargs = {"state_index":1})
+    _get_atom_density_test_helper(measurement_type, function_to_test, dummy_rescaled_cross_section, 
+                                  experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values_on_res_unitarity_2, 
+                                  fun_kwargs = {"state_index":2})
+    _get_atom_density_test_helper(measurement_type, function_to_test, dummy_rescaled_cross_section, 
+                                  experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values_on_res_unitarity_3, 
+                                  fun_kwargs = {"state_index":3})
+    
+    #Test off-resonant imaging 
+
+    off_res_dummy_rescaled_cross_section = dummy_rescaled_cross_section / 5
+    _get_atom_density_test_helper(measurement_type, function_to_test, off_res_dummy_rescaled_cross_section, 
+                                  experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values_off_res_unitarity_1, 
+                                  fun_kwargs = {"state_index":1})
+    
+
+    #Test different field conditions 
+    _get_atom_density_test_helper(measurement_type, function_to_test, dummy_rescaled_cross_section, 
+                                  experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values_on_res_rapid_ramp_1, 
+                                  fun_kwargs = {"state_index":1, "b_field_condition":"rapid_ramp"})    
+
+
+    _get_atom_density_test_helper(measurement_type, function_to_test, dummy_rescaled_cross_section, 
+                                  experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values_on_res_zero_crossing_1, 
+                                  fun_kwargs = {"state_index":1, "b_field_condition":"zero_crossing"})    
+        
+
+def test_get_atom_density_side_li_hf():
+    _get_hf_atom_density_test_helper("side_high_mag", analysis_functions.get_atom_density_side_li_hf, ("ImagFreq0",))
+
+
+def test_get_atom_density_top_A_abs():
+    _get_hf_atom_density_test_helper("top_double", analysis_functions.get_atom_density_top_A_abs, ("ImagFreq1",))
+
+def test_get_atom_density_top_B_abs():
+    _get_hf_atom_density_test_helper("top_double", analysis_functions.get_atom_density_top_B_abs, ("ImagFreq2",))
+
+
+def test_get_atom_densities_top_abs():
+    #analysis_functions.get_atom_densities_top_abs is only a thin wrapper around 
+    #get_atom_density_top_A_abs and get_atom_density_top_B_abs; accordingly, we 
+    #just make sure the piping is being done correctly.
+
+    def top_abs_A_split_off(my_measurement, my_run, **fun_kwargs):
+        fun_kwargs["state_index_A"] = fun_kwargs.pop("state_index")
+        return analysis_functions.get_atom_densities_top_abs(my_measurement, my_run, **fun_kwargs)[0] 
+    
+    def top_abs_B_split_off(my_measurement, my_run, **fun_kwargs):
+        fun_kwargs["state_index_B"] = fun_kwargs.pop("state_index")
+        return analysis_functions.get_atom_densities_top_abs(my_measurement, my_run, **fun_kwargs)[1] 
+    
+    _get_hf_atom_density_test_helper("top_double", top_abs_A_split_off, ("ImagFreq1", "ImagFreq2"))
+    _get_hf_atom_density_test_helper("top_double", top_abs_B_split_off, ("ImagFreq1", "ImagFreq2"))
+    
+
+
+    
+
 
 
 
