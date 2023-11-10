@@ -172,15 +172,11 @@ def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None, b_fi
 def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_condition = "unitarity"):
     #Find the true detuning from the resonance in absolute frequency space,
     #taking into account shifts in AOM frequency and hf frequency offset lock setpoint
-    nominal_resonance_frequencies_list = [my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"], 
-                                        my_measurement.experiment_parameters["state_2_unitarity_res_freq_MHz"], 
-                                        my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]] 
-    nominal_resonance_frequency = nominal_resonance_frequencies_list[state_index - 1]
+    nominal_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, state_index)
     nominal_frequency = my_run.parameters["ImagFreq1"]
     hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency) + hf_lock_frequency_adjustment
-
 
     #Adjust for imaging geometry-dependent cross section
     top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
@@ -194,10 +190,7 @@ def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_
     return atom_density_image
 
 def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_condition = "unitarity"):
-    nominal_resonance_frequencies_list = [my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"], 
-                                        my_measurement.experiment_parameters["state_2_unitarity_res_freq_MHz"], 
-                                        my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]] 
-    nominal_resonance_frequency = nominal_resonance_frequencies_list[state_index - 1]
+    nominal_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, state_index)
     nominal_frequency = my_run.parameters["ImagFreq2"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
     hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
@@ -598,9 +591,9 @@ def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, hori
                             vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point, 
                             horiz_radius = horiz_radius, vert_width = vert_width)
     else:
-        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
+        box_crop = data_fitting_functions.crop_box(atom_density_to_fit,
                             vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point)
-    return box_crop 
+    return box_crop
 
 
 """
