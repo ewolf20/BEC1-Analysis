@@ -32,10 +32,13 @@ DEFAULT_ABS_IMAGE_SHAPE = (512, 512)
 DEFAULT_ABS_SQUARE_WIDTH = 127
 DEFAULT_ABS_SQUARE_CENTER_INDICES = (256, 256)
 
+
 DEFAULT_ABSORPTION_IMAGE_ROI = [170, 170, 340, 340]
 DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (170, 170)
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [10, 10, 160, 160]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (150, 150)
+
+
 
 
 #Dummy values to inject into code instead of the multiplicative and additive identities, to make sure 
@@ -385,8 +388,95 @@ def test_get_atom_densities_top_abs():
     _get_hf_atom_density_test_helper("top_double", top_abs_B_split_off, ("ImagFreq1", "ImagFreq2"))
     
 
+def test_get_atom_densities_top_polrot():
+    pass 
 
-    
+
+
+
+
+EXPECTED_AUTOCUT_FREE_CROP = (192, 193, 320, 320)
+EXPECTED_AUTOCUT_FIXED_CROP = (194, 196, 318, 316)
+EXPECTED_AUTOCUT_FREE_HEIGHT = DEFAULT_ABS_SQUARE_WIDTH
+EXPECTED_AUTOCUT_FREE_WIDTH = DEFAULT_ABS_SQUARE_WIDTH + 1 
+ENFORCED_AUTOCUT_FIXED_HEIGHT = DEFAULT_ABS_SQUARE_WIDTH - 7 
+ENFORCED_AUTOCUT_FIXED_WIDTH = DEFAULT_ABS_SQUARE_WIDTH - 3
+
+def test_box_autocut():
+    experiment_param_values = {
+        "axicon_diameter_pix":ENFORCED_AUTOCUT_FIXED_WIDTH,
+        "box_length_pix":ENFORCED_AUTOCUT_FIXED_HEIGHT
+    }
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", experiment_param_values = experiment_param_values)
+        box_autocut_image = get_box_autocut_absorption_image(crop_to_roi = False)
+        box_autocut_densities = -np.log(box_autocut_image)
+        autocut_box_crop_widths_free = analysis_functions.box_autocut(my_measurement, box_autocut_densities, widths_free = True)
+        xmin_free, ymin_free, xmax_free, ymax_free = autocut_box_crop_widths_free
+        autocut_width_free = xmax_free - xmin_free
+        autocut_height_free = ymax_free - ymin_free
+        print("Box Crop Free: {0}".format(autocut_box_crop_widths_free))
+        #Radius is rounded to nearest integer, hence width is even
+        assert autocut_width_free == DEFAULT_ABS_SQUARE_WIDTH + 1
+        assert autocut_height_free == DEFAULT_ABS_SQUARE_WIDTH
+        assert autocut_box_crop_widths_free == EXPECTED_AUTOCUT_FREE_CROP
+        #Now test the width with constrained sizes
+        autocut_box_crop_widths_fixed = analysis_functions.box_autocut(my_measurement, box_autocut_densities, widths_free = False)
+        print("Box Crop Fixed: {0}".format(autocut_box_crop_widths_fixed))
+        xmin_fixed, ymin_fixed, xmax_fixed, ymax_fixed = autocut_box_crop_widths_fixed 
+        autocut_width_fixed = xmax_fixed - xmin_fixed 
+        assert autocut_width_fixed == experiment_param_values["axicon_diameter_pix"]
+        autocut_height_fixed = ymax_fixed - ymin_fixed
+        assert autocut_height_fixed == experiment_param_values["box_length_pix"]
+        assert autocut_box_crop_widths_fixed == EXPECTED_AUTOCUT_FIXED_CROP
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
+def test_get_atom_densities_box_autocut():
+    box_autocut_image = get_box_autocut_absorption_image() 
+    image_stack = generate_image_stack_from_absorption(box_autocut_image) 
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0,
+        "hf_lock_setpoint":0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0, 
+        "axicon_diameter_pix":ENFORCED_AUTOCUT_FIXED_WIDTH,
+        "box_length_pix":ENFORCED_AUTOCUT_FIXED_HEIGHT
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    autocut_fun_kwargs_no_stored_density = {
+        "imaging_mode":"abs", 
+        "widths_free":True
+    }
+
+    autocut_fun_kwargs_fixed_width = {
+        "imaging_mode":"abs",
+        "widths_free":False
+    }
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = image_stack, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
+                                            norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX, run_param_values = run_param_values, 
+                                            experiment_param_values = hf_atom_density_experiment_param_values)
+        #First try not pre-processing the density
+        autocut_density_1, autocut_density_2 = analysis_functions.get_atom_densities_box_autocut(my_measurement, my_run, **autocut_fun_kwargs_no_stored_density)
+        autocut_density_free_height, autocut_density_free_width = autocut_density_1.shape
+        assert autocut_density_free_height == EXPECTED_AUTOCUT_FREE_HEIGHT
+        assert autocut_density_free_width == EXPECTED_AUTOCUT_FREE_WIDTH
+
+        #With width fixed
+        autocut_density_1_fixed, _ = analysis_functions.get_atom_densities_box_autocut(my_measurement, my_run, **autocut_fun_kwargs_fixed_width)
+        autocut_density_fixed_height, autocut_density_fixed_width = autocut_density_1_fixed.shape
+        assert autocut_density_fixed_height == ENFORCED_AUTOCUT_FIXED_HEIGHT
+        assert autocut_density_fixed_width == ENFORCED_AUTOCUT_FIXED_WIDTH
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 
 
@@ -452,6 +542,26 @@ def get_default_absorption_image(crop_to_roi = False):
     else:
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         return default_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+    
+
+def get_box_autocut_absorption_image(crop_to_roi = False):
+    center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+    box_autocut_absorption_image = np.where(
+        np.logical_and(
+            np.abs(y_indices - center_y_index) < box_radius,
+            np.abs(x_indices - center_x_index) < box_radius
+        ), 
+        np.exp(-np.sqrt(1 - np.square((x_indices - center_x_index) / box_radius))),
+        1.0
+    )
+    if not crop_to_roi:
+        return box_autocut_absorption_image 
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return box_autocut_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+
 
 #Create a dummy measurement folder with a single (simulated) image, 
 #plus experiment_parameters.json file and run_params_dump.json file.
