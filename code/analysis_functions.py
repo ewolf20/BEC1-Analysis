@@ -374,13 +374,14 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocu
 
 def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                                     autocut = True, imaging_mode = "polrot", return_sub_energies = False,
-                                    first_stored_density_name = None, second_stored_density_name = None):
+                                    first_stored_density_name = None, second_stored_density_name = None, **get_density_kwargs):
     positions_first, densities_first, positions_second, densities_second = get_hybrid_trap_densities_along_harmonic_axis( 
                                                                     my_measurement, my_run, first_state_index = first_state_index, 
                                                                     second_state_index = second_state_index, autocut = autocut, 
                                                                     imaging_mode = imaging_mode,
                                                                     first_stored_density_name = first_stored_density_name, 
-                                                                    second_stored_density_name = second_stored_density_name)
+                                                                    second_stored_density_name = second_stored_density_name, 
+                                                                    **get_density_kwargs)
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
@@ -462,7 +463,7 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, return_phases = Fal
     fft_results_first = data_fitting_functions.get_fft_peak(x_delta, integrated_density_first, order = order)
     frequency_first, amp_first, phase_first = fft_results_first 
     fft_results_second = data_fitting_functions.get_fft_peak(x_delta, integrated_density_second, order = order)
-    frequency_second, amp_second, phase_second = fft_results_second 
+    frequency_second, amp_second, phase_second = fft_results_second
     if not return_phases:
         return (amp_first, amp_second)
     else:
@@ -486,7 +487,7 @@ def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_sto
     box_length_um = box_length_pix * um_per_pixel
     axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
     axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
-    box_radius_um = um_per_pixel * axicon_diameter_pix / 2 
+    box_radius_um = um_per_pixel * axicon_diameter_pix / 2
     cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
     first_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_first, cross_section_um, box_length_um)
     second_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_second, cross_section_um, box_length_um)
