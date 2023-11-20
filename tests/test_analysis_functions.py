@@ -392,9 +392,6 @@ def test_get_atom_densities_top_polrot():
     pass 
 
 
-
-
-
 EXPECTED_AUTOCUT_FREE_CROP = (192, 193, 320, 320)
 EXPECTED_AUTOCUT_FIXED_CROP = (194, 196, 318, 316)
 EXPECTED_AUTOCUT_FREE_HEIGHT = DEFAULT_ABS_SQUARE_WIDTH
@@ -816,6 +813,68 @@ def test_get_hybrid_trap_average_energy():
             box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"], autocut = False
         )
         assert np.isclose(expected_average_energy_autocut, average_energy_autocut)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+def test_get_box_shake_fourier_amplitudes():
+    pass 
+
+
+def test_get_box_in_situ_fermi_energies_from_counts():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "box_length_pix": 141,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    default_absorption_image = get_default_absorption_image() 
+    default_image_stack = generate_image_stack_from_absorption(default_absorption_image) 
+    default_absorption_image_cropped = get_default_absorption_image(crop_to_roi = True)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = default_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Calculate the expected Fermi energies; remember, this only tests piping, not the logic for E_F calculation
+        um_per_pixel = hf_atom_density_experiment_param_values["top_um_per_pixel"]
+        expected_atom_densities_cropped = -np.log(default_absorption_image_cropped) / li_6_res_cross_section
+        expected_atom_counts = np.square(um_per_pixel) * np.sum(expected_atom_densities_cropped)
+
+        box_radius_um = um_per_pixel * hf_atom_density_experiment_param_values["axicon_diameter_pix"] / 2
+        box_length_um = um_per_pixel * hf_atom_density_experiment_param_values["box_length_pix"]
+        box_cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, 
+                                                            hf_atom_density_experiment_param_values["axicon_side_angle_deg"], 
+                                                            hf_atom_density_experiment_param_values["axicon_side_aspect_ratio"])
+        expected_fermi_energy = science_functions.get_box_fermi_energy_from_counts(expected_atom_counts, box_cross_section_um, box_length_um)
+        
+        #Now get them from the analysis function...
+        #First use unstored densities
+        fermi_energy_1, fermi_energy_2 = analysis_functions.get_box_in_situ_fermi_energies_from_counts(
+            my_measurement, my_run, 
+            imaging_mode = "abs"
+        )
+        assert np.isclose(fermi_energy_1, fermi_energy_2)
+        assert np.isclose(fermi_energy_1, expected_fermi_energy, rtol = 1e-3)
+        assert np.isclose(fermi_energy_2, expected_fermi_energy, rtol = 1e-3)
+        #Test and compare gettting vs. storing the densities 
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        fermi_energy_1_stored, fermi_energy_2_stored = analysis_functions.get_box_in_situ_fermi_energies_from_counts(
+            my_measurement, my_run, first_stored_density_name = "densities_1", second_stored_density_name = "densities_3"
+        )
+        assert np.isclose(fermi_energy_1_stored, fermi_energy_2_stored)
+        assert np.isclose(fermi_energy_1_stored, expected_fermi_energy, rtol = 1e-3)
     finally:
         shutil.rmtree(measurement_pathname)
 
