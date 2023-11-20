@@ -32,9 +32,13 @@ DEFAULT_ABS_IMAGE_SHAPE = (512, 512)
 DEFAULT_ABS_SQUARE_WIDTH = 127
 DEFAULT_ABS_SQUARE_CENTER_INDICES = (256, 256)
 
+FOURIER_SAMPLE_ORDER = 1
+FOURIER_SAMPLE_AMPLITUDE = 0.1
+
 
 DEFAULT_ABSORPTION_IMAGE_ROI = [171, 171, 342, 342]
 DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (171, 171)
+DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI = [193, 193, 320, 320]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [10, 10, 160, 160]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (150, 150)
 
@@ -817,8 +821,60 @@ def test_get_hybrid_trap_average_energy():
         shutil.rmtree(measurement_pathname)
 
 def test_get_box_shake_fourier_amplitudes():
-    pass 
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "axial_trap_frequency_hz":E_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    fourier_sample_image = get_fourier_component_sample_absorption_image()
+    fourier_sample_image_stack = generate_image_stack_from_absorption(fourier_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = fourier_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Test and compare gettting vs. storing the densities
+        
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        fourier_components_stored_densities = analysis_functions.get_box_shake_fourier_amplitudes(my_measurement, my_run, 
+                                                                            first_stored_density_name = "densities_1", 
+                                                                            second_stored_density_name = "densities_3", 
+                                                                            order = FOURIER_SAMPLE_ORDER)
+        fourier_components_unstored_densities = analysis_functions.get_box_shake_fourier_amplitudes(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", order = FOURIER_SAMPLE_ORDER)
+        assert np.all(np.isclose(fourier_components_stored_densities, fourier_components_unstored_densities))
+        fourier_component_1, fourier_component_2 = fourier_components_stored_densities 
+        assert np.isclose(fourier_component_1, fourier_component_2)
+        top_um_per_pixel = hf_atom_density_experiment_param_values["top_um_per_pixel"]
+        expected_fourier_amplitude = FOURIER_SAMPLE_AMPLITUDE *  (1.0 / li_6_res_cross_section) * DEFAULT_ABS_SQUARE_WIDTH * top_um_per_pixel
+        assert np.isclose(fourier_component_1, expected_fourier_amplitude, rtol = 5e-3)
+        fourier_components_with_phase = analysis_functions.get_box_shake_fourier_amplitudes(my_measurement, my_run, 
+                                                                                first_stored_density_name = "densities_1", 
+                                                                                second_stored_density_name = "densities_3", 
+                                                                                return_phases = True)
+        amp_1, phase_1, amp_2, phase_2 = fourier_components_with_phase 
+        assert np.isclose(amp_1, fourier_component_1)
+        assert np.isclose(amp_1, amp_2) 
+        assert np.isclose(phase_1, phase_2) 
+        assert np.isclose(amp_1, expected_fourier_amplitude, rtol = 5e-3)
+        #Also check phase information
 
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 def test_get_box_in_situ_fermi_energies_from_counts():
     hf_atom_density_experiment_param_values = {
@@ -979,6 +1035,28 @@ def get_hybrid_sample_absorption_image(crop_to_roi = False):
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         return hybrid_sample_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
     
+
+#This one uniquely uses a closer ROI than the others, so that the Fourier components are as one would expect
+def get_fourier_component_sample_absorption_image(crop_to_roi = False):
+    center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+    TARGET_FOURIER_ORDER = 1
+    FOURIER_AMPLITUDE = 0.1
+    fourier_sample_absorption_image = np.where(
+        np.logical_and(
+            np.abs(y_indices - center_y_index) < box_radius,
+            np.abs(x_indices - center_x_index) < box_radius
+        ), 
+        np.exp(-(1.0 - FOURIER_AMPLITUDE * np.cos(np.pi * FOURIER_SAMPLE_ORDER * ((y_indices - center_y_index) / box_radius)))),
+        1.0
+    )
+    if not crop_to_roi:
+        return fourier_sample_absorption_image 
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI
+        return fourier_sample_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+
 #Create a dummy measurement folder with a single (simulated) image, 
 #plus experiment_parameters.json file and run_params_dump.json file.
 #If the measurement is of a type that has multiple images per run, the same image stack is used for each.
