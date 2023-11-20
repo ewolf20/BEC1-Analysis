@@ -286,8 +286,8 @@ def get_y_integrated_atom_densities_top_double(my_measurement, my_run, first_sto
                                         imaging_mode = "polrot", **get_density_kwargs):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                     imaging_mode, **get_density_kwargs)
-    density_1_x_integrated = np.sum(density_1, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
-    density_2_x_integrated = np.sum(density_2, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    density_1_x_integrated = np.sum(density_1, axis = 0) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    density_2_x_integrated = np.sum(density_2, axis = 0) * my_measurement.experiment_parameters["top_um_per_pixel"]
     return (density_1_x_integrated, density_2_x_integrated)
 #ATOM COUNTS
 

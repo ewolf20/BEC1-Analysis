@@ -480,6 +480,59 @@ def test_get_atom_densities_box_autocut():
 
 
 
+def _get_integrated_densities_test_helper(function_to_use, integration_axis):
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0,
+        "hf_lock_setpoint":0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0, 
+        "top_um_per_pixel":E_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    no_stored_density_kwargs = {
+        "imaging_mode":"abs"
+    }
+    stored_density_kwargs = {
+        "first_stored_density_name":"densities_1", 
+        "second_stored_density_name":"densities_3"
+    }
+    box_autocut_image = get_box_autocut_absorption_image()
+    cropped_box_autocut_image = get_box_autocut_absorption_image(crop_to_roi = True)
+    box_autocut_image_stack = generate_image_stack_from_absorption(box_autocut_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = box_autocut_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Get the expected atom densities
+        expected_atom_density = -np.log(cropped_box_autocut_image) / li_6_res_cross_section
+        expected_integrated_density = np.sum(expected_atom_density, axis = integration_axis) * hf_atom_density_experiment_param_values["top_um_per_pixel"] 
+        #First, don't store density
+        integrated_densities = function_to_use(my_measurement, my_run, **no_stored_density_kwargs)
+        integrated_density_1, _ = integrated_densities
+        assert np.all(np.isclose(integrated_density_1, expected_integrated_density, rtol = 1e-3))
+        #Then, do store density
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        integrated_densities_stored_density = function_to_use(my_measurement, my_run, **stored_density_kwargs)
+        integrated_density_1_stored_density, _ = integrated_densities_stored_density
+        assert np.all(np.isclose(expected_integrated_density, integrated_density_1_stored_density, rtol = 1e-3))
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
+
+def test_get_x_integrated_atom_densities_top_double():
+    _get_integrated_densities_test_helper(analysis_functions.get_x_integrated_atom_densities_top_double, 1)
+
+
+def test_get_y_integrated_atom_densities_top_double():
+    _get_integrated_densities_test_helper(analysis_functions.get_y_integrated_atom_densities_top_double, 0) 
+
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
     if image_stack is None:
