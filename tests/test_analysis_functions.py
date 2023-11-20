@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
-from BEC1_Analysis.code import measurement, image_processing_functions
+from BEC1_Analysis.code import measurement, image_processing_functions, science_functions
 from BEC1_Analysis.code import analysis_functions
 
 
@@ -33,8 +33,8 @@ DEFAULT_ABS_SQUARE_WIDTH = 127
 DEFAULT_ABS_SQUARE_CENTER_INDICES = (256, 256)
 
 
-DEFAULT_ABSORPTION_IMAGE_ROI = [170, 170, 340, 340]
-DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (170, 170)
+DEFAULT_ABSORPTION_IMAGE_ROI = [171, 171, 342, 342]
+DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (171, 171)
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [10, 10, 160, 160]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (150, 150)
 
@@ -415,14 +415,12 @@ def test_box_autocut():
         xmin_free, ymin_free, xmax_free, ymax_free = autocut_box_crop_widths_free
         autocut_width_free = xmax_free - xmin_free
         autocut_height_free = ymax_free - ymin_free
-        print("Box Crop Free: {0}".format(autocut_box_crop_widths_free))
         #Radius is rounded to nearest integer, hence width is even
         assert autocut_width_free == DEFAULT_ABS_SQUARE_WIDTH + 1
         assert autocut_height_free == DEFAULT_ABS_SQUARE_WIDTH
         assert autocut_box_crop_widths_free == EXPECTED_AUTOCUT_FREE_CROP
         #Now test the width with constrained sizes
         autocut_box_crop_widths_fixed = analysis_functions.box_autocut(my_measurement, box_autocut_densities, widths_free = False)
-        print("Box Crop Fixed: {0}".format(autocut_box_crop_widths_fixed))
         xmin_fixed, ymin_fixed, xmax_fixed, ymax_fixed = autocut_box_crop_widths_fixed 
         autocut_width_fixed = xmax_fixed - xmin_fixed 
         assert autocut_width_fixed == experiment_param_values["axicon_diameter_pix"]
@@ -688,6 +686,139 @@ def test_get_atom_counts_top_polrot():
     pass 
 
 
+def test_get_hybrid_trap_densities_along_harmonic_axis():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Test and compare gettting vs. storing the densities 
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        hybrid_integrated_values_stored_densities = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", autocut = False,  
+                                                                            first_stored_density_name = "densities_1", 
+                                                                            second_stored_density_name = "densities_3")
+        hybrid_integrated_values_unstored_densities = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", autocut = False)
+        assert np.all(np.isclose(hybrid_integrated_values_stored_densities, hybrid_integrated_values_unstored_densities))
+
+        hybrid_integrated_densities_uncut = hybrid_integrated_values_stored_densities 
+        #Return type is a tuple containing positions and densities
+        hybrid_integrated_positions, hybrid_integrated_density_uncut, _, _ = hybrid_integrated_densities_uncut
+        cropped_hybrid_sample_image = get_hybrid_sample_absorption_image(crop_to_roi=True) 
+        cropped_hybrid_sample_densities = -np.log(cropped_hybrid_sample_image) / li_6_res_cross_section
+        um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+        box_radius_um = um_per_pixel * my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
+        box_cross_section_um = np.pi * np.square(box_radius_um)
+        #Ignore rotation, used only in legacy datasets...
+        expected_hybrid_integrated_densities = np.sum(cropped_hybrid_sample_densities, axis = 1) * um_per_pixel / box_cross_section_um 
+        assert np.all(np.isclose(hybrid_integrated_density_uncut, expected_hybrid_integrated_densities, rtol = 1e-3, atol = 1e-4))
+        #Also check that the positions are of the correct length and spacing
+        assert len(hybrid_integrated_positions) == DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE[0] 
+        assert np.all(np.isclose(np.diff(hybrid_integrated_positions), um_per_pixel))
+        #Lastly, test that autocrop works. Note: we are NOT trying to test the logic of autocrop, just the piping
+        autocrop_start_index, autocrop_stop_index = science_functions.hybrid_trap_autocut(expected_hybrid_integrated_densities)
+        expected_hybrid_integrated_densities_autocropped = expected_hybrid_integrated_densities[autocrop_start_index:autocrop_stop_index]
+        hybrid_integrated_values_autocropped = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", autocut = True,  
+                                                                            first_stored_density_name = "densities_1", 
+                                                                            second_stored_density_name = "densities_3")
+        _, hybrid_integrated_density_autocropped, _, _ = hybrid_integrated_values_autocropped 
+        assert np.all(np.isclose(hybrid_integrated_density_autocropped, expected_hybrid_integrated_densities_autocropped, rtol = 1e-3, atol = 1e-4))
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
+def test_get_hybrid_trap_average_energy():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "axial_trap_frequency_hz":E_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        
+        #Test and compare gettting vs. storing the densities 
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        hybrid_energy_stored_densities = analysis_functions.get_hybrid_trap_average_energy(my_measurement, my_run, 
+                                                                            autocut = True,  
+                                                                            first_stored_density_name = "densities_1", 
+                                                                            second_stored_density_name = "densities_3")
+        hybrid_energy_unstored_densities = analysis_functions.get_hybrid_trap_average_energy(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", autocut = True)
+        assert np.isclose(hybrid_energy_stored_densities, hybrid_energy_unstored_densities)
+        average_energy_autocut = hybrid_energy_stored_densities
+
+        # #Return type is a tuple containing positions and densities
+        cropped_hybrid_sample_image = get_hybrid_sample_absorption_image(crop_to_roi=True) 
+        cropped_hybrid_sample_densities = -np.log(cropped_hybrid_sample_image) / li_6_res_cross_section
+        um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+        box_radius_um = um_per_pixel * my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
+        box_cross_section_um = np.pi * np.square(box_radius_um)
+        #Ignore rotation, used only in legacy datasets...
+        expected_hybrid_integrated_densities = np.sum(cropped_hybrid_sample_densities, axis = 1) * um_per_pixel / box_cross_section_um 
+        expected_densities_length = len(expected_hybrid_integrated_densities)
+        expected_hybrid_integrated_positions = (np.arange(expected_densities_length) - (expected_densities_length - 1) // 2) * um_per_pixel
+        expected_average_energy_uncropped = science_functions.get_hybrid_trap_average_energy(
+            expected_hybrid_integrated_positions, expected_hybrid_integrated_densities, 
+            box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"], autocut = False
+        )
+        average_energy_uncropped = analysis_functions.get_hybrid_trap_average_energy(my_measurement, my_run, 
+                                                                                     autocut = False, 
+                                                                                     first_stored_density_name = "densities_1", 
+                                                                                     second_stored_density_name = "densities_3")
+        assert np.isclose(average_energy_uncropped, expected_average_energy_uncropped)
+        #Also compare the energy after autocutting 
+        autocut_start_index, autocut_stop_index = science_functions.hybrid_trap_autocut(expected_hybrid_integrated_densities) 
+        expected_hybrid_integrated_densities_autocut = expected_hybrid_integrated_densities[autocut_start_index:autocut_stop_index]
+        expected_hybrid_integrated_positions_autocut = expected_hybrid_integrated_positions[autocut_start_index:autocut_stop_index] 
+        expected_average_energy_autocut = science_functions.get_hybrid_trap_average_energy(
+            expected_hybrid_integrated_positions_autocut, expected_hybrid_integrated_densities_autocut, 
+            box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"], autocut = False
+        )
+        assert np.isclose(expected_average_energy_autocut, average_energy_autocut)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
 
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
@@ -771,7 +902,24 @@ def get_box_autocut_absorption_image(crop_to_roi = False):
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         return box_autocut_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
 
-
+def get_hybrid_sample_absorption_image(crop_to_roi = False):
+    center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+    hybrid_sample_absorption_image = np.where(
+        np.logical_and(
+            np.abs(y_indices - center_y_index) < box_radius,
+            np.abs(x_indices - center_x_index) < box_radius
+        ), 
+        np.exp(-(1.0 - np.square((y_indices - center_y_index)/box_radius))),
+        1.0
+    )
+    if not crop_to_roi:
+        return hybrid_sample_absorption_image 
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return hybrid_sample_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+    
 #Create a dummy measurement folder with a single (simulated) image, 
 #plus experiment_parameters.json file and run_params_dump.json file.
 #If the measurement is of a type that has multiple images per run, the same image stack is used for each.
