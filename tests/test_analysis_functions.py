@@ -534,6 +534,162 @@ def test_get_y_integrated_atom_densities_top_double():
     _get_integrated_densities_test_helper(analysis_functions.get_y_integrated_atom_densities_top_double, 0) 
 
 
+
+def _get_atom_counts_test_helper(type_name, function_to_test, experiment_param_values = None, 
+                                           run_param_values = None, fun_kwargs = None):
+    if fun_kwargs is None:
+        fun_kwargs = {}
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
+                                                                          norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX,
+                                                                        experiment_param_values = experiment_param_values, 
+                                                                        run_param_values = run_param_values)
+        atom_counts = function_to_test(my_measurement, my_run, **fun_kwargs)
+        cropped_expected_densities = -np.log(get_default_absorption_image(crop_to_roi = True)) / li_6_res_cross_section 
+        if type_name == "side_low_mag":
+            pixel_length = my_measurement.experiment_parameters["side_low_mag_um_per_pixel"] 
+        elif type_name == "side_high_mag":
+            pixel_length = my_measurement.experiment_parameters["side_high_mag_um_per_pixel"]
+        elif type_name == "top_double":
+            pixel_length = my_measurement.experiment_parameters["top_um_per_pixel"]
+        expected_counts = np.square(pixel_length) * np.sum(cropped_expected_densities)
+        assert np.isclose(atom_counts, expected_counts, rtol = 1e-3)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+def test_get_atom_count_side_li_lf():
+    experiment_param_values = {
+        "li_lf_freq_multiplier":1,
+        "li_lf_res_freq":0.0,
+        "li_side_sigma_multiplier":1.0,
+        "side_low_mag_um_per_pixel":E_DUMMY
+    }
+    run_param_values = {
+        "LFImgFreq":0.0
+    }
+    _get_atom_counts_test_helper("side_low_mag", analysis_functions.get_atom_count_side_li_lf, 
+                        experiment_param_values = experiment_param_values, run_param_values = run_param_values)
+    
+def test_get_atom_count_side_li_hf():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_2_unitarity_res_freq_MHz":0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_rr_resonance_value":0.0,
+        "hf_lock_zero_crossing_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_side_sigma_multiplier":1.0, 
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "side_high_mag_um_per_pixel":PI_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq0":0.0
+    }
+    fun_kwargs = {
+        "state_index":1
+    }
+    _get_atom_counts_test_helper("side_high_mag", analysis_functions.get_atom_count_side_li_hf, 
+                        experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values, fun_kwargs = fun_kwargs)
+
+def test_get_atom_count_top_A_abs():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_2_unitarity_res_freq_MHz":0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_rr_resonance_value":0.0,
+        "hf_lock_zero_crossing_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_side_sigma_multiplier":1.0, 
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0
+    }
+    fun_kwargs = {
+        "state_index":1
+    }
+    _get_atom_counts_test_helper("top_double", analysis_functions.get_atom_count_top_A_abs, 
+                    experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values, 
+                    fun_kwargs = fun_kwargs)
+    
+def test_get_atom_count_top_B_abs():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_2_unitarity_res_freq_MHz":0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_rr_resonance_value":0.0,
+        "hf_lock_zero_crossing_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_side_sigma_multiplier":1.0, 
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq2":0.0
+    }
+    fun_kwargs = {
+        "state_index":3
+    }
+    _get_atom_counts_test_helper("top_double", analysis_functions.get_atom_count_top_B_abs, 
+                    experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values, 
+                    fun_kwargs = fun_kwargs)
+
+def test_get_atom_counts_top_AB_abs():
+
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_2_unitarity_res_freq_MHz":0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_rr_resonance_value":0.0,
+        "hf_lock_zero_crossing_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_side_sigma_multiplier":1.0, 
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0,
+        "ImagFreq2":0.0
+    }
+    fun_kwargs= {
+        "state_index":1
+    }
+
+    def top_abs_A_split_off(my_measurement, my_run, **fun_kwargs):
+        fun_kwargs["state_index_A"] = fun_kwargs.pop("state_index")
+        return analysis_functions.get_atom_counts_top_AB_abs(my_measurement, my_run, **fun_kwargs)[0] 
+    
+    def top_abs_B_split_off(my_measurement, my_run, **fun_kwargs):
+        fun_kwargs["state_index_B"] = fun_kwargs.pop("state_index")
+        return analysis_functions.get_atom_counts_top_AB_abs(my_measurement, my_run, **fun_kwargs)[1] 
+    
+    _get_atom_counts_test_helper("top_double", top_abs_A_split_off, 
+                    experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values, 
+                    fun_kwargs = fun_kwargs)
+
+    _get_atom_counts_test_helper("top_double", top_abs_B_split_off, 
+                    experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values, 
+                    fun_kwargs = fun_kwargs)
+    
+def test_get_atom_counts_top_polrot():
+    pass 
+
+
+
+
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
     if image_stack is None:
         default_abs_image = get_default_absorption_image()
