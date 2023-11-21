@@ -169,6 +169,17 @@ def test_get_abs_image_top_B():
     function_to_test = analysis_functions.get_abs_image_top_B
     _get_abs_image_test_helper(type_name, function_to_test)
 
+def test_get_abs_images_top_double():
+    type_name = "top_double" 
+
+    def abs_image_A_split_off(my_measurement, my_run):
+        return analysis_functions.get_abs_images_top_double(my_measurement, my_run)[0] 
+    
+    def abs_image_B_split_off(my_measurement, my_run):
+        return analysis_functions.get_abs_images_top_double(my_measurement, my_run)[1]
+    
+    _get_abs_image_test_helper(type_name, abs_image_A_split_off)
+    _get_abs_image_test_helper(type_name, abs_image_B_split_off)
 
 def _get_od_image_test_helper(type_name, function_to_test):
     try:
@@ -199,6 +210,18 @@ def test_get_od_image_top_B():
     type_name = "top_double" 
     function_to_test = analysis_functions.get_od_image_top_B 
     _get_od_image_test_helper(type_name, function_to_test)
+
+def test_get_od_images_top_double():
+    type_name = "top_double" 
+
+    def od_image_A_split_off(my_measurement, my_run):
+        return analysis_functions.get_od_images_top_double(my_measurement, my_run)[0] 
+    
+    def od_image_B_split_off(my_measurement, my_run):
+        return analysis_functions.get_od_images_top_double(my_measurement, my_run)[1]
+    
+    _get_od_image_test_helper(type_name, od_image_A_split_off)
+    _get_od_image_test_helper(type_name, od_image_B_split_off)
 
 
 def _get_od_pixel_sum_test_helper(type_name, function_to_test):
@@ -231,6 +254,18 @@ def test_get_od_pixel_sum_top_B():
     type_name = "top_double" 
     function_to_test = analysis_functions.get_od_pixel_sum_top_A 
     _get_od_pixel_sum_test_helper(type_name, function_to_test)
+
+def test_get_od_pixel_sums_top_double():
+    type_name = "top_double" 
+
+    def od_pixel_sum_A_split_off(my_measurement, my_run):
+        return analysis_functions.get_od_pixel_sums_top_double(my_measurement, my_run)[0]
+    
+    def od_pixel_sum_B_split_off(my_measurement, my_run):
+        return analysis_functions.get_od_pixel_sums_top_double(my_measurement, my_run)[1]
+    
+    _get_od_pixel_sum_test_helper(type_name, od_pixel_sum_A_split_off)
+    _get_od_pixel_sum_test_helper(type_name, od_pixel_sum_B_split_off)
 
 
 li_6_res_cross_section = image_processing_functions._get_res_cross_section_from_species("6Li")
@@ -1179,8 +1214,54 @@ def test_get_rr_condensate_fractions_box():
         assert np.isclose(rr_box_condensate_fraction_1, expected_rr_box_condensate_fraction, rtol = 1e-3)
     finally:
         shutil.rmtree(measurement_pathname)
-    pass 
 
+def test_get_saturation_counts_top():
+    experiment_param_values = {
+        "li_top_sigma_multiplier":L33T_DUMMY,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "top_camera_quantum_efficiency":1.0 / np.e,
+        "top_camera_counts_per_photoelectron":1.0 / np.pi,
+        "top_camera_post_atom_photon_transmission":1.0 / np.sqrt(5),
+        "top_camera_saturation_ramsey_fudge":1.337
+    }
+
+    run_param_values = {
+        "ImageTime":42.7
+    }
+
+    imaging_time_us = run_param_values["ImageTime"] 
+    imaging_time = imaging_time_us * 1e-6
+    sigma_multiplier = experiment_param_values["li_top_sigma_multiplier"]
+    um_per_pixel = experiment_param_values["top_um_per_pixel"] 
+    m_per_pixel = um_per_pixel * 1e-6
+    quantum_efficiency = experiment_param_values["top_camera_quantum_efficiency"]
+    counts_per_photoelectron = experiment_param_values["top_camera_counts_per_photoelectron"]
+    photon_transmission = experiment_param_values["top_camera_post_atom_photon_transmission"] 
+    saturation_ramsey_fudge = experiment_param_values["top_camera_saturation_ramsey_fudge"] 
+    linewidth_MHz = li_6_linewidth 
+    gamma = 2 * np.pi * linewidth_MHz * 1e6
+    cross_section_um = li_6_res_cross_section
+    cross_section = cross_section_um * 1e-12
+
+
+    #Independently derived without reference to code
+    #Note that linewidth is in MHz, imaging time in 
+    expected_saturation_counts = (
+        (np.square(m_per_pixel) * quantum_efficiency * photon_transmission * imaging_time* counts_per_photoelectron * gamma) / 
+        (2 * sigma_multiplier * cross_section)
+    )
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double",
+                                                        run_param_values = run_param_values, experiment_param_values = experiment_param_values, 
+                                                        )
+        saturation_counts = analysis_functions.get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = False) 
+        assert np.isclose(expected_saturation_counts, saturation_counts)
+        saturation_counts_fudged = analysis_functions.get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True) 
+        #The ramsey fudge multiplies the saturation at fixed counts, so if the saturation counts are to be determined, they get divided by the fudge
+        expected_saturation_counts_fudged = expected_saturation_counts / saturation_ramsey_fudge
+        assert np.isclose(expected_saturation_counts_fudged, saturation_counts_fudged)
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
