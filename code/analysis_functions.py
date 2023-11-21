@@ -172,15 +172,11 @@ def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None, b_fi
 def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_condition = "unitarity"):
     #Find the true detuning from the resonance in absolute frequency space,
     #taking into account shifts in AOM frequency and hf frequency offset lock setpoint
-    nominal_resonance_frequencies_list = [my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"], 
-                                        my_measurement.experiment_parameters["state_2_unitarity_res_freq_MHz"], 
-                                        my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]] 
-    nominal_resonance_frequency = nominal_resonance_frequencies_list[state_index - 1]
+    nominal_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, state_index)
     nominal_frequency = my_run.parameters["ImagFreq1"]
     hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency) + hf_lock_frequency_adjustment
-
 
     #Adjust for imaging geometry-dependent cross section
     top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
@@ -194,10 +190,7 @@ def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_
     return atom_density_image
 
 def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_condition = "unitarity"):
-    nominal_resonance_frequencies_list = [my_measurement.experiment_parameters["state_1_unitarity_res_freq_MHz"], 
-                                        my_measurement.experiment_parameters["state_2_unitarity_res_freq_MHz"], 
-                                        my_measurement.experiment_parameters["state_3_unitarity_res_freq_MHz"]] 
-    nominal_resonance_frequency = nominal_resonance_frequencies_list[state_index - 1]
+    nominal_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, state_index)
     nominal_frequency = my_run.parameters["ImagFreq2"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
     hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
@@ -210,9 +203,9 @@ def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_
     return atom_density_image
 
 
-def get_atom_densities_top_abs(my_measurement, my_run, state_index_A = 1, state_index_B = 3, b_field_condition = "unitarity"):
-    return (get_atom_density_top_A_abs(my_measurement, my_run, state_index = state_index_A, b_field_condition=b_field_condition),
-     get_atom_density_top_B_abs(my_measurement, my_run, state_index = state_index_B, b_field_condition = b_field_condition))
+def get_atom_densities_top_abs(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity"):
+    return (get_atom_density_top_A_abs(my_measurement, my_run, state_index = first_state_index, b_field_condition=b_field_condition),
+     get_atom_density_top_B_abs(my_measurement, my_run, state_index = second_state_index, b_field_condition = b_field_condition))
 
 
 
@@ -381,13 +374,14 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocu
 
 def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                                     autocut = True, imaging_mode = "polrot", return_sub_energies = False,
-                                    first_stored_density_name = None, second_stored_density_name = None):
+                                    first_stored_density_name = None, second_stored_density_name = None, **get_density_kwargs):
     positions_first, densities_first, positions_second, densities_second = get_hybrid_trap_densities_along_harmonic_axis( 
                                                                     my_measurement, my_run, first_state_index = first_state_index, 
                                                                     second_state_index = second_state_index, autocut = autocut, 
                                                                     imaging_mode = imaging_mode,
                                                                     first_stored_density_name = first_stored_density_name, 
-                                                                    second_stored_density_name = second_stored_density_name)
+                                                                    second_stored_density_name = second_stored_density_name, 
+                                                                    **get_density_kwargs)
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
@@ -469,7 +463,7 @@ def get_box_shake_fourier_amplitudes(my_measurement, my_run, return_phases = Fal
     fft_results_first = data_fitting_functions.get_fft_peak(x_delta, integrated_density_first, order = order)
     frequency_first, amp_first, phase_first = fft_results_first 
     fft_results_second = data_fitting_functions.get_fft_peak(x_delta, integrated_density_second, order = order)
-    frequency_second, amp_second, phase_second = fft_results_second 
+    frequency_second, amp_second, phase_second = fft_results_second
     if not return_phases:
         return (amp_first, amp_second)
     else:
@@ -493,7 +487,7 @@ def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_sto
     box_length_um = box_length_pix * um_per_pixel
     axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
     axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
-    box_radius_um = um_per_pixel * axicon_diameter_pix / 2 
+    box_radius_um = um_per_pixel * axicon_diameter_pix / 2
     cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
     first_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_first, cross_section_um, box_length_um)
     second_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_second, cross_section_um, box_length_um)
@@ -572,8 +566,8 @@ def get_rr_condensate_fractions_box(my_measurement, my_run, first_stored_density
     #Create a new box immediately adjacent to, but below, the rr_roi box
     subtract_xmin = rr_xmin
     subtract_xmax = rr_xmax
-    subtract_ymax = rr_ymin - 1 
-    subtract_ymin = rr_ymin - 1 - (rr_ymax - rr_ymin) 
+    subtract_ymax = rr_ymin
+    subtract_ymin = rr_ymin - (rr_ymax - rr_ymin) 
     subtract_box = (subtract_xmin, subtract_ymin, subtract_xmax, subtract_ymax)
     subtract_density_first = image_processing_functions.subcrop(atom_density_first, subtract_box, my_measurement.measurement_parameters["ROI"])
     subtract_density_second = image_processing_functions.subcrop(atom_density_second, subtract_box, my_measurement.measurement_parameters["ROI"])
@@ -598,9 +592,9 @@ def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, hori
                             vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point, 
                             horiz_radius = horiz_radius, vert_width = vert_width)
     else:
-        box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
+        box_crop = data_fitting_functions.crop_box(atom_density_to_fit,
                             vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point)
-    return box_crop 
+    return box_crop
 
 
 """
@@ -709,7 +703,7 @@ def _load_densities_top_double(my_measurement, my_run, first_stored_density_name
         return _load_densities_polrot(my_measurement, my_run, first_stored_density_name, 
                             second_stored_density_name, **get_density_kwargs)
     elif imaging_mode == "abs":
-        return _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name)
+        return _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name, **get_density_kwargs)
 
 def _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name, **get_density_kwargs):
     if first_stored_density_name is None or second_stored_density_name is None:
