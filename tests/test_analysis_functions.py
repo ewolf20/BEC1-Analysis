@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
-from BEC1_Analysis.code import measurement, image_processing_functions, science_functions
+from BEC1_Analysis.code import measurement, image_processing_functions, science_functions, data_fitting_functions
 from BEC1_Analysis.code import analysis_functions
 
 
@@ -37,9 +37,15 @@ DEFAULT_ABS_SQUARE_CENTER_INDICES = (256, 256)
 FOURIER_SAMPLE_ORDER = 1
 FOURIER_SAMPLE_AMPLITUDE = 0.1
 
+RR_CONDENSATE_MAGNITUDE = 0.5
+RR_CONDENSATE_WIDTH = 16
+RR_THERMAL_MAGNITUDE = 0.5
+RR_THERMAL_WIDTH = 64
+
 
 DEFAULT_ABSORPTION_IMAGE_ROI = [171, 171, 342, 342]
 DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (171, 171)
+EXPANDED_ABSORPTION_IMAGE_ROI = [30, 30, 482, 482]
 DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI = [193, 193, 320, 320]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [50, 50, 140, 140]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (90, 90)
@@ -1090,13 +1096,92 @@ def test_get_rapid_ramp_densities_along_harmonic_axis():
                                                                         first_stored_density_name = "densities_1",
                                                                         second_stored_density_name = "densities_3")
         assert np.all(np.isclose(rr_integrated_densities, rr_integrated_densities_stored))
-        #Check that the expected densities match the observed ones 
-        plt.plot(rr_integrated_densities[0] - rr_integrated_density_expected)
-        plt.show()
         #Rotating and rerotating causes a Gibbs phenomenon on our square profile; the tolerances are accordingly rather high...
         assert np.all(np.isclose(rr_integrated_densities[0], rr_integrated_density_expected, rtol = 1e-3, atol = 1e-1))
     finally:
         shutil.rmtree(measurement_pathname)
+
+def test_get_rr_condensate_fractions_fit():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_rr_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "rr_tilt_deg":-5.0,
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    rotation_angle_deg = hf_atom_density_experiment_param_values["rr_tilt_deg"]
+    rr_condensate_sample_absorption_image = get_rr_condensate_sample_absorption_image()
+    rotated_rr_condensate_sample_absorption_image = ndimage.rotate(rr_condensate_sample_absorption_image, -rotation_angle_deg, reshape = False)
+    rotated_default_image_stack = generate_image_stack_from_absorption(rotated_rr_condensate_sample_absorption_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = rotated_default_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = EXPANDED_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        rr_condensate_fractions = analysis_functions.get_rr_condensate_fractions_fit(my_measurement, my_run)
+        rr_condensate_fraction_1, rr_condensate_fraction_2 = rr_condensate_fractions 
+        assert np.isclose(rr_condensate_fraction_1, rr_condensate_fraction_2)
+        expected_condensate_integral = data_fitting_functions.one_d_condensate_integral(DEFAULT_ABS_SQUARE_CENTER_INDICES, RR_CONDENSATE_WIDTH, RR_CONDENSATE_MAGNITUDE)
+        expected_thermal_integral = data_fitting_functions.thermal_bose_integral(DEFAULT_ABS_SQUARE_CENTER_INDICES, RR_THERMAL_WIDTH, RR_THERMAL_MAGNITUDE)
+        expected_condensate_fraction = expected_condensate_integral / (expected_thermal_integral + expected_condensate_integral)
+        assert np.isclose(rr_condensate_fraction_1, expected_condensate_fraction, rtol = 1e-3)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+def test_get_rr_condensate_fractions_box():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_rr_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "rr_tilt_deg":-5.0,
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    rotation_angle_deg = hf_atom_density_experiment_param_values["rr_tilt_deg"]
+    rr_condensate_sample_absorption_image = get_rr_condensate_sample_absorption_image()
+    rotated_rr_condensate_sample_absorption_image = ndimage.rotate(rr_condensate_sample_absorption_image, -rotation_angle_deg, reshape = False)
+    rotated_default_image_stack = generate_image_stack_from_absorption(rotated_rr_condensate_sample_absorption_image)
+    rr_roi = [100, 256 - RR_CONDENSATE_WIDTH, 400, 256 + RR_CONDENSATE_WIDTH]
+    shifted_rr_roi = [100, 256 - 3*RR_CONDENSATE_WIDTH, 400, 256 - RR_CONDENSATE_WIDTH]
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = rotated_default_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = EXPANDED_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.set_box("rr_condensate_roi", box_coordinates = rr_roi)
+        expected_density = -np.log(rr_condensate_sample_absorption_image) / li_6_res_cross_section
+        rr_roi_xmin, rr_roi_ymin, rr_roi_xmax, rr_roi_ymax = rr_roi
+        rr_roi_sum = np.sum(expected_density[rr_roi_ymin:rr_roi_ymax, rr_roi_xmin:rr_roi_xmax])
+        shifted_rr_roi_xmin, shifted_rr_roi_ymin, shifted_rr_roi_xmax, shifted_rr_roi_ymax = shifted_rr_roi 
+        shifted_rr_roi_sum = np.sum(expected_density[shifted_rr_roi_ymin:shifted_rr_roi_ymax, shifted_rr_roi_xmin:shifted_rr_roi_xmax])
+        shift_subtracted_roi_sum = rr_roi_sum - shifted_rr_roi_sum 
+        expanded_roi_xmin, expanded_roi_ymin, expanded_roi_xmax, expanded_roi_ymax = EXPANDED_ABSORPTION_IMAGE_ROI
+        expanded_roi_sum = np.sum(expected_density[expanded_roi_ymin:expanded_roi_ymax, expanded_roi_xmin:expanded_roi_xmax])
+        expected_rr_box_condensate_fraction = shift_subtracted_roi_sum / expanded_roi_sum 
+        #Now get it from analysis functions
+        rr_box_condensate_fractions = analysis_functions.get_rr_condensate_fractions_box(my_measurement, my_run)
+        rr_box_condensate_fraction_1, rr_box_condensate_fraction_2 = rr_box_condensate_fractions 
+        assert np.isclose(rr_box_condensate_fraction_1, rr_box_condensate_fraction_2)
+        #And let's see if the expected matches the returned 
+        assert np.isclose(rr_box_condensate_fraction_1, expected_rr_box_condensate_fraction, rtol = 2e-2)
+    finally:
+        shutil.rmtree(measurement_pathname)
+    pass 
+
+
 
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
@@ -1213,6 +1298,27 @@ def get_hybrid_sample_absorption_image(crop_to_roi = False):
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         return hybrid_sample_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
     
+def get_rr_condensate_sample_absorption_image(crop_to_roi = False):
+    center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+    condensate_sample_optical_densities = np.where(
+        np.abs(x_indices - center_x_index) < box_radius, 
+        data_fitting_functions.one_d_condensate_function(y_indices, center_y_index, RR_CONDENSATE_WIDTH, RR_CONDENSATE_MAGNITUDE), 
+        0.0
+    )
+    thermal_sample_optical_densities = np.where(
+        np.abs(x_indices - center_x_index) < box_radius, 
+        data_fitting_functions.thermal_bose_function(y_indices, center_y_index, RR_THERMAL_WIDTH, RR_THERMAL_MAGNITUDE),
+        0.0
+    )
+    overall_optical_densities = condensate_sample_optical_densities + thermal_sample_optical_densities
+    condensate_sample_absorption_image = np.exp(-overall_optical_densities)
+    if not crop_to_roi:
+        return condensate_sample_absorption_image 
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return condensate_sample_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
 
 #This one uniquely uses a closer ROI than the others, so that the Fourier components are as one would expect
 def get_fourier_component_sample_absorption_image(crop_to_roi = False):
