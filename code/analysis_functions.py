@@ -203,9 +203,9 @@ def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_
     return atom_density_image
 
 
-def get_atom_densities_top_abs(my_measurement, my_run, state_index_A = 1, state_index_B = 3, b_field_condition = "unitarity"):
-    return (get_atom_density_top_A_abs(my_measurement, my_run, state_index = state_index_A, b_field_condition=b_field_condition),
-     get_atom_density_top_B_abs(my_measurement, my_run, state_index = state_index_B, b_field_condition = b_field_condition))
+def get_atom_densities_top_abs(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity"):
+    return (get_atom_density_top_A_abs(my_measurement, my_run, state_index = first_state_index, b_field_condition=b_field_condition),
+     get_atom_density_top_B_abs(my_measurement, my_run, state_index = second_state_index, b_field_condition = b_field_condition))
 
 
 
@@ -566,8 +566,8 @@ def get_rr_condensate_fractions_box(my_measurement, my_run, first_stored_density
     #Create a new box immediately adjacent to, but below, the rr_roi box
     subtract_xmin = rr_xmin
     subtract_xmax = rr_xmax
-    subtract_ymax = rr_ymin - 1 
-    subtract_ymin = rr_ymin - 1 - (rr_ymax - rr_ymin) 
+    subtract_ymax = rr_ymin
+    subtract_ymin = rr_ymin - (rr_ymax - rr_ymin) 
     subtract_box = (subtract_xmin, subtract_ymin, subtract_xmax, subtract_ymax)
     subtract_density_first = image_processing_functions.subcrop(atom_density_first, subtract_box, my_measurement.measurement_parameters["ROI"])
     subtract_density_second = image_processing_functions.subcrop(atom_density_second, subtract_box, my_measurement.measurement_parameters["ROI"])
@@ -703,7 +703,7 @@ def _load_densities_top_double(my_measurement, my_run, first_stored_density_name
         return _load_densities_polrot(my_measurement, my_run, first_stored_density_name, 
                             second_stored_density_name, **get_density_kwargs)
     elif imaging_mode == "abs":
-        return _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name)
+        return _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name, **get_density_kwargs)
 
 def _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name, **get_density_kwargs):
     if first_stored_density_name is None or second_stored_density_name is None:
