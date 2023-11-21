@@ -382,11 +382,11 @@ def test_get_atom_densities_top_abs():
     #just make sure the piping is being done correctly.
 
     def top_abs_A_split_off(my_measurement, my_run, **fun_kwargs):
-        fun_kwargs["state_index_A"] = fun_kwargs.pop("state_index")
+        fun_kwargs["first_state_index"] = fun_kwargs.pop("state_index")
         return analysis_functions.get_atom_densities_top_abs(my_measurement, my_run, **fun_kwargs)[0] 
     
     def top_abs_B_split_off(my_measurement, my_run, **fun_kwargs):
-        fun_kwargs["state_index_B"] = fun_kwargs.pop("state_index")
+        fun_kwargs["second_state_index"] = fun_kwargs.pop("state_index")
         return analysis_functions.get_atom_densities_top_abs(my_measurement, my_run, **fun_kwargs)[1] 
     
     _get_hf_atom_density_test_helper("top_double", top_abs_A_split_off, ("ImagFreq1", "ImagFreq2"))
@@ -736,11 +736,11 @@ def test_get_atom_counts_top_AB_abs():
     }
 
     def top_abs_A_split_off(my_measurement, my_run, **fun_kwargs):
-        fun_kwargs["state_index_A"] = fun_kwargs.pop("state_index")
+        fun_kwargs["first_state_index"] = fun_kwargs.pop("state_index")
         return analysis_functions.get_atom_counts_top_AB_abs(my_measurement, my_run, **fun_kwargs)[0] 
     
     def top_abs_B_split_off(my_measurement, my_run, **fun_kwargs):
-        fun_kwargs["state_index_B"] = fun_kwargs.pop("state_index")
+        fun_kwargs["second_state_index"] = fun_kwargs.pop("state_index")
         return analysis_functions.get_atom_counts_top_AB_abs(my_measurement, my_run, **fun_kwargs)[1] 
     
     _get_atom_counts_test_helper("top_double", top_abs_A_split_off, 
@@ -1176,7 +1176,7 @@ def test_get_rr_condensate_fractions_box():
         rr_box_condensate_fraction_1, rr_box_condensate_fraction_2 = rr_box_condensate_fractions 
         assert np.isclose(rr_box_condensate_fraction_1, rr_box_condensate_fraction_2)
         #And let's see if the expected matches the returned 
-        assert np.isclose(rr_box_condensate_fraction_1, expected_rr_box_condensate_fraction, rtol = 2e-2)
+        assert np.isclose(rr_box_condensate_fraction_1, expected_rr_box_condensate_fraction, rtol = 1e-3)
     finally:
         shutil.rmtree(measurement_pathname)
     pass 
