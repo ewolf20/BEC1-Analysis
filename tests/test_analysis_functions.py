@@ -1183,7 +1183,6 @@ def test_get_rr_condensate_fractions_box():
 
 
 
-
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
     if image_stack is None:
         default_abs_image = get_default_absorption_image()
@@ -1204,25 +1203,6 @@ def create_measurement(type_name, image_stack = None, run_param_values= None, ex
         my_run = my_measurement.runs_dict[run_id] 
         break
     return (measurement_pathname, my_measurement, my_run)
-
-
-def create_side_low_mag_measurement(image_stack = None, run_param_values = None, experiment_param_values = None, ROI = None, norm_box = None):
-    return create_measurement("side_low_mag", image_stack = image_stack, run_param_values = run_param_values, 
-                    experiment_param_values = experiment_param_values, ROI = ROI, norm_box = norm_box)
-
-
-def create_side_high_mag_measurement(image_stack = None, run_param_values = None, experiment_param_values = None, ROI = None, norm_box = None):
-    return create_measurement("side_high_mag", image_stack = image_stack, run_param_values = run_param_values, 
-                    experiment_param_values = experiment_param_values, ROI = ROI, norm_box = norm_box)
-
-def create_top_measurement(image_stack = None, run_param_values = None, experiment_param_values = None, ROI = None, norm_box = None):
-    return create_measurement("top_double", image_stack = image_stack, run_param_values = run_param_values, 
-                    experiment_param_values = experiment_param_values, ROI = ROI, norm_box = norm_box)
-
-
-def create_catch_measurement(image_stack = None, run_param_values = None, experiment_param_values = None, ROI = None, norm_box = None):
-    return create_measurement("na_catch", image_stack = image_stack, run_param_values = run_param_values, 
-                    experiment_param_values = experiment_param_values, ROI = ROI, norm_box = norm_box)
 
 
 #Generate a test image, suitable for use in most analysis functions
