@@ -265,7 +265,6 @@ def test_get_atom_density_side_li_lf():
 
 
 
-
 def _get_hf_atom_density_test_helper(measurement_type, function_to_test, run_param_keys):
 
     hf_atom_density_experiment_param_values = {
@@ -392,8 +391,85 @@ def test_get_atom_densities_top_abs():
     _get_hf_atom_density_test_helper("top_double", top_abs_B_split_off, ("ImagFreq1", "ImagFreq2"))
     
 
+
 def test_get_atom_densities_top_polrot():
-    pass 
+    experiment_param_values_polrot = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_2_unitarity_res_freq_MHz":10.0,
+        "state_3_unitarity_res_freq_MHz":20.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_side_sigma_multiplier":1.0, 
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY,
+        "polrot_phase_sign":1.0, 
+        "top_camera_quantum_efficiency":0.7,
+        "top_camera_counts_per_photoelectron":2.5,
+        "top_camera_post_atom_photon_transmission":0.8,
+        "top_camera_saturation_ramsey_fudge":1.1
+    }
+    run_param_values_polrot = {
+        "ImagFreq1":3.0, 
+        "ImagFreq2":23.0,
+        "ImageTime":500.0
+    }
+    default_absorption_image = get_default_absorption_image()
+    default_image_stack = generate_image_stack_from_absorption(default_absorption_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = default_image_stack,
+                                                        run_param_values = run_param_values_polrot, experiment_param_values = experiment_param_values_polrot, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Manually call the polrot function to find what the two returned densities ought to be given the absorption
+        #Set up the frequencies...
+        hf_lock_multiplier = experiment_param_values_polrot["hf_lock_frequency_multiplier"]
+        hf_lock_offset = (experiment_param_values_polrot["hf_lock_setpoint"] - experiment_param_values_polrot["hf_lock_unitarity_resonance_value"]) * hf_lock_multiplier
+        imaging_multiplier = experiment_param_values_polrot["li_hf_freq_multiplier"]
+        frequency_A = run_param_values_polrot["ImagFreq1"] 
+        frequency_B = run_param_values_polrot["ImagFreq2"]
+        resonance_1 = experiment_param_values_polrot["state_1_unitarity_res_freq_MHz"]
+        resonance_2 = experiment_param_values_polrot["state_3_unitarity_res_freq_MHz"]
+        detuning_1A = imaging_multiplier * (frequency_A - resonance_1) + hf_lock_offset
+        detuning_1B = imaging_multiplier * (frequency_B - resonance_1) + hf_lock_offset
+        detuning_2A = imaging_multiplier * (frequency_A - resonance_2) + hf_lock_offset 
+        detuning_2B = imaging_multiplier * (frequency_B - resonance_2) + hf_lock_offset 
+        #First do it without saturation 
+        single_pixel_abs_array = np.array([1.0 / np.e])
+        single_pixel_polrot_return_arrays = image_processing_functions.get_atom_density_from_polrot_images(
+            single_pixel_abs_array, single_pixel_abs_array, 
+            detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
+            phase_sign = experiment_param_values_polrot["polrot_phase_sign"]
+        )
+        single_pixel_polrot_density_1, single_pixel_polrot_density_2 = single_pixel_polrot_return_arrays
+        expected_polrot_density_1 = generate_default_image_density_pattern(crop_to_roi = True, density_value = single_pixel_polrot_density_1[0])
+        expected_polrot_density_2 = generate_default_image_density_pattern(crop_to_roi = True, density_value = single_pixel_polrot_density_2[0])
+        polrot_density_1, polrot_density_2 = analysis_functions.get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, 
+                                                                                              second_state_index = 3, b_field_condition = "unitarity", 
+                                                                                              use_saturation = False)
+        assert np.all(np.isclose(polrot_density_1, expected_polrot_density_1, rtol = 1e-3))
+        assert np.all(np.isclose(polrot_density_2, expected_polrot_density_2, rtol = 1e-3))
+        #Then do it with saturation
+        saturation_counts = analysis_functions.get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True)
+        intensity_A = BASE_LIGHT_LEVEL
+        intensity_B = BASE_LIGHT_LEVEL
+        single_pixel_polrot_return_arrays_saturated = image_processing_functions.get_atom_density_from_polrot_images(
+            single_pixel_abs_array, single_pixel_abs_array, 
+            detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
+            phase_sign = experiment_param_values_polrot["polrot_phase_sign"],
+            intensities_A = intensity_A, intensities_B = intensity_B, 
+            intensities_sat = saturation_counts
+        )
+        single_pixel_polrot_density_1_saturated, single_pixel_polrot_density_2_saturated = single_pixel_polrot_return_arrays_saturated
+        expected_polrot_density_1_saturated = generate_default_image_density_pattern(crop_to_roi = True, density_value = single_pixel_polrot_density_1_saturated[0])
+        expected_polrot_density_2_saturated = generate_default_image_density_pattern(crop_to_roi = True, density_value = single_pixel_polrot_density_2_saturated[0])
+        polrot_density_1_saturated, polrot_density_2_saturated = analysis_functions.get_atom_densities_top_polrot(my_measurement, my_run, 
+                                                                                first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity", 
+                                                                                use_saturation = True)
+        assert np.all(np.isclose(polrot_density_1_saturated, expected_polrot_density_1_saturated, rtol = 1e-3))
+        assert np.all(np.isclose(polrot_density_2_saturated, expected_polrot_density_2_saturated, rtol = 1e-3))
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 
 EXPECTED_AUTOCUT_FREE_CROP = (192, 193, 320, 320)
@@ -684,8 +760,59 @@ def test_get_atom_counts_top_AB_abs():
                     fun_kwargs = fun_kwargs)
     
 def test_get_atom_counts_top_polrot():
-    pass 
-
+    experiment_param_values_polrot = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_2_unitarity_res_freq_MHz":10.0,
+        "state_3_unitarity_res_freq_MHz":20.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_side_sigma_multiplier":1.0, 
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY,
+        "polrot_phase_sign":1.0, 
+        "top_camera_quantum_efficiency":0.7,
+        "top_camera_counts_per_photoelectron":2.5,
+        "top_camera_post_atom_photon_transmission":0.8,
+        "top_camera_saturation_ramsey_fudge":1.1
+    }
+    run_param_values_polrot = {
+        "ImagFreq1":3.0, 
+        "ImagFreq2":23.0,
+        "ImageTime":500.0
+    }
+    default_absorption_image = get_default_absorption_image()
+    default_image_stack = generate_image_stack_from_absorption(default_absorption_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = default_image_stack,
+                                                        run_param_values = run_param_values_polrot, experiment_param_values = experiment_param_values_polrot, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Already validated that get_atom_densities works; just validate that the counting is correct
+        polrot_density_1, polrot_density_2 = analysis_functions.get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, 
+                                                                                              second_state_index = 3, b_field_condition = "unitarity", 
+                                                                                              use_saturation = False)
+        um_per_pixel = experiment_param_values_polrot["top_um_per_pixel"]
+        polrot_expected_counts_1 = np.sum(polrot_density_1) * np.square(um_per_pixel)
+        polrot_expected_counts_2 = np.sum(polrot_density_2) * np.square(um_per_pixel)
+        polrot_counts_1, polrot_counts_2 = analysis_functions.get_atom_counts_top_polrot(my_measurement, my_run, first_state_index = 1, 
+                                                                                         second_state_index = 3, b_field_condition = "unitarity", 
+                                                                                         use_saturation = False)
+        assert np.isclose(polrot_counts_1, polrot_expected_counts_1)
+        assert np.isclose(polrot_counts_2, polrot_expected_counts_2)
+        #Then do it with saturation, just to check piping
+        polrot_density_1_sat, polrot_density_2_sat = analysis_functions.get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, 
+                                                                                              second_state_index = 3, b_field_condition = "unitarity", 
+                                                                                              use_saturation = True)
+        polrot_expected_counts_1_sat = np.sum(polrot_density_1_sat) * np.square(um_per_pixel)
+        polrot_expected_counts_2_sat = np.sum(polrot_density_2_sat) * np.square(um_per_pixel)
+        polrot_counts_1_sat, polrot_counts_2_sat = analysis_functions.get_atom_counts_top_polrot(my_measurement, my_run, first_state_index = 1, 
+                                                                                         second_state_index = 3, b_field_condition = "unitarity", 
+                                                                                         use_saturation = True)
+        assert np.isclose(polrot_counts_1_sat, polrot_expected_counts_1_sat)
+        assert np.isclose(polrot_counts_2_sat, polrot_expected_counts_2_sat)
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 def test_get_hybrid_trap_densities_along_harmonic_axis():
     hf_atom_density_experiment_param_values = {
@@ -748,7 +875,6 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
         assert np.all(np.isclose(hybrid_integrated_density_autocropped, expected_hybrid_integrated_densities_autocropped, rtol = 1e-3, atol = 1e-4))
     finally:
         shutil.rmtree(measurement_pathname)
-
 
 def test_get_hybrid_trap_average_energy():
     hf_atom_density_experiment_param_values = {
@@ -872,7 +998,7 @@ def test_get_box_shake_fourier_amplitudes():
         assert np.isclose(phase_1, phase_2) 
         assert np.isclose(amp_1, expected_fourier_amplitude, rtol = 5e-3)
         #Also check phase information
-
+        assert np.isclose(0.0, phase_1, atol = 3e-2)
     finally:
         shutil.rmtree(measurement_pathname)
 
@@ -933,6 +1059,12 @@ def test_get_box_in_situ_fermi_energies_from_counts():
         assert np.isclose(fermi_energy_1_stored, expected_fermi_energy, rtol = 1e-3)
     finally:
         shutil.rmtree(measurement_pathname)
+
+
+def test_get_rapid_ramp_densities_along_harmonic_axis():
+    pass 
+
+
 
 
 
@@ -998,6 +1130,23 @@ def get_default_absorption_image(crop_to_roi = False):
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         return default_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
     
+
+def generate_default_image_density_pattern(crop_to_roi = False, density_value = 0.0):
+    center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    default_density_pattern = np.where(
+        np.logical_and(
+            np.abs(y_indices - center_y_index) < (DEFAULT_ABS_SQUARE_WIDTH + 1) //2, 
+            np.abs(x_indices - center_x_index) < (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+        ),
+        density_value, 
+        0.0
+    )
+    if not crop_to_roi:
+        return default_density_pattern
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return default_density_pattern[roi_ymin:roi_ymax, roi_xmin:roi_xmax]    
 
 def get_box_autocut_absorption_image(crop_to_roi = False):
     center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
