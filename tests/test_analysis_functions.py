@@ -7,6 +7,8 @@ import shutil
 
 import astropy
 import numpy as np
+from scipy import ndimage
+
 #Temp import 
 import matplotlib.pyplot as plt
 
@@ -39,8 +41,8 @@ FOURIER_SAMPLE_AMPLITUDE = 0.1
 DEFAULT_ABSORPTION_IMAGE_ROI = [171, 171, 342, 342]
 DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (171, 171)
 DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI = [193, 193, 320, 320]
-DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [10, 10, 160, 160]
-DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (150, 150)
+DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [50, 50, 140, 140]
+DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (90, 90)
 
 
 
@@ -243,7 +245,6 @@ def _get_atom_density_test_helper(type_name, function_to_test, cross_section, ex
     finally:
         shutil.rmtree(measurement_pathname)
 
-
 def test_get_atom_density_side_li_lf():
     experiment_param_values = {
         "li_lf_freq_multiplier":L33T_DUMMY,
@@ -262,8 +263,6 @@ def test_get_atom_density_side_li_lf():
     detuned_effective_cross_section = dummy_rescaled_cross_section / 5
     _get_atom_density_test_helper("side_low_mag", analysis_functions.get_atom_density_side_li_lf, detuned_effective_cross_section, 
                                   experiment_param_values = experiment_param_values, run_param_values = run_param_values_detuned)
-
-
 
 def _get_hf_atom_density_test_helper(measurement_type, function_to_test, run_param_keys):
 
@@ -362,17 +361,14 @@ def _get_hf_atom_density_test_helper(measurement_type, function_to_test, run_par
                                   experiment_param_values = hf_atom_density_experiment_param_values, run_param_values = run_param_values_on_res_zero_crossing_1, 
                                   fun_kwargs = {"state_index":1, "b_field_condition":"zero_crossing"})    
         
-
 def test_get_atom_density_side_li_hf():
     _get_hf_atom_density_test_helper("side_high_mag", analysis_functions.get_atom_density_side_li_hf, ("ImagFreq0",))
-
 
 def test_get_atom_density_top_A_abs():
     _get_hf_atom_density_test_helper("top_double", analysis_functions.get_atom_density_top_A_abs, ("ImagFreq1",))
 
 def test_get_atom_density_top_B_abs():
     _get_hf_atom_density_test_helper("top_double", analysis_functions.get_atom_density_top_B_abs, ("ImagFreq2",))
-
 
 def test_get_atom_densities_top_abs():
     #analysis_functions.get_atom_densities_top_abs is only a thin wrapper around 
@@ -390,8 +386,6 @@ def test_get_atom_densities_top_abs():
     _get_hf_atom_density_test_helper("top_double", top_abs_A_split_off, ("ImagFreq1", "ImagFreq2"))
     _get_hf_atom_density_test_helper("top_double", top_abs_B_split_off, ("ImagFreq1", "ImagFreq2"))
     
-
-
 def test_get_atom_densities_top_polrot():
     experiment_param_values_polrot = {
         "state_1_unitarity_res_freq_MHz": 0.0,
@@ -507,7 +501,6 @@ def test_box_autocut():
     finally:
         shutil.rmtree(measurement_pathname)
 
-
 def test_get_atom_densities_box_autocut():
     box_autocut_image = get_box_autocut_absorption_image() 
     image_stack = generate_image_stack_from_absorption(box_autocut_image) 
@@ -553,8 +546,6 @@ def test_get_atom_densities_box_autocut():
     finally:
         shutil.rmtree(measurement_pathname)
 
-
-
 def _get_integrated_densities_test_helper(function_to_use, integration_axis):
     hf_atom_density_experiment_param_values = {
         "state_1_unitarity_res_freq_MHz": 0.0,
@@ -599,16 +590,11 @@ def _get_integrated_densities_test_helper(function_to_use, integration_axis):
     finally:
         shutil.rmtree(measurement_pathname)
 
-
-
 def test_get_x_integrated_atom_densities_top_double():
     _get_integrated_densities_test_helper(analysis_functions.get_x_integrated_atom_densities_top_double, 1)
 
-
 def test_get_y_integrated_atom_densities_top_double():
     _get_integrated_densities_test_helper(analysis_functions.get_y_integrated_atom_densities_top_double, 0) 
-
-
 
 def _get_atom_counts_test_helper(type_name, function_to_test, experiment_param_values = None, 
                                            run_param_values = None, fun_kwargs = None):
@@ -1062,10 +1048,55 @@ def test_get_box_in_situ_fermi_energies_from_counts():
 
 
 def test_get_rapid_ramp_densities_along_harmonic_axis():
-    pass 
-
-
-
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_rr_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "rr_tilt_deg":-5.0,
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    rotation_angle_deg = hf_atom_density_experiment_param_values["rr_tilt_deg"]
+    default_absorption_image = get_default_absorption_image()
+    rotated_default_absorption_image = ndimage.rotate(default_absorption_image, -rotation_angle_deg, reshape = False)
+    rotated_default_image_stack = generate_image_stack_from_absorption(rotated_default_absorption_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = rotated_default_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Calculate the expected profile, which should be un-rotated compared to the previous
+        um_per_pixel = hf_atom_density_experiment_param_values["top_um_per_pixel"]
+        rr_density_pre_rotation = -np.log(rotated_default_absorption_image) / li_6_res_cross_section
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        rr_density_pre_rotation_cropped = rr_density_pre_rotation[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+        rr_density_expected = ndimage.rotate(rr_density_pre_rotation_cropped, rotation_angle_deg, reshape = False)
+        rr_integrated_density_expected = np.sum(rr_density_expected, axis = 1) * um_per_pixel
+        #Test getting densities both by storing and by re-processing
+        rr_integrated_densities = analysis_functions.get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, imaging_mode = "abs", 
+                                                                                                  b_field_condition = "rapid_ramp")
+        assert np.all(np.isclose(rr_integrated_densities[0], rr_integrated_densities[1]))
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"), 
+                                    fun_kwargs = {
+                                        "b_field_condition":"rapid_ramp"
+                                    })
+        rr_integrated_densities_stored = analysis_functions.get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run,
+                                                                        first_stored_density_name = "densities_1",
+                                                                        second_stored_density_name = "densities_3")
+        assert np.all(np.isclose(rr_integrated_densities, rr_integrated_densities_stored))
+        #Check that the expected densities match the observed ones 
+        plt.plot(rr_integrated_densities[0] - rr_integrated_density_expected)
+        plt.show()
+        #Rotating and rerotating causes a Gibbs phenomenon on our square profile; the tolerances are accordingly rather high...
+        assert np.all(np.isclose(rr_integrated_densities[0], rr_integrated_density_expected, rtol = 1e-3, atol = 1e-1))
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
@@ -1093,7 +1124,6 @@ def create_measurement(type_name, image_stack = None, run_param_values= None, ex
 def create_side_low_mag_measurement(image_stack = None, run_param_values = None, experiment_param_values = None, ROI = None, norm_box = None):
     return create_measurement("side_low_mag", image_stack = image_stack, run_param_values = run_param_values, 
                     experiment_param_values = experiment_param_values, ROI = ROI, norm_box = norm_box)
-
 
 
 def create_side_high_mag_measurement(image_stack = None, run_param_values = None, experiment_param_values = None, ROI = None, norm_box = None):
@@ -1130,7 +1160,6 @@ def get_default_absorption_image(crop_to_roi = False):
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         return default_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
     
-
 def generate_default_image_density_pattern(crop_to_roi = False, density_value = 0.0):
     center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
     y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
