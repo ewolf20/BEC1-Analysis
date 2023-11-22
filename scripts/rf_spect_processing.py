@@ -127,8 +127,8 @@ def get_rf_frequencies_and_counts(my_measurement, resonance_key):
     if not np.all(np.isclose(pulse_times, tau_value)):
             raise RuntimeError("The tau values should be constant over the RF spectroscopy sequence")
     state_index_A, state_index_B = get_state_indices_from_resonance_key(resonance_key)
-    my_measurement.analyze_runs(analysis_functions.get_atom_counts_top_AB_abs, ("counts_A", "counts_B"), fun_kwargs = {"state_index_A":state_index_A, 
-                                    "state_index_B":state_index_B}, print_progress = True)
+    my_measurement.analyze_runs(analysis_functions.get_atom_counts_top_AB_abs, ("counts_A", "counts_B"), fun_kwargs = {"first_state_index":state_index_A, 
+                                    "second_state_index":state_index_B}, print_progress = True)
     if(state_index_A in [2, 3] and state_index_B in [2, 3]):
         rf_center_param_name = "RF23_Box_Center"
     elif(state_index_A in [1, 2] and state_index_B in [1, 2]):
