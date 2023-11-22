@@ -145,32 +145,46 @@ bin_dimensions: Either an int or tuple of ints specifying the size of bins to us
     does not evenly divide the ith element of data_to_bin.shape, the data is truncated along this axis.
 Omitted axes: If specified, any axis appearing in omitted_axes is not rebinned over. Useful for rebinning only certain axes of an array. 
 
+Note: Where omitted axes is provided, the bin dimensions specified in bin_dimensions run over the non-omitted axes in increasing order.
 """
-def bin_data(data_to_bin, bin_dimensions, omitted_axes = None):
-    num_data_dimensions = len(data_to_bin.shape)
+def bin_and_average_data(data_to_bin, bin_dimensions, omitted_axes = None):
+
     if omitted_axes is None:
         omitted_axes = ()
-    #Move all omitted axes to the back end of the array
-    omitted_axes_positions = tuple((num_data_dimensions - 1) - np.arange(len(omitted_axes)))
-    data_dimensions = data_to_bin.shape
+    elif isinstance(omitted_axes, int):
+        omitted_axes = (omitted_axes,)
+    num_data_dimensions = len(data_to_bin.shape)
+    num_omitted_axes = len(omitted_axes)
+    moved_omitted_axes = tuple((num_data_dimensions - 1) - np.arange(num_omitted_axes))
+    moved_axis_array = np.moveaxis(data_to_bin, omitted_axes, moved_omitted_axes)
+    num_non_omitted_data_dimensions = num_data_dimensions - num_omitted_axes
+    non_omitted_data_dimensions = moved_axis_array.shape[:num_non_omitted_data_dimensions]
+    omitted_data_dimensions = moved_axis_array.shape[num_non_omitted_data_dimensions:]
     if isinstance(bin_dimensions, int):
-        bin_dimensions = tuple([bin_dimensions] * num_data_dimensions)
-    if not len(bin_dimensions) == len(data_to_bin.shape):
+        bin_dimensions = tuple([bin_dimensions] * num_non_omitted_data_dimensions)
+    if not len(bin_dimensions) == num_non_omitted_data_dimensions:
         raise ValueError("The length of the bin dimensions does not agree with the data to be binned.")
-    #Truncate array to correct size in each dimension, then reshape to 2 * num_data_dimensions, with
+    #Truncate array to correct size in each non-omitted dimension, then reshape to 2 * num_non_omitted_data_dimensions + omitted_data_dimensions
     slice_list = []
     reshape_dimension_list = []
-    for bin_dimension, data_dimension in zip(bin_dimensions, data_dimensions):
+    for bin_dimension, data_dimension in zip(bin_dimensions, non_omitted_data_dimensions):
         truncated_data_dimension = data_dimension - (data_dimension % bin_dimension)
         slice_list.append(slice(0, truncated_data_dimension))
         reshape_dimension_list.append(truncated_data_dimension // bin_dimension) 
         reshape_dimension_list.append(bin_dimension)
+    #The reshape dimension list must be extended to include the omitted dimensions
+    reshape_dimension_list.extend(omitted_data_dimensions)
+    print(reshape_dimension_list)
     slice_tuple = tuple(slice_list)
     reshape_dimension_tuple = tuple(reshape_dimension_list)
-    truncated_data = data_to_bin[slice_tuple] 
+    truncated_data = moved_axis_array[slice_tuple] 
     reshaped_truncated_data = truncated_data.reshape(reshape_dimension_tuple)
-    averaging_axis_tuple = tuple(np.arange(1, 2 * num_data_dimensions, 2)) 
-    return np.average(reshaped_truncated_data, axis = averaging_axis_tuple)
+    averaging_axis_tuple = tuple(np.arange(1, 2 * num_non_omitted_data_dimensions, 2)) 
+    #Average over the rebinned dimensions
+    averaged_data = np.average(reshaped_truncated_data, axis = averaging_axis_tuple)
+    #Restore the omitted axes to their original positions 
+    restored_position_averaged_data = np.moveaxis(averaged_data, moved_omitted_axes, omitted_axes)
+    return restored_position_averaged_data
 
 """
 Returns an od image (i.e. -ln(abs_image)) for a given image stack. Essentially wraps -ln(get_absorption_image) with some extra cleaning."""
