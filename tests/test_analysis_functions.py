@@ -74,7 +74,6 @@ def _get_raw_pixels_test_helper(type_name, function_to_test):
         measurement_pathname, my_measurement, my_run = create_measurement(type_name, ROI = DEFAULT_ABSORPTION_IMAGE_ROI)
         returned_array_no_roi = function_to_test(my_measurement, my_run, crop_roi = False) 
         returned_array_roi = function_to_test(my_measurement, my_run, crop_roi = True) 
-
         with_atoms_no_roi, without_atoms_no_roi, dark_no_roi = returned_array_no_roi 
         assert with_atoms_no_roi.dtype == np.ushort
         assert without_atoms_no_roi.dtype == np.ushort 
@@ -145,7 +144,12 @@ def _get_abs_image_test_helper(type_name, function_to_test):
                                                         norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
         absorption_image = function_to_test(my_measurement, my_run)
         cropped_default_absorption_image = get_default_absorption_image(crop_to_roi = True)
-        assert np.all(np.isclose(cropped_default_absorption_image, absorption_image, rtol = 1e-3))
+        assert np.all(np.isclose(cropped_default_absorption_image, absorption_image, rtol = 1e-3))  
+        #Try rebinning pixels
+        REBIN_NUM = 2
+        absorption_image_rebinned_pixels = function_to_test(my_measurement, my_run, rebin_pixel_num = REBIN_NUM)    
+        assert absorption_image_rebinned_pixels.size == np.square((DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE[0] - 1) // REBIN_NUM)
+        assert np.isclose(np.sum(absorption_image) / 4, np.sum(absorption_image_rebinned_pixels), rtol = 3e-2)
     finally:
         shutil.rmtree(measurement_pathname)
 
@@ -172,11 +176,11 @@ def test_get_abs_image_top_B():
 def test_get_abs_images_top_double():
     type_name = "top_double" 
 
-    def abs_image_A_split_off(my_measurement, my_run):
-        return analysis_functions.get_abs_images_top_double(my_measurement, my_run)[0] 
+    def abs_image_A_split_off(my_measurement, my_run, rebin_pixel_num = None):
+        return analysis_functions.get_abs_images_top_double(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)[0] 
     
-    def abs_image_B_split_off(my_measurement, my_run):
-        return analysis_functions.get_abs_images_top_double(my_measurement, my_run)[1]
+    def abs_image_B_split_off(my_measurement, my_run, rebin_pixel_num = None):
+        return analysis_functions.get_abs_images_top_double(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)[1]
     
     _get_abs_image_test_helper(type_name, abs_image_A_split_off)
     _get_abs_image_test_helper(type_name, abs_image_B_split_off)
@@ -188,6 +192,10 @@ def _get_od_image_test_helper(type_name, function_to_test):
         od_image = function_to_test(my_measurement, my_run) 
         cropped_default_od_image = -np.log(get_default_absorption_image(crop_to_roi = True))
         assert np.all(np.isclose(cropped_default_od_image, od_image, rtol = 1e-3))
+        REBIN_NUM = 2
+        od_image_rebinned_pixels = function_to_test(my_measurement, my_run, rebin_pixel_num = REBIN_NUM)    
+        assert od_image_rebinned_pixels.size == np.square((DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE[0] - 1) // REBIN_NUM)
+        assert np.isclose(np.sum(od_image) / 4, np.sum(od_image_rebinned_pixels), rtol = 3e-2)    
     finally:
         shutil.rmtree(measurement_pathname)
 
@@ -214,11 +222,11 @@ def test_get_od_image_top_B():
 def test_get_od_images_top_double():
     type_name = "top_double" 
 
-    def od_image_A_split_off(my_measurement, my_run):
-        return analysis_functions.get_od_images_top_double(my_measurement, my_run)[0] 
+    def od_image_A_split_off(my_measurement, my_run, rebin_pixel_num = None):
+        return analysis_functions.get_od_images_top_double(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)[0] 
     
-    def od_image_B_split_off(my_measurement, my_run):
-        return analysis_functions.get_od_images_top_double(my_measurement, my_run)[1]
+    def od_image_B_split_off(my_measurement, my_run, rebin_pixel_num = None):
+        return analysis_functions.get_od_images_top_double(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)[1]
     
     _get_od_image_test_helper(type_name, od_image_A_split_off)
     _get_od_image_test_helper(type_name, od_image_B_split_off)
@@ -231,6 +239,10 @@ def _get_od_pixel_sum_test_helper(type_name, function_to_test):
         pixel_sum = function_to_test(my_measurement, my_run) 
         expected_pixel_sum = np.square(DEFAULT_ABS_SQUARE_WIDTH)
         assert np.isclose(expected_pixel_sum, pixel_sum, rtol = 1e-3)
+        #Once again, rebin
+        REBIN_NUM = 2
+        rebinned_pixel_sum = function_to_test(my_measurement, my_run, rebin_pixel_num = REBIN_NUM)
+        assert np.isclose(pixel_sum / 4, rebinned_pixel_sum, rtol = 3e-2)
     finally:
         shutil.rmtree(measurement_pathname)
 
@@ -258,11 +270,11 @@ def test_get_od_pixel_sum_top_B():
 def test_get_od_pixel_sums_top_double():
     type_name = "top_double" 
 
-    def od_pixel_sum_A_split_off(my_measurement, my_run):
-        return analysis_functions.get_od_pixel_sums_top_double(my_measurement, my_run)[0]
+    def od_pixel_sum_A_split_off(my_measurement, my_run, rebin_pixel_num = None):
+        return analysis_functions.get_od_pixel_sums_top_double(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)[0]
     
-    def od_pixel_sum_B_split_off(my_measurement, my_run):
-        return analysis_functions.get_od_pixel_sums_top_double(my_measurement, my_run)[1]
+    def od_pixel_sum_B_split_off(my_measurement, my_run, rebin_pixel_num = None):
+        return analysis_functions.get_od_pixel_sums_top_double(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)[1]
     
     _get_od_pixel_sum_test_helper(type_name, od_pixel_sum_A_split_off)
     _get_od_pixel_sum_test_helper(type_name, od_pixel_sum_B_split_off)
@@ -283,6 +295,11 @@ def _get_atom_density_test_helper(type_name, function_to_test, cross_section, ex
         atom_densities = function_to_test(my_measurement, my_run, **fun_kwargs)
         cropped_expected_densities = -np.log(get_default_absorption_image(crop_to_roi = True)) / cross_section 
         assert np.all(np.isclose(atom_densities, cropped_expected_densities, rtol = 1e-3))
+        REBIN_NUM = 2
+        fun_kwargs["rebin_pixel_num"] = REBIN_NUM
+        atom_densities_rebinned_pixels = function_to_test(my_measurement, my_run, **fun_kwargs)
+        assert atom_densities_rebinned_pixels.size == np.square((DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE[0] - 1) // REBIN_NUM)
+        assert np.isclose(np.sum(atom_densities) / 4, np.sum(atom_densities_rebinned_pixels), rtol = 3e-2)
     finally:
         shutil.rmtree(measurement_pathname)
 
@@ -484,6 +501,15 @@ def test_get_atom_densities_top_polrot():
                                                                                               use_saturation = False)
         assert np.all(np.isclose(polrot_density_1, expected_polrot_density_1, rtol = 1e-3))
         assert np.all(np.isclose(polrot_density_2, expected_polrot_density_2, rtol = 1e-3))
+        #Test that pixel rebinning works
+        REBIN_NUM = 2
+        polrot_density_1_rebinned_pixels, polrot_density_2_rebinned_pixels = analysis_functions.get_atom_densities_top_polrot(
+                                                                            my_measurement, my_run, first_state_index = 1,
+                                                                            second_state_index = 3, rebin_pixel_num = REBIN_NUM,
+                                                                            b_field_condition = "unitarity",
+                                                                            use_saturation = False)
+        assert polrot_density_1_rebinned_pixels.size == np.square((DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE[0] - 1) // REBIN_NUM)
+        assert np.isclose(np.sum(polrot_density_1) / 4, np.sum(polrot_density_1_rebinned_pixels), rtol = 1e-1)
         #Then do it with saturation
         saturation_counts = analysis_functions.get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True)
         intensity_A = BASE_LIGHT_LEVEL

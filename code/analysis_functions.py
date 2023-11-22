@@ -59,96 +59,105 @@ def get_raw_pixels_top_B(my_measurement, my_run, crop_roi = False, memmap = Fals
 
 #ABS IMAGES (Sometimes called 'Fake OD')
 
-def get_abs_image_na_catch(my_measurement, my_run):
+def get_abs_image_na_catch(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array = get_raw_pixels_na_catch(my_measurement, my_run, memmap = True)
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                rebin_pixel_num = rebin_pixel_num)
     return my_run_abs_image
 
-def get_abs_image_side(my_measurement, my_run):
+def get_abs_image_side(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array = get_raw_pixels_side(my_measurement, my_run, memmap = True)
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                rebin_pixel_num = rebin_pixel_num)
     return my_run_abs_image
 
 
-def get_abs_image_top_A(my_measurement, my_run):
+def get_abs_image_top_A(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array_A = get_raw_pixels_top_A(my_measurement, my_run, memmap = True)
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array_A, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                rebin_pixel_num = rebin_pixel_num)
     return my_run_abs_image
 
-def get_abs_image_top_B(my_measurement, my_run):
+def get_abs_image_top_B(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array_B = get_raw_pixels_top_B(my_measurement, my_run, memmap = True)
     my_run_abs_image = image_processing_functions.get_absorption_image(my_run_image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                rebin_pixel_num = rebin_pixel_num)
     return my_run_abs_image
     
-def get_abs_images_top_double(my_measurement, my_run):
-    return (get_abs_image_top_A(my_measurement, my_run), get_abs_image_top_B(my_measurement, my_run))
+def get_abs_images_top_double(my_measurement, my_run, rebin_pixel_num = None):
+    return (get_abs_image_top_A(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num),
+            get_abs_image_top_B(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num))
 
 #OD IMAGES
 
-def get_od_image_na_catch(my_measurement, my_run):
+def get_od_image_na_catch(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array = get_raw_pixels_na_catch(my_measurement, my_run, memmap = True)
     my_run_od_image = image_processing_functions.get_absorption_od_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                                rebin_pixel_num = rebin_pixel_num)
     return my_run_od_image
 
-def get_od_image_side(my_measurement, my_run):
+def get_od_image_side(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array = get_raw_pixels_side(my_measurement, my_run, memmap = True)
     my_run_od_image = image_processing_functions.get_absorption_od_image(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                                rebin_pixel_num = rebin_pixel_num)
     return my_run_od_image
 
-def get_od_image_top_A(my_measurement, my_run):
+def get_od_image_top_A(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array_A = get_raw_pixels_top_A(my_measurement, my_run, memmap = True)
     my_run_od_image_A = image_processing_functions.get_absorption_od_image(my_run_image_array_A, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                                rebin_pixel_num = rebin_pixel_num)
     return my_run_od_image_A
 
 
-def get_od_image_top_B(my_measurement, my_run):
+def get_od_image_top_B(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array_B = get_raw_pixels_top_B(my_measurement, my_run, memmap = True)
     my_run_od_image_B = image_processing_functions.get_absorption_od_image(my_run_image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"],
+                                                                rebin_pixel_num = rebin_pixel_num)
     return my_run_od_image_B
 
-def get_od_images_top_double(my_measurement, my_run):
-    od_image_A = get_od_image_top_A(my_measurement, my_run) 
-    od_image_B = get_od_image_top_B(my_measurement, my_run) 
+def get_od_images_top_double(my_measurement, my_run, rebin_pixel_num = None):
+    od_image_A = get_od_image_top_A(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num) 
+    od_image_B = get_od_image_top_B(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num) 
     return (od_image_A, od_image_B)
 
 #PIXEL SUMS
 
-def get_od_pixel_sum_na_catch(my_measurement, my_run):
-    my_run_abs_image = get_od_image_na_catch(my_measurement, my_run)
+def get_od_pixel_sum_na_catch(my_measurement, my_run, rebin_pixel_num = None):
+    my_run_abs_image = get_od_image_na_catch(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)
     pixel_sum = image_processing_functions.pixel_sum(my_run_abs_image)
     return pixel_sum
 
-def get_od_pixel_sum_side(my_measurement, my_run):
-    my_run_abs_image = get_od_image_side(my_measurement, my_run)
+def get_od_pixel_sum_side(my_measurement, my_run, rebin_pixel_num = None):
+    my_run_abs_image = get_od_image_side(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)
     pixel_sum = image_processing_functions.pixel_sum(my_run_abs_image)
     return pixel_sum
 
 
-def get_od_pixel_sum_top_A(my_measurement, my_run):
-    my_run_abs_image_A = get_od_image_top_A(my_measurement, my_run)
+def get_od_pixel_sum_top_A(my_measurement, my_run, rebin_pixel_num = None):
+    my_run_abs_image_A = get_od_image_top_A(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)
     pixel_sum_A = image_processing_functions.pixel_sum(my_run_abs_image_A)
     return pixel_sum_A
 
-def get_od_pixel_sum_top_B(my_measurement, my_run):
-    my_run_abs_image_B = get_od_image_top_B(my_measurement, my_run)
+def get_od_pixel_sum_top_B(my_measurement, my_run, rebin_pixel_num = None):
+    my_run_abs_image_B = get_od_image_top_B(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num)
     pixel_sum_B = image_processing_functions.pixel_sum(my_run_abs_image_B)
     return pixel_sum_B
 
-def get_od_pixel_sums_top_double(my_measurement, my_run):
-    return (get_od_pixel_sum_top_A(my_measurement, my_run), get_od_pixel_sum_top_B(my_measurement, my_run))
-
+def get_od_pixel_sums_top_double(my_measurement, my_run, rebin_pixel_num = None):
+    return (get_od_pixel_sum_top_A(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num), 
+            get_od_pixel_sum_top_B(my_measurement, my_run, rebin_pixel_num = rebin_pixel_num))
 
 #ATOM DENSITIES
 
-def get_atom_density_side_li_lf(my_measurement, my_run):
+def get_atom_density_side_li_lf(my_measurement, my_run, rebin_pixel_num = None):
     my_run_image_array = get_raw_pixels_side(my_measurement, my_run, memmap = True)
     frequency_multiplier = my_measurement.experiment_parameters["li_lf_freq_multiplier"]
     nominal_resonance_frequency = my_measurement.experiment_parameters["li_lf_res_freq"]
@@ -156,11 +165,13 @@ def get_atom_density_side_li_lf(my_measurement, my_run):
     side_cross_section_geometry_factor = my_measurement.experiment_parameters["li_side_sigma_multiplier"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"],
+                                                            rebin_pixel_num = rebin_pixel_num,
+                                                            detuning = detuning, 
                                                             cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
     return atom_density_image
 
-def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None, b_field_condition = "unitarity"):
+def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None, b_field_condition = "unitarity", rebin_pixel_num = None):
     if state_index is None:
         raise RuntimeError("The state of the imaging must be specified.")
     
@@ -172,11 +183,12 @@ def get_atom_density_side_li_hf(my_measurement, my_run, state_index = None, b_fi
     nominal_frequency = my_run.parameters["ImagFreq0"]
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency) + hf_lock_frequency_adjustment
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning,
-                                                            cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"],
+                                                            rebin_pixel_num = rebin_pixel_num, 
+                                                            detuning = detuning, cross_section_imaging_geometry_factor=side_cross_section_geometry_factor)
     return atom_density_image
 
-def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_condition = "unitarity"):
+def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_condition = "unitarity", rebin_pixel_num = None):
     #Find the true detuning from the resonance in absolute frequency space,
     #taking into account shifts in AOM frequency and hf frequency offset lock setpoint
     nominal_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, state_index)
@@ -187,16 +199,15 @@ def get_atom_density_top_A_abs(my_measurement, my_run, state_index = 1, b_field_
 
     #Adjust for imaging geometry-dependent cross section
     top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
-
-
     #Process
     my_run_image_array = get_raw_pixels_top_A(my_measurement, my_run, memmap = True)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
-                                                            cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], 
+                                                            rebin_pixel_num = rebin_pixel_num,
+                                                            detuning = detuning, cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
     return atom_density_image
 
-def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_condition = "unitarity"):
+def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_condition = "unitarity", rebin_pixel_num = None):
     nominal_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, state_index)
     nominal_frequency = my_run.parameters["ImagFreq2"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
@@ -205,19 +216,22 @@ def get_atom_density_top_B_abs(my_measurement, my_run, state_index = 3, b_field_
     detuning = frequency_multiplier * (nominal_frequency - nominal_resonance_frequency) + hf_lock_frequency_adjustment
     my_run_image_array = get_raw_pixels_top_B(my_measurement, my_run, memmap = True)
     atom_density_image = image_processing_functions.get_atom_density_absorption(my_run_image_array, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], detuning = detuning, 
+                                                            norm_box_coordinates=my_measurement.measurement_parameters["norm_box"],
+                                                            rebin_pixel_num = rebin_pixel_num, detuning = detuning, 
                                                             cross_section_imaging_geometry_factor=top_cross_section_geometry_factor)
     return atom_density_image
 
 
-def get_atom_densities_top_abs(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity"):
-    return (get_atom_density_top_A_abs(my_measurement, my_run, state_index = first_state_index, b_field_condition=b_field_condition),
-     get_atom_density_top_B_abs(my_measurement, my_run, state_index = second_state_index, b_field_condition = b_field_condition))
+def get_atom_densities_top_abs(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity", 
+                               rebin_pixel_num = None):
+    return (get_atom_density_top_A_abs(my_measurement, my_run, state_index = first_state_index, b_field_condition=b_field_condition, rebin_pixel_num = rebin_pixel_num),
+     get_atom_density_top_B_abs(my_measurement, my_run, state_index = second_state_index, b_field_condition = b_field_condition, rebin_pixel_num = rebin_pixel_num))
 
 
 
 def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1, second_state_index = 3, b_field_condition = "unitarity", 
-                                first_state_fudge = 1.0, second_state_fudge = 1.0, use_saturation = True, average_saturation = False):
+                                  rebin_pixel_num = None, first_state_fudge = 1.0, second_state_fudge = 1.0, use_saturation = True, 
+                                  average_saturation = False):
     first_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, first_state_index)
     second_state_resonance_frequency = _get_resonance_frequency_from_state_index(my_measurement, second_state_index)
     nominal_frequency_A = my_run.parameters["ImagFreq1"]
@@ -234,9 +248,11 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     image_array_B = get_raw_pixels_top_B(my_measurement, my_run, memmap = True)
     abs_image_A = image_processing_functions.get_absorption_image(image_array_A, 
                                                                 ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])
+                                                                norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], 
+                                                                rebin_pixel_num = rebin_pixel_num)
     abs_image_B = image_processing_functions.get_absorption_image(image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
-                                                    norm_box_coordinates=my_measurement.measurement_parameters["norm_box"])
+                                                    norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], 
+                                                    rebin_pixel_num = rebin_pixel_num)
     if not use_saturation:        
         intensities_A = None 
         intensities_B = None 
@@ -245,12 +261,14 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
         intensities_sat = get_saturation_counts_top(my_measurement, my_run)
         intensities_A = image_processing_functions.get_without_atoms_counts(image_array_A, 
                                                                 ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                                rebin_pixel_num = rebin_pixel_num)
         intensities_B = image_processing_functions.get_without_atoms_counts(image_array_B, 
                                                                 ROI = my_measurement.measurement_parameters["ROI"], 
-                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"])
+                                                                norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
+                                                                rebin_pixel_num = rebin_pixel_num)
         if average_saturation:
-            intensities_A = np.average(intensities_A) 
+            intensities_A = np.average(intensities_A)
             intensities_B = np.average(intensities_B)
     atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B,
                                                                 detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign, 
