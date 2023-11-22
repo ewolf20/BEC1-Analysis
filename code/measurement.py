@@ -206,6 +206,8 @@ class Measurement():
             json.dump(analysis_dump_dict, analysis_dump_file)
         #Default assumption is that parameters values will be vanilla JSON serializable.
         parameters_dump_pathname = os.path.join(dump_foldername, Measurement.PARAMETERS_DUMPFILE_NAME)
+        #Experiment parameter overrides are not saved
+        self.undo_experiment_parameter_overrides()
         with open(parameters_dump_pathname, 'w') as parameters_dump_file:
             parameters_dump_dict = {} 
             parameters_dump_dict["Measurement"] = self.measurement_parameters 
@@ -313,6 +315,40 @@ class Measurement():
         with open(os.path.join(workfolder_pathname, "Source.txt"), 'w') as f:
             f.write("Data source: " + self.measurement_directory_path)
         return workfolder_pathname
+    
+
+
+    EXPERIMENT_PARAMETER_OVERRIDE_PREFIX = "_OVERRIDDEN_"
+
+    """
+    Temporarily override an experiment parameter value.
+    
+    Given a key key and value new_value, replace the current value of self.experiment_parameters[key] with new_value. The original value of the 
+    parameter, before any overrides are called, is saved under a modified name and can be restored by a call to undo_experiment_parameter_overrides()
+     
+    REMARK: This function covers the rare case where an experiment parameter value, normally treated as physically fixed constants independent  
+    of analysis, needs to be changed during analysis. The most common such case is a rebinning of pixels within an image, which effectively
+    changes the physical length of a pixel.
+ 
+    """
+    def override_experiment_parameter(self, key, value):
+        if not key in self.experiment_parameters:
+            raise KeyError("The specified key is not present in experiment_parameters.")
+        original_value = self.experiment_parameters[key] 
+        modified_key = Measurement.EXPERIMENT_PARAMETER_OVERRIDE_PREFIX + key 
+        if not modified_key in self.experiment_parameters:
+            self.experiment_parameters[modified_key] = original_value
+        self.experiment_parameters[key] = value
+
+
+    def undo_experiment_parameter_overrides(self):
+        keys_to_restore = []
+        for key in self.experiment_parameters:
+            if Measurement.EXPERIMENT_PARAMETER_OVERRIDE_PREFIX in key:
+                keys_to_restore.append(key)
+        for key_to_restore in keys_to_restore:
+            original_key_name = key_to_restore.split(Measurement.EXPERIMENT_PARAMETER_OVERRIDE_PREFIX)[1] 
+            self.experiment_parameters[original_key_name] = self.experiment_parameters.pop(key_to_restore)
 
     """
     Set a rectangular box with user input.

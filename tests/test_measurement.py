@@ -47,6 +47,26 @@ class TestMeasurement:
         my_measurement = TestMeasurement.initialize_measurement() 
         assert True
 
+    @staticmethod 
+    def test_override_experiment_parameter():
+        my_measurement = TestMeasurement.initialize_measurement()
+        my_measurement.experiment_parameters = {"foo":1} 
+        my_measurement.override_experiment_parameter("foo", 2) 
+        assert len(my_measurement.experiment_parameters) == 2
+        assert my_measurement.experiment_parameters["foo"] == 2
+        assert Measurement.EXPERIMENT_PARAMETER_OVERRIDE_PREFIX + "foo" in my_measurement.experiment_parameters
+
+    @staticmethod
+    def test_undo_experiment_parameter_overrides():
+        my_measurement = TestMeasurement.initialize_measurement()
+        my_measurement.experiment_parameters = {"foo":1} 
+        my_measurement.override_experiment_parameter("foo", 2) 
+        assert len(my_measurement.experiment_parameters) == 2
+        my_measurement.undo_experiment_parameter_overrides() 
+        assert len(my_measurement.experiment_parameters) == 1
+        assert my_measurement.experiment_parameters["foo"] == 1
+
+
     @staticmethod
     def test_update_runs_dict():
         my_measurement = TestMeasurement.initialize_measurement()
@@ -61,6 +81,8 @@ class TestMeasurement:
         spoofed_measurement = TestMeasurement._dump_and_load_measurement_spoofer()
         try:
             TEST_DUMP_FOLDERNAME = "Temp"
+            #Modify the dumped measurement via an override of an experiment parameter
+            spoofed_measurement.override_experiment_parameter("swallow_species", "coconut")
             spoofed_measurement.dump_measurement(dump_foldername = TEST_DUMP_FOLDERNAME)
             #Twiddle the spoofed measurement to be different
             spoofed_measurement.analyze_runs(lambda my_measurement, my_run: 0.0, "bar", overwrite_existing = True)
