@@ -67,15 +67,15 @@ def test_get_absorption_image():
     test_image_array = load_test_image()
     absorption_image_full = image_processing_functions.get_absorption_image(test_image_array)
     saved_absorption_image_full = np.load(ABSORPTION_NUMPY_ARRAY_FILEPATH)
-    assert np.all(np.abs(absorption_image_full - saved_absorption_image_full) < 1e-4)
+    assert np.all(np.isclose(absorption_image_full, saved_absorption_image_full))
     absorption_image_ROI = image_processing_functions.get_absorption_image(test_image_array, ROI = ROI)
-    xmin, ymin, xmax, ymax = ROI 
+    xmin, ymin, xmax, ymax = ROI
     saved_absorption_image_ROI = saved_absorption_image_full[ymin:ymax, xmin:xmax]
-    assert np.all(np.abs(absorption_image_ROI - saved_absorption_image_ROI) < 1e-4)
+    assert np.all(np.isclose(absorption_image_ROI, saved_absorption_image_ROI))
     absorption_image_ROI_norm = image_processing_functions.get_absorption_image(test_image_array, ROI = ROI, norm_box_coordinates = norm_box)
-    norm_xmin, norm_ymin, norm_xmax, norm_ymax = norm_box 
-    with_atoms = test_image_array[0] 
-    without_atoms = test_image_array[1] 
+    norm_xmin, norm_ymin, norm_xmax, norm_ymax = norm_box
+    with_atoms = test_image_array[0]
+    without_atoms = test_image_array[1]
     dark = test_image_array[2]
     norm_with_atoms_subtracted = with_atoms[norm_ymin:norm_ymax, norm_xmin:norm_xmax] - dark[norm_ymin:norm_ymax, norm_xmin:norm_xmax]
     norm_without_atoms_subtracted = without_atoms[norm_ymin:norm_ymax, norm_xmin:norm_xmax] - dark[norm_ymin:norm_ymax, norm_xmin:norm_xmax]
@@ -83,13 +83,24 @@ def test_get_absorption_image():
     unnorm_to_norm_ratio_array = (absorption_image_ROI / absorption_image_ROI_norm).flatten()
     unnorm_to_norm_ratio_array = unnorm_to_norm_ratio_array[~np.isnan(unnorm_to_norm_ratio_array)]
     assert np.all(np.isclose(norm_ratio, unnorm_to_norm_ratio_array))
+    #As the details of rebin averaging are tested elsewhere, it suffices to verify that it's being done by checking sizes and sums
+    absorption_image_full_averaged = image_processing_functions.get_absorption_image(test_image_array, rebin_pixel_num = 2)
+    assert absorption_image_full_averaged.size == (absorption_image_full.size / 4)
+    #Because the absorption image process is nonlinear, no guarantee that the sum is exactly the same; tolerance is hence very high
+    assert np.isclose(np.sum(absorption_image_full) / 4, np.sum(absorption_image_full_averaged), rtol = 5e-2)
 
 
 def test_get_absorption_od_image():
     test_image_array = load_test_image() 
     od_image_full = image_processing_functions.get_absorption_od_image(test_image_array)
     saved_od_image = np.load(OD_NUMPY_ARRAY_FILEPATH)
-    assert np.all(np.abs(od_image_full - saved_od_image) < 1e-4)
+    assert np.all(np.isclose(od_image_full, saved_od_image))
+    #Again, just test that the dimensions are correct 
+    od_image_full_averaged = image_processing_functions.get_absorption_od_image(test_image_array, rebin_pixel_num = 2)
+    assert od_image_full_averaged.size == od_image_full.size / 4
+    #Likewise, no guarantee of equality of sums, so high tolerance 
+    assert np.isclose(np.sum(od_image_full_averaged), np.sum(od_image_full) / 4, rtol = 2e-1)
+
 
 def test_pixel_sum():
     ROI = [270, 0, 480, 180] 
@@ -119,6 +130,7 @@ def test_get_atom_density_absorption():
     atom_number_image_full_detuned = image_processing_functions.get_atom_density_absorption(test_image_array, detuning = 3)
     atom_number_image_full_sat = image_processing_functions.get_atom_density_absorption(test_image_array, flag = 'sat_beer-lambert', saturation_counts = 1000000)
     atom_number_image_full_geo_adjusted = image_processing_functions.get_atom_density_absorption(test_image_array, cross_section_imaging_geometry_factor = 0.5)
+    atom_number_image_pixel_averaged = image_processing_functions.get_atom_density_absorption(test_image_array, rebin_pixel_num = 2)
     atom_count = image_processing_functions.atom_count_pixel_sum(atom_number_image_full, 27.52, sum_region = ROI)
     atom_count_detuned = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_detuned, 27.52, sum_region = ROI) 
     atom_count_sat = image_processing_functions.atom_count_pixel_sum(atom_number_image_full_sat, 27.52, sum_region = ROI)
@@ -127,6 +139,10 @@ def test_get_atom_density_absorption():
     assert np.abs(atom_count_detuned - EXPECTED_DETUNED_SUM) < 0.01 
     assert np.abs(atom_count_sat - EXPECTED_SAT_SUM) < 0.01
     assert np.abs(atom_count_geo_adjusted - 2 *EXPECTED_SUM) < 0.01
+    #Test pixel summing 
+    REBIN_NUM = 2
+    assert atom_number_image_pixel_averaged.size == atom_number_image_full.size / 4
+    assert np.isclose(np.sum(atom_number_image_pixel_averaged), np.sum(atom_number_image_full) / 4, rtol = 2e-1)
 
 
 POLROT_DETUNING_1A = 5
@@ -214,14 +230,14 @@ def test_get_atom_density_from_polrot_images():
                                                                                                                     phase_sign = -1.0)
     saved_density_1 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_1.npy"))
     saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
-    assert np.all(np.abs(saved_density_1 - reconstructed_density_1) < 1e-4)
-    assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-4)
+    assert np.all(np.isclose(saved_density_1, reconstructed_density_1))
+    assert np.all(np.isclose(saved_density_2, reconstructed_density_2))
     reconstructed_geo_adjusted_density_1, reconstructed_geo_adjusted_density_2 = image_processing_functions.get_atom_density_from_polrot_images(
                                                                             fake_image_A, fake_image_B, POLROT_DETUNING_1A, POLROT_DETUNING_1B, 
                                                                             POLROT_DETUNING_2A, POLROT_DETUNING_2B, phase_sign = -1.0, 
                                                                             cross_section_imaging_geometry_factor = 0.5)
-    assert np.all(np.abs(2 * saved_density_1 - reconstructed_geo_adjusted_density_1) < 1e-4)
-    assert np.all(np.abs(2 * saved_density_2 - reconstructed_geo_adjusted_density_2) < 1e-4)  
+    assert np.all(np.isclose(2 * saved_density_1, reconstructed_geo_adjusted_density_1))
+    assert np.all(np.isclose(2 * saved_density_2, reconstructed_geo_adjusted_density_2))
 
 
 def test_generate_polrot_lookup_table():
@@ -309,7 +325,7 @@ def test_get_hybrid_cross_section_um():
     assert np.isclose(cross_section, EXPECTED_CROSS_SECTION_UM2)
 
 
-def test_bin_data():
+def test_bin_and_average_data():
     DATA_LENGTH_1D = 24
     BIN_SIZE_1D_EVEN = 3
     BIN_SIZE_1D_UNEVEN = 5
@@ -317,9 +333,9 @@ def test_bin_data():
         expected_rebinned_data = (bin_size - 1) / 2 + bin_size * np.arange(data_length // bin_size)
         assert np.array_equal(rebinned_data, expected_rebinned_data)
     data_to_bin_1d = np.arange(DATA_LENGTH_1D) 
-    rebinned_data_even = image_processing_functions.bin_data(data_to_bin_1d, BIN_SIZE_1D_EVEN)
+    rebinned_data_even = image_processing_functions.bin_and_average_data(data_to_bin_1d, BIN_SIZE_1D_EVEN)
     validate_data_1d(DATA_LENGTH_1D, BIN_SIZE_1D_EVEN, rebinned_data_even)
-    rebinned_data_uneven = image_processing_functions.bin_data(data_to_bin_1d, BIN_SIZE_1D_UNEVEN)
+    rebinned_data_uneven = image_processing_functions.bin_and_average_data(data_to_bin_1d, BIN_SIZE_1D_UNEVEN)
     validate_data_1d(DATA_LENGTH_1D, BIN_SIZE_1D_UNEVEN, rebinned_data_uneven)
     DATA_LENGTH_2D = 96
     DATA_SHAPE_2D = (8, 12)
@@ -334,16 +350,24 @@ def test_bin_data():
         bin_dim_0, bin_dim_1 = bin_shape 
         constant_offset = (bin_dim_0 - 1) / 2 * data_dim_1 + (bin_dim_1 - 1)/2 
         base_array = np.expand_dims(bin_dim_0 * data_dim_1 * np.arange(data_dim_0 // bin_dim_0), axis = 1) + bin_dim_1 * np.arange(data_dim_1 // bin_dim_1)
-        expected_rebinned_data = constant_offset + base_array 
-        assert np.array_equal(rebinned_data, expected_rebinned_data) 
-    rebinned_data_2d_single_even = image_processing_functions.bin_data(data_to_bin_2d, BIN_SIZE_2D_SINGLE_EVEN)
+        expected_rebinned_data = constant_offset + base_array
+        assert np.array_equal(rebinned_data, expected_rebinned_data)
+    rebinned_data_2d_single_even = image_processing_functions.bin_and_average_data(data_to_bin_2d, BIN_SIZE_2D_SINGLE_EVEN)
     validate_data_2d(data_shape_2d, (BIN_SIZE_2D_SINGLE_EVEN, BIN_SIZE_2D_SINGLE_EVEN), rebinned_data_2d_single_even)
-    rebinned_data_2d_single_uneven = image_processing_functions.bin_data(data_to_bin_2d, BIN_SIZE_2D_SINGLE_UNEVEN)
+    rebinned_data_2d_single_uneven = image_processing_functions.bin_and_average_data(data_to_bin_2d, BIN_SIZE_2D_SINGLE_UNEVEN)
     validate_data_2d(data_shape_2d, (BIN_SIZE_2D_SINGLE_UNEVEN, BIN_SIZE_2D_SINGLE_UNEVEN), rebinned_data_2d_single_uneven)
-    rebinned_data_2d_tuple_even = image_processing_functions.bin_data(data_to_bin_2d, BIN_SIZE_2D_TUPLE_EVEN)
+    rebinned_data_2d_tuple_even = image_processing_functions.bin_and_average_data(data_to_bin_2d, BIN_SIZE_2D_TUPLE_EVEN)
     validate_data_2d(data_shape_2d, BIN_SIZE_2D_TUPLE_EVEN, rebinned_data_2d_tuple_even)
-    rebinned_data_2d_tuple_uneven = image_processing_functions.bin_data(data_to_bin_2d, BIN_SIZE_2D_TUPLE_UNEVEN) 
+    rebinned_data_2d_tuple_uneven = image_processing_functions.bin_and_average_data(data_to_bin_2d, BIN_SIZE_2D_TUPLE_UNEVEN)
     validate_data_2d(data_shape_2d, BIN_SIZE_2D_TUPLE_UNEVEN, rebinned_data_2d_tuple_uneven) 
+    #Check axis omission
+    data_to_bin_1d_omissions = np.reshape(np.arange(4), (4, 1)) * np.arange(3)
+    rebinned_data_1d_omissions = image_processing_functions.bin_and_average_data(data_to_bin_1d_omissions, 3, omitted_axes = 0)
+    expected_rebinned_data_1d_omissions = np.reshape(np.arange(4), (4, 1))
+    assert np.array_equal(expected_rebinned_data_1d_omissions, rebinned_data_1d_omissions)
+    other_axis_rebinned_data_1d_omissions = image_processing_functions.bin_and_average_data(data_to_bin_1d_omissions, 4, omitted_axes = 1)
+    expected_other_axis_rebinned_data_1d_omissions = 1.5 * np.reshape(np.arange(3), (1, 3)) 
+    assert np.array_equal(other_axis_rebinned_data_1d_omissions, expected_other_axis_rebinned_data_1d_omissions)
     
 def test_get_saturation_counts_from_camera_parameters():
     SAMPLE_CAMERA_COUNTS_TO_PHOTONS_FACTOR = 1.2
