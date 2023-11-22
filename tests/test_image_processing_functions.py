@@ -67,15 +67,15 @@ def test_get_absorption_image():
     test_image_array = load_test_image()
     absorption_image_full = image_processing_functions.get_absorption_image(test_image_array)
     saved_absorption_image_full = np.load(ABSORPTION_NUMPY_ARRAY_FILEPATH)
-    assert np.all(np.abs(absorption_image_full - saved_absorption_image_full) < 1e-4)
+    assert np.all(np.isclose(absorption_image_full, saved_absorption_image_full))
     absorption_image_ROI = image_processing_functions.get_absorption_image(test_image_array, ROI = ROI)
-    xmin, ymin, xmax, ymax = ROI 
+    xmin, ymin, xmax, ymax = ROI
     saved_absorption_image_ROI = saved_absorption_image_full[ymin:ymax, xmin:xmax]
-    assert np.all(np.abs(absorption_image_ROI - saved_absorption_image_ROI) < 1e-4)
+    assert np.all(np.isclose(absorption_image_ROI, saved_absorption_image_ROI))
     absorption_image_ROI_norm = image_processing_functions.get_absorption_image(test_image_array, ROI = ROI, norm_box_coordinates = norm_box)
-    norm_xmin, norm_ymin, norm_xmax, norm_ymax = norm_box 
-    with_atoms = test_image_array[0] 
-    without_atoms = test_image_array[1] 
+    norm_xmin, norm_ymin, norm_xmax, norm_ymax = norm_box
+    with_atoms = test_image_array[0]
+    without_atoms = test_image_array[1]
     dark = test_image_array[2]
     norm_with_atoms_subtracted = with_atoms[norm_ymin:norm_ymax, norm_xmin:norm_xmax] - dark[norm_ymin:norm_ymax, norm_xmin:norm_xmax]
     norm_without_atoms_subtracted = without_atoms[norm_ymin:norm_ymax, norm_xmin:norm_xmax] - dark[norm_ymin:norm_ymax, norm_xmin:norm_xmax]
@@ -83,13 +83,24 @@ def test_get_absorption_image():
     unnorm_to_norm_ratio_array = (absorption_image_ROI / absorption_image_ROI_norm).flatten()
     unnorm_to_norm_ratio_array = unnorm_to_norm_ratio_array[~np.isnan(unnorm_to_norm_ratio_array)]
     assert np.all(np.isclose(norm_ratio, unnorm_to_norm_ratio_array))
+    #As the details of rebin averaging are tested elsewhere, it suffices to verify that it's being done by checking sizes and sums
+    absorption_image_full_averaged = image_processing_functions.get_absorption_image(test_image_array, rebin_pixels = 2)
+    assert absorption_image_full_averaged.size == (absorption_image_full.size / 4)
+    #Because the absorption image process is nonlinear, no guarantee that the sum is exactly the same; tolerance is hence very high
+    assert np.isclose(np.sum(absorption_image_full) / 4, np.sum(absorption_image_full_averaged), rtol = 5e-2)
 
 
 def test_get_absorption_od_image():
     test_image_array = load_test_image() 
     od_image_full = image_processing_functions.get_absorption_od_image(test_image_array)
     saved_od_image = np.load(OD_NUMPY_ARRAY_FILEPATH)
-    assert np.all(np.abs(od_image_full - saved_od_image) < 1e-4)
+    assert np.all(np.isclose(od_image_full, saved_od_image))
+    #Again, just test that the dimensions are correct 
+    od_image_full_averaged = image_processing_functions.get_absorption_od_image(test_image_array, rebin_pixels = 2)
+    assert od_image_full_averaged.size == od_image_full.size / 4
+    #Likewise, no guarantee of equality of sums, so high tolerance 
+    assert np.isclose(np.sum(od_image_full_averaged), np.sum(od_image_full) / 4, rtol = 2e-1)
+
 
 def test_pixel_sum():
     ROI = [270, 0, 480, 180] 

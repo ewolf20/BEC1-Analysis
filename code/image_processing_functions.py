@@ -50,9 +50,9 @@ atoms, corrected by the dark image counts. If norm_box_coordinates is specified,
 to normalize the image_with_atoms and the image_without_atoms to have the same counts there.
 
 Note: ROI and norm_box use coordinates in the form [x_min, y_min, x_max, y_max]"""
-def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, clean_strategy = "default_clipped"):
+def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, rebin_pixels = None, clean_strategy = "default_clipped"):
     with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates)
-    dark_subtracted_image_with_atoms, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI)
+    dark_subtracted_image_with_atoms, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI, rebin_pixels = rebin_pixels)
     absorption_image = dark_subtracted_image_with_atoms / (dark_subtracted_image_without_atoms * with_without_light_ratio)
     absorption_image = _clean_absorption_image(absorption_image, strategy = clean_strategy)
     return absorption_image
@@ -62,24 +62,20 @@ def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, c
 
 Returns dark-subtracted, norm-box-adjusted counts in the without atoms image, suitable for use as a marker of saturation intensity."""
 
-def get_without_atoms_counts(image_stack, ROI = None, norm_box_coordinates = None):
+def get_without_atoms_counts(image_stack, ROI = None, norm_box_coordinates = None, rebin_pixels = None):
     with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates)
-    _, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI)
+    _, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI, rebin_pixels = rebin_pixels)
     norm_adjusted_dark_subtracted_image_without_atoms = dark_subtracted_image_without_atoms * with_without_light_ratio
     return norm_adjusted_dark_subtracted_image_without_atoms
 
-def _roi_crop_helper(image_stack, ROI = None):
-    image_with_atoms = image_stack[0] 
-    image_without_atoms = image_stack[1] 
-    image_dark = image_stack[2]
-    if(ROI):
-        roi_x_min, roi_y_min, roi_x_max, roi_y_max = ROI 
-        image_with_atoms_ROI = image_with_atoms[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
-        image_without_atoms_ROI = image_without_atoms[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
-        image_dark_ROI = image_dark[roi_y_min:roi_y_max, roi_x_min:roi_x_max]
-        return (safe_subtract(image_with_atoms_ROI, image_dark_ROI), safe_subtract(image_without_atoms_ROI, image_dark_ROI))
-    else:
-        return (safe_subtract(image_with_atoms, image_dark),  safe_subtract(image_without_atoms, image_dark))
+def _roi_crop_helper(image_stack, ROI = None, rebin_pixels = None):
+    if not ROI is None:
+        roi_x_min, roi_y_min, roi_x_max, roi_y_max = ROI
+        image_stack = image_stack[:, roi_y_min:roi_y_max, roi_x_min:roi_x_max]
+    if not rebin_pixels is None:
+        image_stack = bin_and_average_data(image_stack, rebin_pixels, omitted_axes = 0)
+    image_with_atoms, image_without_atoms, image_dark = image_stack
+    return (safe_subtract(image_with_atoms, image_dark),  safe_subtract(image_without_atoms, image_dark))
 
 """
 Convenience function for safely subtracting two arrays of unsigned type.
@@ -188,9 +184,10 @@ def bin_and_average_data(data_to_bin, bin_dimensions, omitted_axes = None):
 
 """
 Returns an od image (i.e. -ln(abs_image)) for a given image stack. Essentially wraps -ln(get_absorption_image) with some extra cleaning."""
-def get_absorption_od_image(image_stack, ROI = None, norm_box_coordinates = None, abs_clean_strategy = "default_clipped", od_clean_strategy = 'default_clipped'):
+def get_absorption_od_image(image_stack, ROI = None, norm_box_coordinates = None, rebin_pixels = None,
+                            abs_clean_strategy = "default_clipped", od_clean_strategy = 'default_clipped'):
     absorption_image = get_absorption_image(image_stack, ROI = ROI, norm_box_coordinates = norm_box_coordinates,
-                                                 clean_strategy = abs_clean_strategy)
+                                            rebin_pixels = rebin_pixels, clean_strategy = abs_clean_strategy)
     od_image_raw = -np.log(absorption_image)
     return _clean_od_image(od_image_raw, strategy = od_clean_strategy)
 
@@ -232,7 +229,8 @@ Warning: All inverse-time units are in units of MHz by convention. All length un
 Remark: res_cross_section is _the_ resonant cross section for the transition - i.e. that of a cycling transition driven with the correct polarization, 
 i.e. 6 * pi * lambda_bar^2. cross_section_multiplier is provided for accommodating deviations from this thanks to imaging geometry."""
 
-def get_atom_density_absorption(image_stack, ROI = None, norm_box_coordinates = None, abs_clean_strategy = 'default_clipped', od_clean_strategy = 'default_clipped',
+def get_atom_density_absorption(image_stack, ROI = None, norm_box_coordinates = None, rebin_pixels = None,
+                                abs_clean_strategy = 'default_clipped', od_clean_strategy = 'default_clipped',
                                 flag = 'beer-lambert', detuning = 0, linewidth = None, res_cross_section = None, species = '6Li', saturation_counts = None, 
                                 cross_section_imaging_geometry_factor = 1.0):
     if not linewidth:
