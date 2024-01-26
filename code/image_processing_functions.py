@@ -74,7 +74,9 @@ def _roi_crop_helper(image_stack, ROI = None, rebin_pixel_num = None):
         image_stack = image_stack[:, roi_y_min:roi_y_max, roi_x_min:roi_x_max]
     if not rebin_pixel_num is None:
         image_stack = bin_and_average_data(image_stack, rebin_pixel_num, omitted_axes = 0)
-    image_with_atoms, image_without_atoms, image_dark = image_stack
+    image_with_atoms = image_stack[0] 
+    image_without_atoms = image_stack[1] 
+    image_dark = image_stack[2]
     return (safe_subtract(image_with_atoms, image_dark),  safe_subtract(image_without_atoms, image_dark))
 
 """
