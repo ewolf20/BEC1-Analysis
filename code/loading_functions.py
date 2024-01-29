@@ -109,14 +109,14 @@ def load_unitary_EOS():
             (kappa_tilde, p_tilde, Cv_over_Nk, T_over_TF, E_over_E0, mu_over_EF, 
             F_over_E0, S_over_NkB, betamu) = eos_data
             eos_dict = {
-                "T/TF":T_over_TF, 
-                "E/E0":E_over_E0, 
-                "mu/EF":mu_over_EF, 
-                "F/E0":F_over_E0, 
-                "S/NkB":S_over_NkB, 
-                "Cv/Nk":Cv_over_Nk, 
-                "P_tilde":p_tilde, 
-                "kappa_tilde":kappa_tilde, 
+                "kappa_over_kappa0":kappa_tilde, 
+                "P_over_P0":p_tilde, 
+                "Cv_over_NkB":Cv_over_Nk, 
+                "T_over_TF":T_over_TF, 
+                "E_over_E0":E_over_E0, 
+                "mu_over_EF":mu_over_EF, 
+                "F_over_E0":F_over_E0, 
+                "S_over_NkB":S_over_NkB, 
                 "betamu":betamu
             }
             return eos_dict

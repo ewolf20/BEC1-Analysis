@@ -1,3 +1,4 @@
+from re import L
 import numpy as np 
 from scipy.integrate import trapezoid
 from scipy.interpolate import interp1d
@@ -30,6 +31,9 @@ BERTSCH_PARAMETER = 0.370
 
 
 #THERMODYNAMICS FUNCTIONS
+
+
+#IDEAL FERMI GAS
 
 #Homebrewed implementation of the f_minus function, defined in Kardar, "Statistical Physics of Particles", chapter 7.
 #Observe that f_minus(s, z) = -polylog(s, -z). Observe also that this function takes the _log_ of z instead of the argument itself, 
@@ -98,6 +102,10 @@ def _kardar_intermediateT_f_minus(s, logz):
     return -numerical_functions.stored_coeffs_polylog_taylor_series(minus_z, centers, coeffs)
 
 
+
+#FERMI GAS THERMODYNAMICS
+
+
 def thermal_de_broglie_li_6_mks(kBT):
     return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * LI_6_MASS_KG * kBT)
 
@@ -134,7 +142,7 @@ def _low_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
     mu_over_EF = np.sum(reshaped_coefficients * np.power(reshaped_pi_T_over_TF, reshaped_indices), axis = -1)
     return mu_over_EF / T_over_TF
 
-#From Equation 65 of Cowan 2019
+#From Equation 65 of Cowan 2019. Expansion of T/T_F fi
 def _high_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
     maxwell_term = T_over_TF * np.log(4.0 / (3.0 * np.sqrt(np.pi) * np.power(T_over_TF, 1.5)))
     COWAN_COEFFICIENTS = [1.0 / 3.0 * np.sqrt(2 / np.pi), 
@@ -193,6 +201,41 @@ def get_fermi_energy_hz_from_density(atom_density_m):
     return fermi_energy_hz
 
 
+
+#THERMODYNAMICS OF BALANCED UNITARY GAS
+
+#Virial coefficients for high-temperature expansion of the grand potential of the unitary, balanced Fermi gas
+#Taken from Liu et. al, PRL 102, 160401 (2009), and as cited in Ku 2012
+#10.1103/PhysRevLett.102.160401
+BALANCED_GAS_VIRIAL_COEFFICIENTS = np.array([1, 3 * np.sqrt(2) / 8, -0.29095295])
+
+
+"""
+Returns the experimentally determined and calculated EOS functions for a balanced unitary Fermi gas.
+
+Returns a series of functions of thermodynamic quantities for the balanced Fermi gas, typically normalized by 
+the corresponding values for a zero-temperature ideal Fermi gas. Optionally, a key may be passed in order to return only 
+a single function; if no key is passed, all of the functions are returned as a dictionary.
+
+To agree with internal conventions, all functions are returned as functions of the logarithm betamu of the fugacity. They may instead be 
+expressed in terms of T/T_F by composing them with the separately provided inverse function for z in terms of T_F. 
+
+Returned functions:
+
+kappa_over_kappa0: The compressibility kappa, divided by the compressibility for an ideal Fermi gas
+P_over_P0: The pressure P, normalized again to an ideal Fermi gas 
+Cv_over_NkB: The dimensionless per-particle heat capacity at constant volume 
+T_over_TF: The reduced temperature
+E_over_E0: The reduced energy. Please note that E0 is the total energy of the homogeneous Fermi gas, equal to 3/5 E_F
+mu_over_EF: The reduced _single-species_ chemical potential. Here E_F is used. 
+F_over_E0: The reduced free energy. Here E_0 is used. 
+S_over_NkB: The dimensionless entropy per particle. 
+
+
+"""
+def get_balanced_eos_functions():
+    ku_experimental_values_dict = loading_functions.load_unitary_EOS()
+    pass
 
 
 #FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
