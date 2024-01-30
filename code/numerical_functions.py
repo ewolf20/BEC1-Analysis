@@ -114,3 +114,32 @@ def stored_coeffs_polylog_taylor_series(z, center_array, coeff_array):
     center_values_to_use = np.squeeze(np.take_along_axis(reshaped_center_array, minimum_indices, axis = -1))
     coeff_values_to_use = np.squeeze(np.take_along_axis(coeff_array, minimum_indices, axis = 0))
     return polylog_taylor_series(z, center_values_to_use, coeff_values_to_use)
+
+
+
+"""General implementation of the cubic formula, useful for fast computation
+
+Given coefficients a, b, c, d of the cubic equation 
+
+ax^3 + bx^2 + cx + d = 0 
+
+where a, b, c, d are assumed to broadcast together, return a cube root of the 
+equation of order specified by cube root order. 
+
+Formula is taken from the section "General Cubic Formula" on Wikipedia; the cube root order 
+follows the convention of that section. 
+
+Note that the function does not yet handle degeneracies.
+"""
+def cubic_formula(a, b, c, d, cube_root_order = 0, cast_to_real = False):
+    delta_0 = (np.square(b) - 3 * a * c ) * (1 + 0j)
+    #Cast delta to complex for safety
+    delta_1 = (2 * np.power(b, 3) - 9 * a * b * c + 27 * np.square(a) * d) * (1 + 0j)
+    C_fundamental = np.power(1/2.0 * (delta_1 + np.sqrt(np.square(delta_1) - 4 * np.power(delta_0, 3))), 1/3)
+    xi = -0.5 + 1j * np.sqrt(3) / 2
+    C_specific = C_fundamental * np.power(xi, cube_root_order) 
+    root_value = -1/(3 * a) * (b + C_specific + delta_0 / C_specific)
+    if cast_to_real:
+        return np.real(root_value) 
+    else:
+        return root_value

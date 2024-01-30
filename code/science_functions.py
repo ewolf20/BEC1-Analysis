@@ -217,25 +217,37 @@ Returns a series of functions of thermodynamic quantities for the balanced Fermi
 the corresponding values for a zero-temperature ideal Fermi gas. Optionally, a key may be passed in order to return only 
 a single function; if no key is passed, all of the functions are returned as a dictionary.
 
-To agree with internal conventions, all functions are returned as functions of the logarithm betamu of the fugacity. They may instead be 
-expressed in terms of T/T_F by composing them with the separately provided inverse function for z in terms of T_F. 
+To agree with internal conventions, all functions are returned by default as functions of the logarithm betamu of the fugacity. 
+They may instead be expressed in terms of T/T_F by passing the independent_variable kwarg. 
+
+Parameters:
+
+key: (str) A key which specifies only a single function to return. If None, all functions are returned as a dict. 
+independent_variable: (str) If "betamu" (default), functions are returned as a function of betamu, the log of the fugacity. 
+    If "T_over_TF", functions are instead returned with this as the independent variable. 
+
+
+
 
 Returned functions:
 
 kappa_over_kappa0: The compressibility kappa, divided by the compressibility for an ideal Fermi gas
 P_over_P0: The pressure P, normalized again to an ideal Fermi gas 
 Cv_over_NkB: The dimensionless per-particle heat capacity at constant volume 
-T_over_TF: The reduced temperature
+T_over_TF: The reduced temperature. (Nontrivial only for returns in terms of betamu)
 E_over_E0: The reduced energy. Please note that E0 is the total energy of the homogeneous Fermi gas, equal to 3/5 E_F
 mu_over_EF: The reduced _single-species_ chemical potential. Here E_F is used. 
 F_over_E0: The reduced free energy. Here E_0 is used. 
 S_over_NkB: The dimensionless entropy per particle. 
+betamu: The dimensionless chemical potential; the log of the fugacity. (Nontrivial only for returns in terms of T_over_TF)
 
 
 """
-def get_balanced_eos_functions(key = None):
-    #Hard-coded value of beta mu below which to switch to high-temperature virial expansions of the equation of state
+def get_balanced_eos_functions(key = None, independent_variable = "betamu"):
+    #Hard-coded value of betamu below which to switch to high-temperature virial expansions of the equation of state
     VIRIAL_HANDOFF_BETAMU = -1.1
+    #Hard-coded value above which to switch to high-temperature virial expansions of the equation of state
+    VIRIAL_HANDOFF_T_OVER_TF = 1.43
     virial_function_dict = {
         "kappa_over_kappa0":balanced_kappa_over_kappa0_virial,
         "P_over_P0":balanced_P_over_P0_virial,
@@ -244,44 +256,72 @@ def get_balanced_eos_functions(key = None):
         "E_over_E0":balanced_E_over_E0_virial,
         "mu_over_EF":balanced_mu_over_EF_virial,
         "F_over_E0":balanced_F_over_E0_virial,
-        "S_over_NkB":balanced_S_over_NkB_virial
+        "S_over_NkB":balanced_S_over_NkB_virial,
+        "betamu":balanced_betamu_virial
     }
     ku_experimental_values_dict = loading_functions.load_unitary_EOS()
-    betamu_values = ku_experimental_values_dict["betamu"]
+    independent_variable_values = ku_experimental_values_dict[independent_variable]
     returned_function_dict = {}
     for dict_key in ku_experimental_values_dict:
-        if dict_key != "betamu":
-            experimental_data = ku_experimental_values_dict[dict_key]
-            interpolated_experimental_function = lambda x: np.interp(x, betamu_values, experimental_data)
-            virial_function = virial_function_dict[dict_key]
+        experimental_data = ku_experimental_values_dict[dict_key]
+        interpolated_experimental_function = lambda x: np.interp(x, independent_variable_values, experimental_data)
+        virial_function = virial_function_dict[dict_key]
+        if independent_variable == "betamu":
             def virial_extended_function(betamu):
                 return numerical_functions.smart_where(betamu > VIRIAL_HANDOFF_BETAMU, betamu, 
-                                                       interpolated_experimental_function, virial_function)
-            returned_function_dict[dict_key] = virial_extended_function
+                                                    interpolated_experimental_function, virial_function)
+        elif independent_variable == "T_over_TF":
+            def virial_function_TF_converted(T_over_TF):
+                return virial_function(balanced_betamu_from_T_over_TF_virial(T_over_TF))
+            def virial_extended_function(T_over_TF):
+                return numerical_functions.smart_where(T_over_TF < VIRIAL_HANDOFF_T_OVER_TF, T_over_TF, 
+                                                       interpolated_experimental_function, virial_function_TF_converted)
+        else:
+            raise ValueError("Unsupported value of independent_variable.")
+        returned_function_dict[dict_key] = virial_extended_function
     if key is None:
         return returned_function_dict
     else:
         return returned_function_dict[key]
-    
+
 
 def balanced_eos_virial_f(z):
+    #handle scalar input
+    if np.ndim(z) == 0:
+        reshaped_scalar = True
+        z = np.expand_dims(z, 0)
+    else:
+        reshaped_scalar = False
     number_coeffs = len(BALANCED_GAS_VIRIAL_COEFFICIENTS)
     power_indices = np.arange(number_coeffs) + 1
     reshaped_power_indices = np.expand_dims(power_indices, 0)
     reshaped_z = np.expand_dims(z, 1)
     reshaped_coefficients = np.expand_dims(BALANCED_GAS_VIRIAL_COEFFICIENTS, 0)
-    return np.sum(reshaped_coefficients * np.power(reshaped_z, reshaped_power_indices), axis = 1)
+    return_value = np.sum(reshaped_coefficients * np.power(reshaped_z, reshaped_power_indices), axis = 1)
+    if reshaped_scalar:
+        return np.squeeze(return_value, axis = 0)
+    else:
+        return return_value
 
 
 def balanced_eos_virial_fprime(z):
+    #Handle scalar input
+    if np.ndim(z) == 0:
+        reshaped_scalar = True
+        z = np.expand_dims(z, 0)
+    else:
+        reshaped_scalar = False
     number_coeffs = len(BALANCED_GAS_VIRIAL_COEFFICIENTS)
     primed_coeffs = np.arange(1, number_coeffs + 1) * BALANCED_GAS_VIRIAL_COEFFICIENTS
     power_indices = np.arange(number_coeffs)
     reshaped_power_indices = np.expand_dims(power_indices, 0)
     reshaped_z = np.expand_dims(z, 1)
     reshaped_coefficients = np.expand_dims(primed_coeffs, 0)
-    return np.sum(reshaped_coefficients * np.power(reshaped_z, reshaped_power_indices), axis = 1)
-
+    return_value = np.sum(reshaped_coefficients * np.power(reshaped_z, reshaped_power_indices), axis = 1)
+    if reshaped_scalar:
+        return np.squeeze(return_value, axis = 0)
+    else:
+        return return_value
 
 def balanced_kappa_over_kappa0_virial(betamu):
     return 0.0
@@ -310,6 +350,24 @@ def balanced_F_over_E0_virial(betamu):
 def balanced_S_over_NkB_virial(betamu):
     return 0.0
 
+#Included for compatibility with T_over_TF returns
+def balanced_betamu_virial(betamu):
+    return betamu
+
+
+def balanced_betamu_from_T_over_TF_virial(T_over_TF):
+    z_star = 4.0 / (3 * np.sqrt(np.pi)) * np.power(T_over_TF, -3/2) 
+    virial_fprime_coeffs_ascending_power = (np.arange(len(BALANCED_GAS_VIRIAL_COEFFICIENTS)) + 1) * BALANCED_GAS_VIRIAL_COEFFICIENTS
+    virial_fprime_coeffs_descending_power = np.flip(virial_fprime_coeffs_ascending_power)
+    #By manual inspection, the third root (order = 2) is the correct one for z_star < Z_STAR_ROOT_SWITCH, then the second root is correct for 
+    #z_star > Z_STAR_ROOT_SWITCH 
+    #Note that there is no continuity between the roots when they switch, so it's vital to specify the crossover point as precisely as possible.
+    Z_STAR_ROOT_SWITCH = 0.521065275
+    order_to_use = np.where(z_star < Z_STAR_ROOT_SWITCH, 2, 1)
+    virial_inverted_z_values = numerical_functions.cubic_formula(*virial_fprime_coeffs_descending_power, -z_star, 
+                                                                 cube_root_order = order_to_use, cast_to_real = True)
+    virial_inverted_betamu_values = np.log(virial_inverted_z_values) 
+    return virial_inverted_betamu_values
 
 #FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
 
