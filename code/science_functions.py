@@ -233,9 +233,82 @@ S_over_NkB: The dimensionless entropy per particle.
 
 
 """
-def get_balanced_eos_functions():
+def get_balanced_eos_functions(key = None):
+    #Hard-coded value of beta mu below which to switch to high-temperature virial expansions of the equation of state
+    VIRIAL_HANDOFF_BETAMU = -1.1
+    virial_function_dict = {
+        "kappa_over_kappa0":balanced_kappa_over_kappa0_virial,
+        "P_over_P0":balanced_P_over_P0_virial,
+        "Cv_over_NkB":balanced_Cv_over_NkB_virial,
+        "T_over_TF":balanced_T_over_TF_virial,
+        "E_over_E0":balanced_E_over_E0_virial,
+        "mu_over_EF":balanced_mu_over_EF_virial,
+        "F_over_E0":balanced_F_over_E0_virial,
+        "S_over_NkB":balanced_S_over_NkB_virial
+    }
     ku_experimental_values_dict = loading_functions.load_unitary_EOS()
-    pass
+    betamu_values = ku_experimental_values_dict["betamu"]
+    returned_function_dict = {}
+    for dict_key in ku_experimental_values_dict:
+        if dict_key != "betamu":
+            experimental_data = ku_experimental_values_dict[dict_key]
+            interpolated_experimental_function = lambda x: np.interp(x, betamu_values, experimental_data)
+            virial_function = virial_function_dict[dict_key]
+            def virial_extended_function(betamu):
+                return numerical_functions.smart_where(betamu > VIRIAL_HANDOFF_BETAMU, betamu, 
+                                                       interpolated_experimental_function, virial_function)
+            returned_function_dict[dict_key] = virial_extended_function
+    if key is None:
+        return returned_function_dict
+    else:
+        return returned_function_dict[key]
+    
+
+def balanced_eos_virial_f(z):
+    number_coeffs = len(BALANCED_GAS_VIRIAL_COEFFICIENTS)
+    power_indices = np.arange(number_coeffs) + 1
+    reshaped_power_indices = np.expand_dims(power_indices, 0)
+    reshaped_z = np.expand_dims(z, 1)
+    reshaped_coefficients = np.expand_dims(BALANCED_GAS_VIRIAL_COEFFICIENTS, 0)
+    return np.sum(reshaped_coefficients * np.power(reshaped_z, reshaped_power_indices), axis = 1)
+
+
+def balanced_eos_virial_fprime(z):
+    number_coeffs = len(BALANCED_GAS_VIRIAL_COEFFICIENTS)
+    primed_coeffs = np.arange(1, number_coeffs + 1) * BALANCED_GAS_VIRIAL_COEFFICIENTS
+    power_indices = np.arange(number_coeffs)
+    reshaped_power_indices = np.expand_dims(power_indices, 0)
+    reshaped_z = np.expand_dims(z, 1)
+    reshaped_coefficients = np.expand_dims(primed_coeffs, 0)
+    return np.sum(reshaped_coefficients * np.power(reshaped_z, reshaped_power_indices), axis = 1)
+
+
+def balanced_kappa_over_kappa0_virial(betamu):
+    return 0.0
+
+
+def balanced_P_over_P0_virial(betamu):
+    z = np.exp(betamu)
+    return 10 / np.cbrt(36 * np.pi) * balanced_eos_virial_f(z) / np.power(z * balanced_eos_virial_fprime(z), 5/3)
+
+def balanced_Cv_over_NkB_virial(betamu):
+    return 0.0
+
+def balanced_T_over_TF_virial(betamu):
+    z = np.exp(betamu)
+    return np.cbrt(16 / (9 * np.pi)) * np.power(z * balanced_eos_virial_fprime(z), -2/3)
+
+def balanced_E_over_E0_virial(betamu):
+    return 0.0 
+
+def balanced_mu_over_EF_virial(betamu):
+    return 0.0 
+
+def balanced_F_over_E0_virial(betamu):
+    return 0.0 
+
+def balanced_S_over_NkB_virial(betamu):
+    return 0.0
 
 
 #FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
