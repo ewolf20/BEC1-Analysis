@@ -299,7 +299,7 @@ def balanced_T_over_TF_virial(betamu):
     return np.cbrt(16 / (9 * np.pi)) * np.power(z * balanced_eos_virial_fprime(z), -2/3)
 
 def balanced_E_over_E0_virial(betamu):
-    return 0.0 
+    return balanced_P_over_P0_virial(betamu)
 
 def balanced_mu_over_EF_virial(betamu):
     return 0.0 
