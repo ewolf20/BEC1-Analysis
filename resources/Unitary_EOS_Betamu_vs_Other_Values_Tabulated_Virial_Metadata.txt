@@ -1,0 +1,14 @@
+Axis 0: parameter (e.g. betamu, P/P_0)
+Axis 1: Value
+Axis 1 is in order of decreasing betamu.
+--------
+Maximum betamu value: -1.0
+Minimum betamu value: -20.0
+Number points: 20000
+--------
+Parameter ordering:
+Betamu
+P_over_P0
+T_over_TF
+E_over_E0
+S_over_NkB

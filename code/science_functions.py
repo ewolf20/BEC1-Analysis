@@ -1,4 +1,5 @@
-from re import L
+import functools
+
 import numpy as np 
 from scipy.integrate import trapezoid
 from scipy.interpolate import interp1d
@@ -245,45 +246,50 @@ betamu: The dimensionless chemical potential; the log of the fugacity. (Nontrivi
 """
 def get_balanced_eos_functions(key = None, independent_variable = "betamu"):
     #Hard-coded value of betamu below which to switch to high-temperature virial expansions of the equation of state
-    VIRIAL_HANDOFF_BETAMU = -1.1
-    #Hard-coded value above which to switch to high-temperature virial expansions of the equation of state
-    VIRIAL_HANDOFF_T_OVER_TF = 1.43
-    virial_function_dict = {
-        "kappa_over_kappa0":balanced_kappa_over_kappa0_virial,
-        "P_over_P0":balanced_P_over_P0_virial,
-        "Cv_over_NkB":balanced_Cv_over_NkB_virial,
-        "T_over_TF":balanced_T_over_TF_virial,
-        "E_over_E0":balanced_E_over_E0_virial,
-        "mu_over_EF":balanced_mu_over_EF_virial,
-        "F_over_E0":balanced_F_over_E0_virial,
-        "S_over_NkB":balanced_S_over_NkB_virial,
-        "betamu":balanced_betamu_virial
-    }
+    VIRIAL_HANDOFF_BETAMU = -1.20
+    independent_var_virial_function = _get_balanced_eos_virial_function(independent_variable)
+    independent_var_virial_handoff = independent_var_virial_function(VIRIAL_HANDOFF_BETAMU)
+    independent_var_to_betamu_virial_function = _get_balanced_eos_betamu_from_other_value_virial_function(independent_variable)
     ku_experimental_values_dict = loading_functions.load_unitary_EOS()
     independent_variable_values = ku_experimental_values_dict[independent_variable]
+    #np.interp requires ascending x axis
+    independent_ascending_sort_indices = np.argsort(independent_variable_values)
+    sorted_independent_variable_values = independent_variable_values[independent_ascending_sort_indices]
     returned_function_dict = {}
     for dict_key in ku_experimental_values_dict:
         experimental_data = ku_experimental_values_dict[dict_key]
-        interpolated_experimental_function = lambda x: np.interp(x, independent_variable_values, experimental_data)
-        virial_function = virial_function_dict[dict_key]
+        sorted_experimental_data = experimental_data[independent_ascending_sort_indices]
+        #closure to avoid issues with changing values of sorted_experimental_data
+        interpolated_experimental_function = _interp_wrapper(sorted_independent_variable_values, sorted_experimental_data)
+        virial_function = _get_balanced_eos_virial_function(dict_key)
+        converted_virial_function = _virial_wrapper(virial_function, independent_var_to_betamu_virial_function)
         if independent_variable == "betamu":
-            def virial_extended_function(betamu):
-                return numerical_functions.smart_where(betamu > VIRIAL_HANDOFF_BETAMU, betamu, 
-                                                    interpolated_experimental_function, virial_function)
-        elif independent_variable == "T_over_TF":
-            def virial_function_TF_converted(T_over_TF):
-                return virial_function(balanced_betamu_from_T_over_TF_virial(T_over_TF))
-            def virial_extended_function(T_over_TF):
-                return numerical_functions.smart_where(T_over_TF < VIRIAL_HANDOFF_T_OVER_TF, T_over_TF, 
-                                                       interpolated_experimental_function, virial_function_TF_converted)
+            returned_function_dict[dict_key] = _smart_where_wrapper(independent_var_virial_handoff, 
+                                                                    interpolated_experimental_function, converted_virial_function)
         else:
-            raise ValueError("Unsupported value of independent_variable.")
-        returned_function_dict[dict_key] = virial_extended_function
+            returned_function_dict[dict_key] = _smart_where_wrapper(independent_var_virial_handoff, 
+                                                                    converted_virial_function, interpolated_experimental_function)
     if key is None:
         return returned_function_dict
     else:
         return returned_function_dict[key]
 
+
+#Wrappers for smart_where and interp to avoid issues with scoping in above
+def _smart_where_wrapper(cutoff, *funcs):
+    def wrapped(x):
+        return numerical_functions.smart_where(x > cutoff, x, *funcs)
+    return wrapped
+
+def _interp_wrapper(independent, experimental):
+    def interp_wrapped(x):
+        return np.interp(x, independent, experimental)
+    return interp_wrapped
+
+def _virial_wrapper(virial_function, independent_variable_to_betamu):
+    def wrapped(indep):
+        return virial_function(independent_variable_to_betamu(indep)) 
+    return wrapped
 
 def balanced_eos_virial_f(z):
     #handle scalar input
@@ -322,17 +328,39 @@ def balanced_eos_virial_fprime(z):
         return np.squeeze(return_value, axis = 0)
     else:
         return return_value
+    
+
+#Returns a quantity equal to zf'(z) + z^2 f''(z) which occurs in the EOS calculations of second derivatives
+def balanced_eos_virial_f_twice_deriv(z):
+    #Handle scalar input
+    if np.ndim(z) == 0:
+        reshaped_scalar = True
+        z = np.expand_dims(z, 0)
+    else:
+        reshaped_scalar = False
+    number_coeffs = len(BALANCED_GAS_VIRIAL_COEFFICIENTS)
+    primed_coeffs = np.square(np.arange(1, number_coeffs + 1)) * BALANCED_GAS_VIRIAL_COEFFICIENTS
+    power_indices = np.arange(number_coeffs) + 1
+    reshaped_power_indices = np.expand_dims(power_indices, 0)
+    reshaped_z = np.expand_dims(z, 1)
+    reshaped_coefficients = np.expand_dims(primed_coeffs, 0)
+    return_value = np.sum(reshaped_coefficients * np.power(reshaped_z, reshaped_power_indices), axis = 1)
+    if reshaped_scalar:
+        return np.squeeze(return_value, axis = 0)
+    else:
+        return return_value
+
 
 def balanced_kappa_over_kappa0_virial(betamu):
-    return 0.0
-
+    z = np.exp(betamu)
+    return np.cbrt(np.pi / 6) * balanced_eos_virial_f_twice_deriv(z) / np.power(z * balanced_eos_virial_fprime(z), 1/3)
 
 def balanced_P_over_P0_virial(betamu):
     z = np.exp(betamu)
     return 10 / np.cbrt(36 * np.pi) * balanced_eos_virial_f(z) / np.power(z * balanced_eos_virial_fprime(z), 5/3)
 
 def balanced_Cv_over_NkB_virial(betamu):
-    return 0.0
+    return 3.0 / 2.0 * (1.0 / balanced_T_over_TF_virial(betamu)) * (balanced_P_over_P0_virial(betamu) - 1.0 / balanced_kappa_over_kappa0_virial(betamu))
 
 def balanced_T_over_TF_virial(betamu):
     z = np.exp(betamu)
@@ -342,32 +370,120 @@ def balanced_E_over_E0_virial(betamu):
     return balanced_P_over_P0_virial(betamu)
 
 def balanced_mu_over_EF_virial(betamu):
-    return 0.0 
+    return betamu * balanced_T_over_TF_virial(betamu)
 
 def balanced_F_over_E0_virial(betamu):
-    return 0.0 
+    z = np.exp(betamu)
+    return -np.cbrt(2000/(243 * np.pi)) * (balanced_eos_virial_f(z) - z * betamu * balanced_eos_virial_fprime(z)) / np.power(balanced_eos_virial_fprime(z) * z, 5/3)
 
 def balanced_S_over_NkB_virial(betamu):
-    return 0.0
+    z = np.exp(betamu)
+    return 2.5 * balanced_eos_virial_f(z) /(z * balanced_eos_virial_fprime(z))  - betamu
 
-#Included for compatibility with T_over_TF returns
+#Included for compatibility with non_betamu returns
 def balanced_betamu_virial(betamu):
     return betamu
 
 
-def balanced_betamu_from_T_over_TF_virial(T_over_TF):
+# def balanced_betamu_from_T_over_TF_virial(T_over_TF):
+#     z_star = 4.0 / (3 * np.sqrt(np.pi)) * np.power(T_over_TF, -3/2) 
+#     virial_fprime_coeffs_ascending_power = (np.arange(len(BALANCED_GAS_VIRIAL_COEFFICIENTS)) + 1) * BALANCED_GAS_VIRIAL_COEFFICIENTS
+#     virial_fprime_coeffs_descending_power = np.flip(virial_fprime_coeffs_ascending_power)
+#     #By manual inspection, the third root (order = 2) is the correct one for z_star < Z_STAR_ROOT_SWITCH, then the second root is correct for 
+#     #z_star > Z_STAR_ROOT_SWITCH 
+#     #Note that there is no continuity between the roots when they switch, so it's vital to specify the crossover point as precisely as possible.
+#     Z_STAR_ROOT_SWITCH = 0.521065275
+#     order_to_use = np.where(z_star < Z_STAR_ROOT_SWITCH, 2, 1)
+#     virial_inverted_z_values = numerical_functions.cubic_formula(*virial_fprime_coeffs_descending_power, -z_star, 
+#                                                                  cube_root_order = order_to_use, cast_to_real = True)
+#     virial_inverted_betamu_values = np.log(virial_inverted_z_values) 
+#     return virial_inverted_betamu_values
+
+def _get_balanced_eos_virial_function(key):
+    virial_function_dict = {
+        "kappa_over_kappa0":balanced_kappa_over_kappa0_virial,
+        "P_over_P0":balanced_P_over_P0_virial,
+        "Cv_over_NkB":balanced_Cv_over_NkB_virial,
+        "T_over_TF":balanced_T_over_TF_virial,
+        "E_over_E0":balanced_E_over_E0_virial,
+        "mu_over_EF":balanced_mu_over_EF_virial,
+        "F_over_E0":balanced_F_over_E0_virial,
+        "S_over_NkB":balanced_S_over_NkB_virial,
+        "betamu":balanced_betamu_virial
+    }
+    return virial_function_dict[key]
+
+
+#List of balanced eos values which can be back-converted to betamu
+BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST = ["P_over_P0", "T_over_TF", "E_over_E0", "S_over_NkB"]
+
+
+def _get_balanced_eos_betamu_from_other_value_virial_function(key):
+    if key == "betamu":
+        return balanced_betamu_virial
+    ULTRALOW_FUGACITY_DICT = {
+        "P_over_P0":ultralow_fugacity_betamu_function_P_over_P0,
+        "T_over_TF":ultralow_fugacity_betamu_function_T_over_TF,
+        "E_over_E0":ultralow_fugacity_betamu_function_E_over_E0,
+        "S_over_NkB":ultralow_fugacity_betamu_function_S_over_NkB
+    }
+    key_to_index_dict = {key:i+1 for i, key in enumerate(BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST)}
+    if not key in BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST:
+        raise ValueError("Unsupported variable for conversion to betamu")
+    ultralow_fugacity_function = ULTRALOW_FUGACITY_DICT[key] 
+    tabulated_virial_betamu_data_array = loading_functions.load_tabulated_unitary_eos_virial_betamu_data()
+    #Betamu is in decreasing order
+    tabulated_betamu_values = tabulated_virial_betamu_data_array[0] 
+    tabulated_experimental_values = tabulated_virial_betamu_data_array[key_to_index_dict[key]] 
+    def tabulated_betamu_function(other_value):
+        return np.interp(other_value, tabulated_experimental_values, tabulated_betamu_values)
+    #All experimental values which are currently available are increasing with decreasing betamu
+    maximum_experimental_value = tabulated_experimental_values[-1] 
+    def betamu_from_other_value_virial_func(other_value):
+        return numerical_functions.smart_where(other_value > maximum_experimental_value, other_value, 
+                                               ultralow_fugacity_function, tabulated_betamu_function)
+    return betamu_from_other_value_virial_func
+
+
+def generate_and_save_balanced_eos_betamu_from_other_value_virial_data(data_path, metadata_path, 
+                                                                max_betamu = -1, min_betamu = -10, 
+                                                                num_points = 10000):
+    betamu_values = np.linspace(max_betamu, min_betamu, num_points)
+    stacked_array = betamu_values
+    for key in BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST:
+        virial_function = _get_balanced_eos_virial_function(key)
+        other_values = virial_function(betamu_values) 
+        stacked_array = np.vstack((stacked_array, other_values))
+    np.save(data_path, stacked_array)
+    with open(metadata_path, 'w') as f:
+        f.write("Axis 0: parameter (e.g. betamu, P/P_0)\n")
+        f.write("Axis 1: Value\n")
+        f.write("Axis 1 is in order of decreasing betamu.\n")
+        f.write("--------\n") 
+        f.write("Maximum betamu value: {0:.1f}\n".format(max_betamu))
+        f.write("Minimum betamu value: {0:.1f}\n".format(min_betamu))
+        f.write("Number points: {0:d}\n".format(num_points))
+        f.write("--------\n")
+        f.write("Parameter ordering:\n")
+        f.write("Betamu\n")
+        for key in BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST:
+            f.write("{0}\n".format(key))
+
+
+
+def ultralow_fugacity_betamu_function_P_over_P0(P_over_P0):
+    z_star = np.power(np.cbrt(36 * np.pi) / 10 * P_over_P0, -3/2)
+    return np.log(z_star)
+
+def ultralow_fugacity_betamu_function_T_over_TF(T_over_TF):
     z_star = 4.0 / (3 * np.sqrt(np.pi)) * np.power(T_over_TF, -3/2) 
-    virial_fprime_coeffs_ascending_power = (np.arange(len(BALANCED_GAS_VIRIAL_COEFFICIENTS)) + 1) * BALANCED_GAS_VIRIAL_COEFFICIENTS
-    virial_fprime_coeffs_descending_power = np.flip(virial_fprime_coeffs_ascending_power)
-    #By manual inspection, the third root (order = 2) is the correct one for z_star < Z_STAR_ROOT_SWITCH, then the second root is correct for 
-    #z_star > Z_STAR_ROOT_SWITCH 
-    #Note that there is no continuity between the roots when they switch, so it's vital to specify the crossover point as precisely as possible.
-    Z_STAR_ROOT_SWITCH = 0.521065275
-    order_to_use = np.where(z_star < Z_STAR_ROOT_SWITCH, 2, 1)
-    virial_inverted_z_values = numerical_functions.cubic_formula(*virial_fprime_coeffs_descending_power, -z_star, 
-                                                                 cube_root_order = order_to_use, cast_to_real = True)
-    virial_inverted_betamu_values = np.log(virial_inverted_z_values) 
-    return virial_inverted_betamu_values
+    return np.log(z_star) 
+
+def ultralow_fugacity_betamu_function_E_over_E0(E_over_E0):
+    return ultralow_fugacity_betamu_function_P_over_P0(E_over_E0)
+
+def ultralow_fugacity_betamu_function_S_over_NkB(S_over_NkB):
+    return 5/2 - S_over_NkB
 
 #FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
 
