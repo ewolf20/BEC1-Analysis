@@ -12,6 +12,12 @@ Where more than two are specified, condition acts as a switch statement; the val
 which function should be used to evaluate input[i]. 
 """
 def smart_where(condition, input, *funs):
+    scalar_condition = np.ndim(condition) == 0
+    if scalar_condition:
+        condition = np.expand_dims(condition, 0)
+    scalar_input = np.ndim(input) == 0
+    if scalar_input:
+        input = np.expand_dims(input, 0)
     return_array = np.empty_like(input) 
     if(len(funs) < 2):
         raise ValueError("At least two functions must be specified.")
@@ -20,6 +26,8 @@ def smart_where(condition, input, *funs):
     num_funs = int(max(condition)) + 1
     for i in range(num_funs):
         return_array[condition == i] = funs[i](input[condition == i])
+    if scalar_condition and scalar_input:
+        return_array = np.squeeze(return_array)
     return return_array
 
 

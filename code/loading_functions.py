@@ -120,6 +120,12 @@ def load_unitary_EOS():
                 "betamu":betamu
             }
             return eos_dict
+        
+def load_tabulated_unitary_eos_virial_betamu_data():
+    TABULATED_VIRIAL_BETAMU_FILE_BASENAME = "Unitary_EOS_Betamu_vs_Other_Values_Tabulated_Virial_Data.npy"
+    with pkg_resources.path(r, TABULATED_VIRIAL_BETAMU_FILE_BASENAME) as file_path:
+       return np.load(file_path)
+
 
 def load_polylog_analytic_continuation_parameters():
     CENTERS_FILENAME = "Polylog_Taylor_Centers.npy"
