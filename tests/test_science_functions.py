@@ -40,6 +40,14 @@ def test_get_fermi_energy_hz_from_density():
     assert (np.abs((energy - EXPECTED_FERMI_ENERGY) / EXPECTED_FERMI_ENERGY) < 1e-4)
 
 
+def test_get_ideal_fermi_pressure_hz_um_from_density():
+    SAMPLE_DENSITY = 2.71818
+    #Checked calculation for this value manually 
+    EXPECTED_PRESSURE_HZ_UM = 2.703112e-26
+    pressure_hz_um = science_functions.get_ideal_fermi_pressure_hz_um_from_density(SAMPLE_DENSITY)
+    assert np.isclose(EXPECTED_PRESSURE_HZ_UM, pressure_hz_um, atol = 0.0, rtol = 1e-6)
+
+
 def test_get_li_energy_hz_in_1D_trap():
     SAMPLE_DISPLACEMENT = 3.27
     SAMPLE_FREQUENCY = 12.5

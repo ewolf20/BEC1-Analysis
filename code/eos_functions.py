@@ -7,7 +7,10 @@ from scipy.special import zeta, gamma
 from . import numerical_functions, loading_functions
 
 
-#THERMODYNAMICS FUNCTIONS
+#Taken from https://jet.physics.ncsu.edu/techdocs/pdf/PropertiesOfLi.pdf
+LI_6_MASS_KG = 9.98834e-27
+#Taken from https://physics.nist.gov/cgi-bin/cuu/Value?hbar
+H_BAR_MKS = 1.054572e-34
 
 
 #IDEAL FERMI GAS

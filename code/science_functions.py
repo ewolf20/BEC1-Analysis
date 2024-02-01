@@ -4,7 +4,7 @@ from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
 
-from . import statistics_functions, numerical_functions, loading_functions
+from . import statistics_functions, eos_functions
 
 
 
@@ -34,6 +34,12 @@ def get_fermi_energy_hz_from_density(atom_density_m):
     fermi_energy_J = np.square(H_BAR_MKS) * np.square(fermi_k_m) / (2 * LI_6_MASS_KG)
     fermi_energy_hz = fermi_energy_J / (2 * np.pi * H_BAR_MKS) 
     return fermi_energy_hz
+
+def get_ideal_fermi_pressure_hz_um_from_density(atom_density_m):
+    fermi_energy_hz = get_fermi_energy_hz_from_density(atom_density_m) 
+    atom_density_um = atom_density_m * 1e-18
+    ideal_pressure_hz_um = eos_functions.ideal_fermi_P0(atom_density_um, fermi_energy_hz) 
+    return ideal_pressure_hz_um
 
 
 #FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
