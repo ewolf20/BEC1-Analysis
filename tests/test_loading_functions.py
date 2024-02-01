@@ -3,6 +3,7 @@ import json
 import os 
 import sys 
 
+import numpy as np
 import matplotlib.pyplot as plt 
 
 path_to_file = os.path.dirname(os.path.abspath(__file__))
@@ -60,3 +61,21 @@ def test_update_nested_json():
         os.remove(temp_pathname)
 
 
+
+def test_load_unitary_EOS():
+    loaded_eos_dict = loading_functions.load_unitary_EOS()
+    for key in loaded_eos_dict:
+        assert isinstance(loaded_eos_dict[key], np.ndarray)
+    listified_eos_dict = {key:list(loaded_eos_dict[key]) for key in loaded_eos_dict}
+    dump_string = json.dumps(listified_eos_dict)
+    dump_string_bytes = dump_string.encode("ASCII")
+    dump_string_hash = get_sha_hash_string(dump_string_bytes)
+    EXPECTED_DUMP_STRING_HASH = "094000a7f61ffebe97dd14ede5167cf4d50079a27b6775c9eefe2f0cd5261c1d"
+    assert dump_string_hash == EXPECTED_DUMP_STRING_HASH
+
+
+def test_load_tabulated_unitary_eos_virial_betamu_data():
+    loaded_array = loading_functions.load_tabulated_unitary_eos_virial_betamu_data()
+    loaded_array_hash = get_sha_hash_string(loaded_array.data.tobytes())
+    EXPECTED_ARRAY_HASH = "844344b287815ee0905f1a9175395c8b7920c9e91cb1ee65e3021b6d2058f0dd"
+    assert EXPECTED_ARRAY_HASH == loaded_array_hash

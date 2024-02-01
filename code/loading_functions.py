@@ -109,17 +109,23 @@ def load_unitary_EOS():
             (kappa_tilde, p_tilde, Cv_over_Nk, T_over_TF, E_over_E0, mu_over_EF, 
             F_over_E0, S_over_NkB, betamu) = eos_data
             eos_dict = {
-                "T/TF":T_over_TF, 
-                "E/E0":E_over_E0, 
-                "mu/EF":mu_over_EF, 
-                "F/E0":F_over_E0, 
-                "S/NkB":S_over_NkB, 
-                "Cv/Nk":Cv_over_Nk, 
-                "P_tilde":p_tilde, 
-                "kappa_tilde":kappa_tilde, 
+                "kappa_over_kappa0":kappa_tilde, 
+                "P_over_P0":p_tilde, 
+                "Cv_over_NkB":Cv_over_Nk, 
+                "T_over_TF":T_over_TF, 
+                "E_over_E0":E_over_E0, 
+                "mu_over_EF":mu_over_EF, 
+                "F_over_E0":F_over_E0, 
+                "S_over_NkB":S_over_NkB, 
                 "betamu":betamu
             }
             return eos_dict
+        
+def load_tabulated_unitary_eos_virial_betamu_data():
+    TABULATED_VIRIAL_BETAMU_FILE_BASENAME = "Unitary_EOS_Betamu_vs_Other_Values_Tabulated_Virial_Data.npy"
+    with pkg_resources.path(r, TABULATED_VIRIAL_BETAMU_FILE_BASENAME) as file_path:
+       return np.load(file_path)
+
 
 def load_polylog_analytic_continuation_parameters():
     CENTERS_FILENAME = "Polylog_Taylor_Centers.npy"

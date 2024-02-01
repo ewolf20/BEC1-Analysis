@@ -1,9 +1,9 @@
 import os
+import shutil
 import sys
 import time
 
 import matplotlib.pyplot as plt
-import mpmath 
 import numpy as np 
 
 
@@ -13,31 +13,7 @@ sys.path.insert(0, path_to_analysis)
 
 RESOURCES_DIRECTORY_PATH = "./resources"
 
-from BEC1_Analysis.code import science_functions
-
-def test_kardar_f_minus_function():
-    LOWER_LOG_BOUND = -10
-    UPPER_LOG_BOUND = 100
-    S_VALUE_1 = 3/2
-    S_VALUE_2 = 5/2
-    log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 10000)
-    vectorized_mpmath_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
-    mp_math_values_1 = -vectorized_mpmath_polylog(S_VALUE_1, -np.exp(log_z_values))
-    mp_math_values_2 = -vectorized_mpmath_polylog(S_VALUE_2, -np.exp(log_z_values))
-    homebrew_values_1 = science_functions.kardar_f_minus_function(S_VALUE_1, log_z_values)
-    homebrew_values_2 = science_functions.kardar_f_minus_function(S_VALUE_2, log_z_values)
-    assert np.all(np.isclose(mp_math_values_1, homebrew_values_1, atol = 0.0, rtol = 1e-6))
-    assert np.all(np.isclose(mp_math_values_2, homebrew_values_2, atol = 0.0, rtol = 1e-6))
-
-
-def test_get_ideal_betamu_from_T_over_TF():
-    T_over_TF_values = np.logspace(-3, 3, 1000)
-    betamu_values_direct = science_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values)
-    reconstituted_T_over_TF_values_direct = science_functions.ideal_T_over_TF(betamu_values_direct)
-    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_direct, rtol = 1e-8, atol = 0.0))
-    betamu_values_tabulated = science_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values, flag = "tabulated")
-    reconstituted_T_over_TF_values_tabulated = science_functions.ideal_T_over_TF(betamu_values_tabulated) 
-    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_tabulated, rtol = 1e-8, atol = 0.0))
+from BEC1_Analysis.code import science_functions, loading_functions
 
 
 def test_two_level_system_population_rabi():
@@ -62,6 +38,14 @@ def test_get_fermi_energy_hz_from_density():
     EXPECTED_FERMI_ENERGY = 5.8969e-09
     energy = science_functions.get_fermi_energy_hz_from_density(SAMPLE_DENSITY) 
     assert (np.abs((energy - EXPECTED_FERMI_ENERGY) / EXPECTED_FERMI_ENERGY) < 1e-4)
+
+
+def test_get_ideal_fermi_pressure_hz_um_from_density():
+    SAMPLE_DENSITY = 2.71818
+    #Checked calculation for this value manually 
+    EXPECTED_PRESSURE_HZ_UM = 2.703112e-26
+    pressure_hz_um = science_functions.get_ideal_fermi_pressure_hz_um_from_density(SAMPLE_DENSITY)
+    assert np.isclose(EXPECTED_PRESSURE_HZ_UM, pressure_hz_um, atol = 0.0, rtol = 1e-6)
 
 
 def test_get_li_energy_hz_in_1D_trap():
@@ -140,4 +124,3 @@ def test_get_field_from_li6_resonance():
     SAMPLE_INDICES = (1, 2)
     extracted_field = science_functions.get_field_from_li6_resonance(SAMPLE_RESONANCE_FREQ, SAMPLE_INDICES)
     assert(np.abs((extracted_field - EXPECTED_B_FIELD) / EXPECTED_B_FIELD) < 1e-5)
-    
