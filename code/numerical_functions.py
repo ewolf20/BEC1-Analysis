@@ -23,7 +23,7 @@ def smart_where(condition, input, *funs):
         raise ValueError("At least two functions must be specified.")
     if(len(funs) == 2):
         funs = (funs[1], funs[0])
-    num_funs = int(max(condition)) + 1
+    num_funs = int(np.max(condition)) + 1
     for i in range(num_funs):
         return_array[condition == i] = funs[i](input[condition == i])
     if scalar_condition and scalar_input:
