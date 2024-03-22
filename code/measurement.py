@@ -408,7 +408,7 @@ class Measurement():
     @staticmethod
     def _draw_box(my_image, label, title):
         ax = plt.gca()
-        ax.imshow(my_image, cmap = 'gray')
+        ax.imshow(my_image, cmap = 'gray', origin = "lower")
         ax.set_title(title)
         x_1 = None
         y_1 = None
@@ -444,7 +444,7 @@ class Measurement():
         height = y_max - y_min
         rect = patches.Rectangle((x_min, y_min), width, height, linewidth = 1, edgecolor = 'r', facecolor = 'none') 
         ax = plt.gca()
-        ax.imshow(my_with_atoms_image, cmap = 'gray')
+        ax.imshow(my_with_atoms_image, cmap = 'gray', origin = "lower")
         ax.add_patch(rect)
         plt.show()
 
