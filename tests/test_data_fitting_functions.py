@@ -54,6 +54,25 @@ def test_fit_lorentzian_times_freq():
     assert np.isclose(amp_to_peak_conversion, EXPECTED_AMP_TO_PEAK_CONVERSION)
 
 
+def test_fit_gaussian():
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    normal_randoms_rescaled = normal_randoms / 5
+    x_vals = np.linspace(0, 1, 100)
+    CENTER = 0.42
+    AMP = 3.14 
+    SIGMA = 0.162
+    OFFSET = 0.56
+    y_vals_no_offset = data_fitting_functions.gaussian(x_vals, AMP, CENTER, SIGMA) + normal_randoms_rescaled
+    y_vals_with_offset = y_vals_no_offset + OFFSET 
+    no_offset_fit_results = data_fitting_functions.fit_gaussian(x_vals, y_vals_no_offset)
+    offset_fit_results = data_fitting_functions.fit_gaussian_with_offset(x_vals, y_vals_with_offset)
+    no_offset_popt, no_offset_pcov = no_offset_fit_results 
+    offset_popt, offset_pcov = offset_fit_results
+    EXPECTED_NO_OFFSET_POPT = np.array([3.1659692, 0.4197707, 0.16001888])
+    EXPECTED_OFFSET_POPT = np.array([ 3.18150399, 0.41981671, 0.16140804, 0.53924337])
+    assert np.all(np.isclose(offset_popt, EXPECTED_OFFSET_POPT))
+    assert np.all(np.isclose(no_offset_popt, EXPECTED_NO_OFFSET_POPT))
+
 GAUSSIAN_X_PIXEL_NUM = 490 
 GAUSSIAN_Y_PIXEL_NUM = 500     
 GAUSSIAN_SIMULATED_X_CENTER = 130 

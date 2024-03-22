@@ -11,98 +11,42 @@ from .statistics_functions import filter_1d_residuals, generalized_bootstrap
 
 def fit_lorentzian(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None,
                                     filter_outliers = False, report_inliers = False):
-    return _fit_lorentzian_helper(x_vals, y_vals, errors = errors, amp_guess = amp_guess, center_guess = center_guess, 
-                        gamma_guess = gamma_guess, filter_outliers = filter_outliers, report_inliers = report_inliers, fit_offset = False)
+    x_vals, y_vals, errors = _numpy_condition_data(x_vals, y_vals, errors = errors)
+    param_guesses = _peak_guess_helper(x_vals, y_vals, amp_guess = amp_guess, center_guess = center_guess, 
+                                      width_guess = gamma_guess, fit_offset = False)
+    results = curve_fit(lorentzian, x_vals, y_vals, p0 = param_guesses, sigma = errors)
+    return _filter_outliers_helper(x_vals, y_vals, lorentzian, results, errors = errors, report_inliers = report_inliers, 
+                                   filter_outliers = filter_outliers)
+
 
 def fit_lorentzian_with_offset(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None, offset_guess = None,
                                     filter_outliers = False, report_inliers = False):
-    return _fit_lorentzian_helper(x_vals, y_vals, errors = errors, amp_guess = amp_guess, center_guess = center_guess, 
-                        gamma_guess = gamma_guess, offset_guess = offset_guess, 
-                        filter_outliers = filter_outliers, report_inliers = report_inliers, fit_offset = True)
-    
-def _fit_lorentzian_helper(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None, offset_guess = None,
-                                    filter_outliers = False, report_inliers = False, fit_offset = False):
-    #Cast to guarantee we can use array syntax
-    x_vals = np.array(x_vals) 
-    y_vals = np.array(y_vals)
-    if(not errors is None):
-        errors = np.array(errors)
-    #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
-    data_average = np.average(y_vals)
-    if amp_guess is None:
-        biggest_val = y_vals[np.argmax(np.abs(y_vals))]
-        amp_guess = biggest_val - data_average
-    if center_guess is None:
-        center_guess = x_vals[np.argmax(np.abs(y_vals))]
-    if gamma_guess is None:
-        x_range = max(x_vals) - min(x_vals) 
-        gamma_guess = x_range / 2
-    if offset_guess is None and fit_offset:
-        offset_guess = data_average
-    if fit_offset:
-        fit_fun = lorentzian_with_offset 
-        params = [amp_guess, center_guess, gamma_guess, offset_guess]
-    else:
-        fit_fun = lorentzian 
-        params = [amp_guess, center_guess, gamma_guess]
-    results = curve_fit(fit_fun, x_vals, y_vals, p0 = params, sigma = errors)
-    if(filter_outliers):
-        popt, pcov = results
-        inlier_indices = _filter_1d_outliers(x_vals, y_vals, fit_fun, 
-                                                            popt)
-        x_vals = x_vals[inlier_indices] 
-        y_vals = y_vals[inlier_indices] 
-        if(errors):
-            errors = errors[inlier_indices]
-        results = curve_fit(fit_fun, x_vals, y_vals, p0 = popt, sigma = errors)
-    if(report_inliers):
-        return (results, inlier_indices) 
-    else:
-        return results
+    x_vals, y_vals, errors = _numpy_condition_data(x_vals, y_vals, errors = errors)
+    param_guesses = _peak_guess_helper(x_vals, y_vals, amp_guess = amp_guess, center_guess = center_guess, 
+                                      width_guess = gamma_guess, offset_guess = offset_guess, fit_offset = True)
+    results = curve_fit(lorentzian_with_offset, x_vals, y_vals, p0 = param_guesses, sigma = errors)
+    conditioned_results = _condition_peak_results(results)
+    return _filter_outliers_helper(x_vals, y_vals, lorentzian_with_offset, conditioned_results, errors = errors, report_inliers = report_inliers, 
+                                   filter_outliers = filter_outliers)
 
-def lorentzian_with_offset(x, amp, center, gamma, offset):
-    return amp * 1.0 / (np.square(2.0 * (x - center) / gamma) + 1) + offset
-
+def fit_lorentzian_times_freq(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None,
+                                    filter_outliers = False, report_inliers = False):
+    x_vals, y_vals, errors = _numpy_condition_data(x_vals, y_vals, errors = errors)
+    naive_param_guesses = _peak_guess_helper(x_vals, y_vals, amp_guess = amp_guess, center_guess = center_guess, 
+                                      width_guess = gamma_guess, fit_offset = False)
+    naive_amp_guess, center_guess, gamma_guess = naive_param_guesses 
+    amp_guess = naive_amp_guess / center_guess
+    param_guesses = [amp_guess, center_guess, gamma_guess] 
+    results = curve_fit(lorentzian_times_freq, x_vals, y_vals, p0 = param_guesses, sigma = errors)
+    conditioned_results = _condition_peak_results(results)
+    return _filter_outliers_helper(x_vals, y_vals, lorentzian_times_freq, conditioned_results, errors = errors, report_inliers = report_inliers, 
+                                   filter_outliers = filter_outliers)
 
 def lorentzian(x, amp, center, gamma):
     return amp * 1.0 / (np.square(2.0 * (x - center) / gamma) + 1)
 
-
-def fit_lorentzian_times_freq(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None,
-                                    filter_outliers = False, report_inliers = False):
-    #Cast to guarantee we can use array syntax
-    x_vals = np.array(x_vals) 
-    y_vals = np.array(y_vals)
-    if(not errors is None):
-        errors = np.array(errors)
-    #Rough magnitude expected for gamma in any imaging resonance lorentzian we would plot
-    data_average = np.average(y_vals)
-    peak_index = np.argmax(np.abs(y_vals)) 
-    peak_height = y_vals[peak_index] 
-    peak_freq = x_vals[peak_index]
-    if amp_guess is None:
-        amp_guess = (peak_height - data_average) / peak_freq
-    if center_guess is None:
-        center_guess = peak_freq
-    if gamma_guess is None:
-        x_range = max(x_vals) - min(x_vals) 
-        gamma_guess = x_range / 2
-    params_init = [amp_guess, center_guess, gamma_guess]
-    results = curve_fit(lorentzian_times_freq, x_vals, y_vals, p0 = params_init, sigma = errors)
-    if(filter_outliers):
-        popt, pcov = results
-        inlier_indices = _filter_1d_outliers(x_vals, y_vals, lorentzian_times_freq, 
-                                                            popt)
-        x_vals = x_vals[inlier_indices] 
-        y_vals = y_vals[inlier_indices] 
-        if(errors):
-            errors = errors[inlier_indices]
-        results = curve_fit(lorentzian_times_freq, x_vals, y_vals, p0 = popt, sigma = errors)
-    if(report_inliers):
-        return (results, inlier_indices) 
-    else:
-        return results
-
+def lorentzian_with_offset(x, amp, center, gamma, offset):
+    return lorentzian(x, amp, center, gamma) + offset
 
 def lorentzian_times_freq(freq, amp, center, gamma):
     return amp * freq / (1 + np.square(2.0 * (freq - center) / gamma))
@@ -113,6 +57,84 @@ def get_lorentzian_times_freq_amp_to_peak_conversion_factor(center, gamma):
     return lorentzian_times_freq_on_peak_value
 
 
+
+def fit_gaussian(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, sigma_guess = None,
+                                    filter_outliers = False, report_inliers = False):
+    x_vals, y_vals, errors = _numpy_condition_data(x_vals, y_vals, errors = errors)
+    param_guesses = _peak_guess_helper(x_vals, y_vals, amp_guess = amp_guess, center_guess = center_guess, 
+                                      width_guess = sigma_guess, fit_offset = False)
+    results = curve_fit(gaussian, x_vals, y_vals, p0 = param_guesses, sigma = errors)
+    conditioned_results = _condition_peak_results(results)
+    return _filter_outliers_helper(x_vals, y_vals, gaussian, conditioned_results, errors = errors, report_inliers = report_inliers, 
+                                   filter_outliers = filter_outliers)
+
+
+def fit_gaussian_with_offset(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, sigma_guess = None, offset_guess = None,
+                                    filter_outliers = False, report_inliers = False):
+    x_vals, y_vals, errors = _numpy_condition_data(x_vals, y_vals, errors = errors)
+    param_guesses = _peak_guess_helper(x_vals, y_vals, amp_guess = amp_guess, center_guess = center_guess, 
+                                      width_guess = sigma_guess, offset_guess = offset_guess, fit_offset = True)
+    results = curve_fit(gaussian_with_offset, x_vals, y_vals, p0 = param_guesses, sigma = errors)
+    conditioned_results = _condition_peak_results(results)
+    return _filter_outliers_helper(x_vals, y_vals, gaussian_with_offset, conditioned_results, errors = errors, report_inliers = report_inliers, 
+                                   filter_outliers = filter_outliers)
+
+def gaussian(x, amp, center, sigma):
+    return amp * np.exp(-np.square(x - center) / (2 * np.square(sigma)))
+
+def gaussian_with_offset(x, amp, center, sigma, offset):
+    return gaussian(x, amp, center, sigma) + offset
+
+
+def _peak_guess_helper(x_vals, y_vals, amp_guess = None, center_guess = None, width_guess = None, offset_guess = None, fit_offset = False):
+    data_average = np.average(y_vals)
+    peak_index = np.argmax(np.abs(y_vals))
+    peak_height = y_vals[peak_index] 
+    peak_x = x_vals[peak_index]
+    x_range = max(x_vals) - min(x_vals)
+    if amp_guess is None:
+        amp_guess = peak_height - data_average
+    if center_guess is None:
+        center_guess = peak_x
+    if width_guess is None:
+        x_range = max(x_vals) - min(x_vals) 
+        width_guess = x_range / 2
+    if offset_guess is None and fit_offset:
+        offset_guess = data_average - amp_guess * width_guess / x_range
+    if fit_offset:
+        return (amp_guess, center_guess, width_guess, offset_guess)
+    else:
+        return (amp_guess, center_guess, width_guess)
+
+
+def _numpy_condition_data(x_vals, y_vals, errors = None):
+    x_vals = np.array(x_vals) 
+    y_vals = np.array(y_vals) 
+    if not errors is None:
+        errors = np.array(errors) 
+    return (x_vals, y_vals, errors)
+
+
+def _filter_outliers_helper(x_vals, y_vals, fit_fun, results, errors = None, report_inliers = False, filter_outliers = False):
+    if not filter_outliers:
+        return results
+    popt, pcov = results
+    inlier_indices = _filter_1d_outliers(x_vals, y_vals, fit_fun, popt)
+    filtered_x_vals = x_vals[inlier_indices] 
+    filtered_y_vals = y_vals[inlier_indices] 
+    if not errors is None:
+        errors = errors[inlier_indices]
+    results = curve_fit(fit_fun, filtered_x_vals, filtered_y_vals, p0=popt, sigma = errors)
+    if report_inliers:
+        return (results, inlier_indices) 
+    else:
+        return results
+    
+#The above "peak" functions have a width which may be negative; this makes it positive
+def _condition_peak_results(results):
+    popt, pcov = results 
+    popt[2] = np.abs(popt[2])
+    return (popt, pcov)
 
 
 def fit_two_dimensional_gaussian(image_to_fit, center = None, amp = None, width_sigmas = None, offset = None, errors = None):
