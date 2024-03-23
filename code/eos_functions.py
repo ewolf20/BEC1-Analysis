@@ -263,8 +263,11 @@ def _virial_wrapper(virial_function, independent_variable_to_betamu):
         return virial_function(independent_variable_to_betamu(indep)) 
     return wrapped
 
-def balanced_eos_virial_f(z):
+#Function f(z) occurring in calculations of thermodynamic quantities. While f(z) is by definition a function of the fugacity 
+#z, the input is betamu = log(z) for numerical stability
+def balanced_eos_virial_f(betamu):
     #handle scalar input
+    z = np.exp(betamu)
     if np.ndim(z) == 0:
         reshaped_scalar = True
         z = np.expand_dims(z, 0)
@@ -282,7 +285,9 @@ def balanced_eos_virial_f(z):
         return return_value
 
 
-def balanced_eos_virial_fprime(z):
+#Returns a quantity equal to zf'(z) which occurs in the EOS calculations of first derivatives of the potential
+def balanced_eos_virial_f_once_deriv(betamu):
+    z = np.exp(betamu)
     #Handle scalar input
     if np.ndim(z) == 0:
         reshaped_scalar = True
@@ -291,7 +296,7 @@ def balanced_eos_virial_fprime(z):
         reshaped_scalar = False
     number_coeffs = len(BALANCED_GAS_VIRIAL_COEFFICIENTS)
     primed_coeffs = np.arange(1, number_coeffs + 1) * BALANCED_GAS_VIRIAL_COEFFICIENTS
-    power_indices = np.arange(number_coeffs)
+    power_indices = np.arange(number_coeffs) + 1
     reshaped_power_indices = np.expand_dims(power_indices, 0)
     reshaped_z = np.expand_dims(z, 1)
     reshaped_coefficients = np.expand_dims(primed_coeffs, 0)
@@ -303,7 +308,8 @@ def balanced_eos_virial_fprime(z):
     
 
 #Returns a quantity equal to zf'(z) + z^2 f''(z) which occurs in the EOS calculations of second derivatives
-def balanced_eos_virial_f_twice_deriv(z):
+def balanced_eos_virial_f_twice_deriv(betamu):
+    z = np.exp(betamu)
     #Handle scalar input
     if np.ndim(z) == 0:
         reshaped_scalar = True
@@ -324,52 +330,33 @@ def balanced_eos_virial_f_twice_deriv(z):
 
 
 def balanced_kappa_over_kappa0_virial(betamu):
-    z = np.exp(betamu)
-    return np.cbrt(np.pi / 6) * balanced_eos_virial_f_twice_deriv(z) / np.power(z * balanced_eos_virial_fprime(z), 1/3)
+    return _kappa_over_kappa0_f(betamu, balanced_eos_virial_f_once_deriv, balanced_eos_virial_f_twice_deriv)
 
 def balanced_P_over_P0_virial(betamu):
-    z = np.exp(betamu)
-    return 10 / np.cbrt(36 * np.pi) * balanced_eos_virial_f(z) / np.power(z * balanced_eos_virial_fprime(z), 5/3)
+    return _P_over_P0_f(betamu, balanced_eos_virial_f, balanced_eos_virial_f_once_deriv)
 
 def balanced_Cv_over_NkB_virial(betamu):
-    return 3.0 / 2.0 * (1.0 / balanced_T_over_TF_virial(betamu)) * (balanced_P_over_P0_virial(betamu) - 1.0 / balanced_kappa_over_kappa0_virial(betamu))
+    return _Cv_over_NkB_f(betamu, balanced_eos_virial_f, balanced_eos_virial_f_once_deriv, balanced_eos_virial_f_twice_deriv)
 
 def balanced_T_over_TF_virial(betamu):
-    z = np.exp(betamu)
-    return np.cbrt(16 / (9 * np.pi)) * np.power(z * balanced_eos_virial_fprime(z), -2/3)
+    return _T_over_TF_f(betamu, balanced_eos_virial_f_once_deriv)
 
 def balanced_E_over_E0_virial(betamu):
-    return balanced_P_over_P0_virial(betamu)
+    return _E_over_E0_f(betamu, balanced_eos_virial_f, balanced_eos_virial_f_once_deriv)
 
 def balanced_mu_over_EF_virial(betamu):
-    return betamu * balanced_T_over_TF_virial(betamu)
+    return _mu_over_EF_f(betamu, balanced_eos_virial_f_once_deriv)
 
 def balanced_F_over_E0_virial(betamu):
-    z = np.exp(betamu)
-    return -np.cbrt(2000/(243 * np.pi)) * (balanced_eos_virial_f(z) - z * betamu * balanced_eos_virial_fprime(z)) / np.power(balanced_eos_virial_fprime(z) * z, 5/3)
+    return _F_over_E0_f(betamu, balanced_eos_virial_f, balanced_eos_virial_f_once_deriv)
 
 def balanced_S_over_NkB_virial(betamu):
-    z = np.exp(betamu)
-    return 2.5 * balanced_eos_virial_f(z) /(z * balanced_eos_virial_fprime(z))  - betamu
+    return _S_over_NkB_f(betamu, balanced_eos_virial_f, balanced_eos_virial_f_once_deriv)
 
 #Included for compatibility with non_betamu returns
 def balanced_betamu_virial(betamu):
-    return betamu
+    return _betamu_f(betamu)
 
-
-# def balanced_betamu_from_T_over_TF_virial(T_over_TF):
-#     z_star = 4.0 / (3 * np.sqrt(np.pi)) * np.power(T_over_TF, -3/2) 
-#     virial_fprime_coeffs_ascending_power = (np.arange(len(BALANCED_GAS_VIRIAL_COEFFICIENTS)) + 1) * BALANCED_GAS_VIRIAL_COEFFICIENTS
-#     virial_fprime_coeffs_descending_power = np.flip(virial_fprime_coeffs_ascending_power)
-#     #By manual inspection, the third root (order = 2) is the correct one for z_star < Z_STAR_ROOT_SWITCH, then the second root is correct for 
-#     #z_star > Z_STAR_ROOT_SWITCH 
-#     #Note that there is no continuity between the roots when they switch, so it's vital to specify the crossover point as precisely as possible.
-#     Z_STAR_ROOT_SWITCH = 0.521065275
-#     order_to_use = np.where(z_star < Z_STAR_ROOT_SWITCH, 2, 1)
-#     virial_inverted_z_values = numerical_functions.cubic_formula(*virial_fprime_coeffs_descending_power, -z_star, 
-#                                                                  cube_root_order = order_to_use, cast_to_real = True)
-#     virial_inverted_betamu_values = np.log(virial_inverted_z_values) 
-#     return virial_inverted_betamu_values
 
 def _get_balanced_eos_virial_function(key):
     virial_function_dict = {
@@ -441,6 +428,43 @@ def generate_and_save_balanced_eos_betamu_from_other_value_virial_data(data_path
         for key in BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST:
             f.write("{0}\n".format(key))
 
+
+
+#General functions for various normalized thermodynamic quantities in terms of a function f, defined such that 
+#   Phi_G = -k_B T * V / (lambda_dB^3) f(z)
+#   with z = e^betamu, Phi_G the grand potential
+
+def _kappa_over_kappa0_f(betamu, f_once_deriv_func, f_twice_deriv_func):
+    return np.cbrt(np.pi / 6) * f_twice_deriv_func(betamu) / np.power(f_once_deriv_func(betamu), 1/3)
+
+def _P_over_P0_f(betamu, f_func, f_once_deriv_func):
+    return 10 / np.cbrt(36 * np.pi) * f_func(betamu) / np.power(f_once_deriv_func(betamu), 5/3)
+
+def _Cv_over_NkB_f(betamu, f_func, f_once_deriv_func, f_twice_deriv_func):
+    prefactor = 3.0 / 2.0 * (1.0 / _T_over_TF_f(betamu, f_once_deriv_func))
+    terms = (_P_over_P0_f(betamu, f_func, f_once_deriv_func) - 1.0 / _kappa_over_kappa0_f(betamu, f_once_deriv_func, f_twice_deriv_func))
+    return prefactor * terms
+
+def _T_over_TF_f(betamu, f_once_deriv_func):
+    return np.cbrt(16 / (9 * np.pi)) * np.power(f_once_deriv_func(betamu), -2/3)
+
+#ONLY VALID FOR THE SCALE-INVARIANT GAS!!!
+def _E_over_E0_f(betamu, f_func, f_once_deriv_func):
+    return _P_over_P0_f(betamu, f_func, f_once_deriv_func)
+
+def _mu_over_EF_f(betamu, f_once_deriv_func):
+    return betamu * _T_over_TF_f(betamu, f_once_deriv_func)
+
+def _F_over_E0_f(betamu, f_func, f_once_deriv_func):
+    return -np.cbrt(2000/(243 * np.pi)) * (f_func(betamu) -
+                                    betamu * f_once_deriv_func(betamu)) / np.power(f_once_deriv_func(betamu), 5/3)
+
+def _S_over_NkB_f(betamu, f_func, f_once_deriv_func):
+    return 2.5 * f_func(betamu) /(f_once_deriv_func(betamu))  - betamu
+
+#Included for compatibility with non_betamu returns
+def _betamu_f(betamu):
+    return betamu
 
 
 def ultralow_fugacity_betamu_function_P_over_P0(P_over_P0):
