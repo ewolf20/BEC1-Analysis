@@ -93,11 +93,11 @@ def polylog_taylor_series(z, z0, coefficients):
 
 def generate_and_save_taylor_series_coefficients(s, coeff_save_path, center_save_path):
     START_POINT = -0.1
-    END_POINT = 9.9
+    END_POINT = 12.0
     POLYLOG_SERIES_ORDER_SMALL = 11
     POLYLOG_SERIES_ORDER_MEDIUM = 11
     POLYLOG_SERIES_ORDER_LARGE = 11
-    center_values = -np.logspace(START_POINT, END_POINT, num = 50, base = np.exp(1))
+    center_values = -np.logspace(START_POINT, END_POINT, num = 60, base = np.e)
     coefficients_list = []
     for center_value in center_values:
         if(np.log(center_value) < 2):

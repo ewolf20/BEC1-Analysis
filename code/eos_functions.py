@@ -21,7 +21,7 @@ H_BAR_MKS = 1.054572e-34
 
 def kardar_f_minus_function(s, log_z):
     SOMMERFELD_EXPANSION_ORDER = 6
-    SOMMERFELD_LOG_CUTOFF = 10
+    SOMMERFELD_LOG_CUTOFF = 12
     POWER_SERIES_EXPANSION_ORDER = 70
     POWER_SERIES_LOG_CUTOFF = -0.1
     #Safety cast with minimal overhead for scalar log_z
@@ -65,7 +65,8 @@ def _kardar_highT_f_minus(s, order, logz):
     return np.sum(summands, axis = -1)
 
 
-(polylog_analytic_continuation_centers, 
+(polylog_analytic_continuation_centers,
+polylog_analytic_continuation_coeffs_1_2, 
 polylog_analytic_continuation_coeffs_3_2, 
 polylog_analytic_continuation_coeffs_5_2) = loading_functions.load_polylog_analytic_continuation_parameters()
 
@@ -73,12 +74,14 @@ polylog_analytic_continuation_coeffs_5_2) = loading_functions.load_polylog_analy
 def _kardar_intermediateT_f_minus(s, logz):
     minus_z = -np.exp(logz)
     centers = polylog_analytic_continuation_centers
-    if(s == 3/2):
+    if s == 1/2:
+        coeffs = polylog_analytic_continuation_coeffs_1_2
+    elif s == 3/2:
         coeffs = polylog_analytic_continuation_coeffs_3_2
-    elif(s == 5/2):
+    elif s == 5/2:
         coeffs = polylog_analytic_continuation_coeffs_5_2
     else:
-        raise NotImplementedError("The fast analytic continuation implementation of the polylog is not supported for s != 3/2, 5/2.")
+        raise NotImplementedError("The fast analytic continuation implementation of the polylog is not supported for s != 1/2, 3/2, 5/2.")
     return -numerical_functions.stored_coeffs_polylog_taylor_series(minus_z, centers, coeffs)
 
 

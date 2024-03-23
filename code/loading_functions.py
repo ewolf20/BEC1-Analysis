@@ -129,15 +129,18 @@ def load_tabulated_unitary_eos_virial_betamu_data():
 
 def load_polylog_analytic_continuation_parameters():
     CENTERS_FILENAME = "Polylog_Taylor_Centers.npy"
+    COEFFS_1_2_FILENAME = "Polylog_Taylor_Coefficients_1_2.npy"
     COEFFS_3_2_FILENAME = "Polylog_Taylor_Coefficients_3_2.npy"
     COEFFS_5_2_FILENAME = "Polylog_Taylor_Coefficients_5_2.npy"
     with pkg_resources.path(r, CENTERS_FILENAME) as centers_path, \
+        pkg_resources.path(r, COEFFS_1_2_FILENAME) as coeffs_1_2_path, \
         pkg_resources.path(r, COEFFS_3_2_FILENAME) as coeffs_3_2_path, \
         pkg_resources.path(r, COEFFS_5_2_FILENAME) as coeffs_5_2_path:
         centers = np.load(centers_path)
+        coeffs_1_2 = np.load(coeffs_1_2_path)
         coeffs_3_2 = np.load(coeffs_3_2_path) 
         coeffs_5_2 = np.load(coeffs_5_2_path) 
-    return (centers, coeffs_3_2, coeffs_5_2)
+    return (centers, coeffs_1_2, coeffs_3_2, coeffs_5_2)
 
 
 def load_tabulated_ideal_betamu_vs_T_over_TF():

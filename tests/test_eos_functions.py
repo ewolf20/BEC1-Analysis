@@ -21,16 +21,17 @@ from BEC1_Analysis.code import eos_functions, loading_functions
 def test_kardar_f_minus_function():
     LOWER_LOG_BOUND = -10
     UPPER_LOG_BOUND = 100
-    S_VALUE_1 = 3/2
-    S_VALUE_2 = 5/2
-    log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 10000)
-    vectorized_mpmath_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
-    mp_math_values_1 = -vectorized_mpmath_polylog(S_VALUE_1, -np.exp(log_z_values))
-    mp_math_values_2 = -vectorized_mpmath_polylog(S_VALUE_2, -np.exp(log_z_values))
-    homebrew_values_1 = eos_functions.kardar_f_minus_function(S_VALUE_1, log_z_values)
-    homebrew_values_2 = eos_functions.kardar_f_minus_function(S_VALUE_2, log_z_values)
-    assert np.all(np.isclose(mp_math_values_1, homebrew_values_1, atol = 0.0, rtol = 1e-6))
-    assert np.all(np.isclose(mp_math_values_2, homebrew_values_2, atol = 0.0, rtol = 1e-6))
+    s_values = [1/2, 3/2, 5/2]
+    log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 1000)
+    vectorized_mpmath_polylog_fp = np.vectorize(mpmath.fp.polylog, otypes = [complex])
+    vectorized_mpmath_polylog = np.vectorize(mpmath.polylog, otypes = [complex])
+    for s_value in s_values:
+        if s_value == 0.5:
+            mp_math_values = -vectorized_mpmath_polylog(s_value, -np.exp(log_z_values))
+        else:
+            mp_math_values = -vectorized_mpmath_polylog_fp(s_value, -np.exp(log_z_values))
+        homebrew_values = eos_functions.kardar_f_minus_function(s_value, log_z_values)
+        assert np.all(np.isclose(mp_math_values, homebrew_values, atol = 0.0, rtol = 1e-6))
 
 
 def test_get_ideal_betamu_from_T_over_TF():
