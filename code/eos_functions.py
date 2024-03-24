@@ -86,8 +86,16 @@ def _kardar_intermediateT_f_minus(s, logz):
 
 
 
-#FERMI GAS THERMODYNAMICS
+#IDEAL FERMI GAS THERMODYNAMICS
 
+def ideal_fermi_f(betamu):
+    return kardar_f_minus_function(5/2, betamu) 
+
+def ideal_fermi_f_once_deriv(betamu):
+    return kardar_f_minus_function(3/2, betamu) 
+
+def ideal_fermi_f_twice_deriv(betamu):
+    return kardar_f_minus_function(1/2, betamu)
 
 def thermal_de_broglie_li_6_mks(kBT):
     return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * LI_6_MASS_KG * kBT)
@@ -98,21 +106,38 @@ def ideal_fermi_P0(n, E_F):
 def ideal_fermi_kappa0(n, E_F):
     return 3 / (2 * n * E_F)
 
-
 #Note: Only valid for box potentials
 def ideal_fermi_E0_uniform(E_F):
     return 3/5 * E_F
 
 #Derived from notes in Kardar, 'Statistical Physics of Particles', chapter 7
+def ideal_fermi_kappa_over_kappa0(betamu):
+    return _kappa_over_kappa0_f(betamu, ideal_fermi_f_once_deriv, ideal_fermi_f_twice_deriv)
+
 def ideal_fermi_P_over_p0(betamu):
-    return 5.0 / 2.0 * 1.0 / (np.cbrt(9 * np.pi / 16)) * np.power(kardar_f_minus_function(3/2, betamu), -5/3) * (kardar_f_minus_function(5/2, betamu))
+    return _P_over_P0_f(betamu, ideal_fermi_f, ideal_fermi_f_once_deriv)
+
+def ideal_fermi_Cv_over_NkB(betamu):
+    return _Cv_over_NkB_f(betamu, ideal_fermi_f, ideal_fermi_f_once_deriv, ideal_fermi_f_twice_deriv)
+
+def ideal_fermi_T_over_TF(betamu):
+    return _T_over_TF_f(betamu, ideal_fermi_f_once_deriv)
+
+def ideal_fermi_E_over_E0(betamu):
+    return _E_over_E0_f(betamu, ideal_fermi_f, ideal_fermi_f_once_deriv)
+
+def ideal_fermi_mu_over_EF(betamu):
+    return _mu_over_EF_f(betamu, ideal_fermi_f_once_deriv)
+
+def ideal_fermi_F_over_E0(betamu):
+    return _F_over_E0_f(betamu, ideal_fermi_f, ideal_fermi_f_once_deriv)
+
+def ideal_fermi_S_over_NkB(betamu):
+    return _S_over_NkB_f(betamu, ideal_fermi_f, ideal_fermi_f_once_deriv)
 
 
-def ideal_T_over_TF(betamu):
-    return 1.0 / (np.cbrt(9 * np.pi / 16) * np.power(kardar_f_minus_function(3/2, betamu), 2/3))
-
-def _bruteforce_get_ideal_betamu_from_T_over_TF(T_over_TF):
-    return fsolve(lambda x: ideal_T_over_TF(x) - T_over_TF, 0)
+def _bruteforce_get_ideal_fermi_betamu_from_T_over_TF(T_over_TF):
+    return fsolve(lambda x: ideal_fermi_T_over_TF(x) - T_over_TF, 0)
 
 #Derived by slight alteration of Equation 64 of Cowan 2019: https://doi.org/10.1007/s10909-019-02228-0
 def _low_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
@@ -143,13 +168,13 @@ def _high_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
 vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = None
 tabulated_ideal_betamu_interpolant = None
 
-def get_ideal_betamu_from_T_over_TF(T_over_TF, flag = "direct"):
+def get_ideal_fermi_betamu_from_T_over_TF(T_over_TF, flag = "direct"):
     LOW_T_CUTOFF = 0.01
     HIGH_T_CUTOFF = 5.0
     if(flag == "direct"):
         global vectorized_bruteforce_get_ideal_betamu_from_T_over_TF
         if(not vectorized_bruteforce_get_ideal_betamu_from_T_over_TF):
-            vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = np.vectorize(_bruteforce_get_ideal_betamu_from_T_over_TF, otypes = [float])
+            vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = np.vectorize(_bruteforce_get_ideal_fermi_betamu_from_T_over_TF, otypes = [float])
         input_scalar = np.isscalar(T_over_TF)
         if(input_scalar):
             T_over_TF = np.atleast_1d(T_over_TF)
@@ -269,8 +294,8 @@ def _virial_wrapper(virial_function, independent_variable_to_betamu):
 #Function f(z) occurring in calculations of thermodynamic quantities. While f(z) is by definition a function of the fugacity 
 #z, the input is betamu = log(z) for numerical stability
 def balanced_eos_virial_f(betamu):
-    #handle scalar input
     z = np.exp(betamu)
+    #handle scalar input
     if np.ndim(z) == 0:
         reshaped_scalar = True
         z = np.expand_dims(z, 0)

@@ -34,13 +34,13 @@ def test_kardar_f_minus_function():
         assert np.all(np.isclose(mp_math_values, homebrew_values, atol = 0.0, rtol = 1e-6))
 
 
-def test_get_ideal_betamu_from_T_over_TF():
+def test_get_ideal_fermi_betamu_from_T_over_TF():
     T_over_TF_values = np.logspace(-3, 3, 1000)
-    betamu_values_direct = eos_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values)
-    reconstituted_T_over_TF_values_direct = eos_functions.ideal_T_over_TF(betamu_values_direct)
+    betamu_values_direct = eos_functions.get_ideal_fermi_betamu_from_T_over_TF(T_over_TF_values)
+    reconstituted_T_over_TF_values_direct = eos_functions.ideal_fermi_T_over_TF(betamu_values_direct)
     assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_direct, rtol = 1e-8, atol = 0.0))
-    betamu_values_tabulated = eos_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values, flag = "tabulated")
-    reconstituted_T_over_TF_values_tabulated = eos_functions.ideal_T_over_TF(betamu_values_tabulated) 
+    betamu_values_tabulated = eos_functions.get_ideal_fermi_betamu_from_T_over_TF(T_over_TF_values, flag = "tabulated")
+    reconstituted_T_over_TF_values_tabulated = eos_functions.ideal_fermi_T_over_TF(betamu_values_tabulated) 
     assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_tabulated, rtol = 1e-8, atol = 0.0))
 
 
