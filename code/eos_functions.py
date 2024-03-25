@@ -11,6 +11,8 @@ from . import numerical_functions, loading_functions
 LI_6_MASS_KG = 9.98834e-27
 #Taken from https://physics.nist.gov/cgi-bin/cuu/Value?hbar
 H_BAR_MKS = 1.054572e-34
+H_MKS = 2 * np.pi * H_BAR_MKS
+KB_MKS = 1.380649e-23
 
 
 #IDEAL FERMI GAS
@@ -97,14 +99,32 @@ def ideal_fermi_f_once_deriv(betamu):
 def ideal_fermi_f_twice_deriv(betamu):
     return kardar_f_minus_function(1/2, betamu)
 
-def thermal_de_broglie_li_6_mks(kBT):
-    return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * LI_6_MASS_KG * kBT)
+
+
+
+
+def thermal_de_broglie_mks(kBT_J, mass_kg):
+    return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * mass_kg * kBT_J)
 
 def ideal_fermi_P0(n, E_F):
     return 2 / 5 * n * E_F 
 
 def ideal_fermi_kappa0(n, E_F):
     return 3 / (2 * n * E_F)
+
+#Function for calculating the density of an ideal Fermi gas vs. betamu and T. 
+#Because of a lack of normalization, this takes two parameters betamu and T, and requires the species to be 
+#specified, so that the mass is known.
+def ideal_fermi_density_um(betamu, kBT_Hz, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG
+    else:
+        raise ValueError("Unsupported species")
+    kBT_J = kBT_Hz * H_MKS
+    thermal_de_broglie_m = thermal_de_broglie_mks(kBT_J, mass_kg)
+    thermal_de_broglie_um = thermal_de_broglie_m * 1e6
+    return np.power(thermal_de_broglie_um, -3.0) * ideal_fermi_f_once_deriv(betamu)
+
 
 #Note: Only valid for box potentials
 def ideal_fermi_E0_uniform(E_F):
