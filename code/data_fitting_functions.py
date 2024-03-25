@@ -664,62 +664,50 @@ def crop_box(atom_densities, vert_crop_point = 0.5, horiz_crop_point = 0.01, hor
 #Fitting ideal Fermi density data
 
 #Fit the (3d) fermi density of ideal lithium-6 vs potential to extract the global chemical potential mu_0 and kBT in Hz. 
-#Note that the chemical potential is referenced to the lowest point in the potential; the same result for 
-#mu would be obtained if the potentials are offset by any additive constant.
-def fit_li6_ideal_fermi_density(potentials_Hz, densities_um, errors = None, mu_0_Hz_guess = None, kBT_Hz_guess = None):
+#Note that the chemical potential is returned in absolute terms; if an additive constant is added to the potentials, the same 
+#constant will be added to the chemical potential.
+def fit_li6_ideal_fermi_density(potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, kBT_Hz_guess = None):
     return _fit_li6_ideal_fermi_density_helper(
-        _li6_ideal_fermi_density_no_mu_referencing, potentials_Hz, densities_um, errors = errors, mu_0_Hz_guess = mu_0_Hz_guess, 
+        li6_ideal_fermi_density, potentials_Hz, densities_um, errors = errors, absolute_mu_0_Hz_guess = absolute_mu_0_Hz_guess, 
         kBT_Hz_guess = kBT_Hz_guess)
 
 #Fit the (3d) Fermi density of ideal lithium-6 as above, but with a free initial multiplicative prefactor
 #representing a possible miscalibration of density. Here, fitting the chemical potential requires exploring 
 #regions of sufficiently high fugacity to go beyond the ideal gas limit. 
-def fit_li6_ideal_fermi_density_with_prefactor(potentials_Hz, densities_um, errors = None, mu_0_Hz_guess = None, kBT_Hz_guess = None, 
+def fit_li6_ideal_fermi_density_with_prefactor(potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, kBT_Hz_guess = None, 
                                                prefactor_guess = 1.0):
     return _fit_li6_ideal_fermi_density_helper(
-        _li6_ideal_fermi_density_no_mu_referencing_prefactor, potentials_Hz, densities_um, errors = errors, mu_0_Hz_guess=mu_0_Hz_guess, 
+        li6_ideal_fermi_density_with_prefactor, potentials_Hz, densities_um, errors = errors, absolute_mu_0_Hz_guess= absolute_mu_0_Hz_guess, 
         kBT_Hz_guess=kBT_Hz_guess, prefactor_guess=prefactor_guess
     )
 
-def _fit_li6_ideal_fermi_density_helper(function, potentials_Hz, densities_um, errors = None, mu_0_Hz_guess = None, 
+def _fit_li6_ideal_fermi_density_helper(function, potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, 
                                         kBT_Hz_guess = None, prefactor_guess = None):
     potentials_Hz, densities_um, errors = _numpy_condition_data(potentials_Hz, densities_um, errors = errors)
-    if mu_0_Hz_guess is None:
+    potential_minimum = np.min(potentials_Hz)
+    if absolute_mu_0_Hz_guess is None:
         #Assume zero temperature fermi gas at maximum density point
         peak_density_um = np.max(densities_um)
-        mu_0_Hz_guess = get_fermi_energy_hz_from_density(peak_density_um * 1e18)
-    potential_minimum = np.min(potentials_Hz)
-    absolute_mu_0_Hz_guess = mu_0_Hz_guess + potential_minimum
+        relative_mu_0_Hz_guess = get_fermi_energy_hz_from_density(peak_density_um * 1e18)
+        absolute_mu_0_Hz_guess = relative_mu_0_Hz_guess + potential_minimum
     if kBT_Hz_guess is None: 
         #Assume T/T_F value of 0.5. Inconsistent with above... but useful for getting order of magnitude
-        kBT_Hz_guess = 0.5 * mu_0_Hz_guess
+        kBT_Hz_guess = 0.5 * (absolute_mu_0_Hz_guess - potential_minimum)
     #None means we don't fit with prefactor
     if prefactor_guess is None:
         param_guesses = [absolute_mu_0_Hz_guess, kBT_Hz_guess]
     else:
         param_guesses = [absolute_mu_0_Hz_guess, kBT_Hz_guess, prefactor_guess]
     results = curve_fit(function, potentials_Hz, densities_um, p0 = param_guesses, sigma = errors)
-    popt, pcov = results 
-    absolute_mu_0_Hz_opt, *_ = popt 
-    referenced_mu_0_Hz_opt = absolute_mu_0_Hz_opt - potential_minimum
-    referenced_popt = (referenced_mu_0_Hz_opt, *popt[1:])
-    return (referenced_popt, pcov)
+    return results
 
-def _li6_ideal_fermi_density_no_mu_referencing(potentials_Hz, absolute_mu_0_Hz, kBT_Hz):
+def li6_ideal_fermi_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz):
     local_mu_values = absolute_mu_0_Hz - potentials_Hz
     local_betamu_values = local_mu_values / kBT_Hz 
     return ideal_fermi_density_um(local_betamu_values, kBT_Hz, species = "6Li")
 
-def _li6_ideal_fermi_density_no_mu_referencing_prefactor(potentials_Hz, absolute_mu_0_Hz, kBT_Hz, prefactor):
-    return prefactor * _li6_ideal_fermi_density_no_mu_referencing(potentials_Hz, absolute_mu_0_Hz, kBT_Hz)
-
-def li6_ideal_fermi_density(potentials_Hz, mu_0_Hz, kBT_Hz):
-    absolute_mu_0_Hz = mu_0_Hz + np.min(potentials_Hz)
-    return _li6_ideal_fermi_density_no_mu_referencing(potentials_Hz, absolute_mu_0_Hz, kBT_Hz)
-
-
-def li6_ideal_fermi_density_with_prefactor(potentials_Hz, mu_0_Hz, kBT_Hz, prefactor):
-    return prefactor * li6_ideal_fermi_density(potentials_Hz, mu_0_Hz, kBT_Hz) 
+def li6_ideal_fermi_density_with_prefactor(potentials_Hz, absolute_mu_0_Hz, kBT_Hz, prefactor):
+    return prefactor * li6_ideal_fermi_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz)
 
 
 def _sort_and_deduplicate_xy_data(x_values, y_values):

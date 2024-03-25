@@ -358,13 +358,14 @@ def test_fit_li6_ideal_fermi_density():
     noisy_densities = noise_free_densities * (1.0 + 0.05 * normal_randoms) 
     fit_results = data_fitting_functions.fit_li6_ideal_fermi_density(potential_values, noisy_densities)
     popt, pcov = fit_results
-    EXPECTED_POPT = [793.61463, 204.85814]
+    EXPECTED_POPT = np.array([793.61463, 204.85814])
     assert np.all(np.isclose(popt, EXPECTED_POPT))
     POTENTIAL_OFFSET = 3141
     offset_potential_values = potential_values + POTENTIAL_OFFSET
     fit_results_offset = data_fitting_functions.fit_li6_ideal_fermi_density(offset_potential_values, noisy_densities)
     offset_popt, offset_pcov = fit_results_offset 
-    assert np.all(np.isclose(offset_popt, EXPECTED_POPT))
+    expected_offset_popt = EXPECTED_POPT + np.array([POTENTIAL_OFFSET, 0.0])
+    assert np.all(np.isclose(offset_popt, expected_offset_popt))
 
 
 def test_fit_li6_ideal_fermi_density_with_prefactor():
@@ -379,13 +380,14 @@ def test_fit_li6_ideal_fermi_density_with_prefactor():
     noisy_densities = noise_free_densities * (1.0 + 0.05 * normal_randoms) 
     fit_results = data_fitting_functions.fit_li6_ideal_fermi_density_with_prefactor(potential_values, noisy_densities)
     popt, pcov = fit_results
-    EXPECTED_POPT = [1024.22259, 192.358369, 1.43997535]
+    EXPECTED_POPT = np.array([1024.22259, 192.358369, 1.43997535])
     assert np.all(np.isclose(popt, EXPECTED_POPT))
     POTENTIAL_OFFSET = 3141
     offset_potential_values = potential_values + POTENTIAL_OFFSET
     fit_results_offset = data_fitting_functions.fit_li6_ideal_fermi_density_with_prefactor(offset_potential_values, noisy_densities)
     offset_popt, offset_pcov = fit_results_offset 
-    assert np.all(np.isclose(offset_popt, EXPECTED_POPT))
+    expected_offset_popt = EXPECTED_POPT + np.array([POTENTIAL_OFFSET, 0.0, 0.0])
+    assert np.all(np.isclose(offset_popt, expected_offset_popt))
 
 
 def test_bootstrap_fit_covariance():
