@@ -14,7 +14,7 @@ sys.path.insert(0, path_to_analysis)
 
 TEST_DATA_DIRECTORY_PATH = "./resources/test_data"
 
-from BEC1_Analysis.code import data_fitting_functions
+from BEC1_Analysis.code import data_fitting_functions, eos_functions
 
 def test_fit_lorentzian():
     normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
@@ -345,6 +345,47 @@ def test_crop_box():
     EXPECTED_BOX_CROP_FIXED_WIDTHS = (4, 68, 244, 158)
     box_crop_fixed_widths = data_fitting_functions.crop_box(sample_box_data, horiz_radius = FIXED_HORIZ_RADIUS, vert_width = FIXED_VERT_WIDTH)
     assert EXPECTED_BOX_CROP_FIXED_WIDTHS == box_crop_fixed_widths
+
+
+def test_fit_li6_ideal_fermi_density():
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    potential_values = np.linspace(0, 1500, num = len(normal_randoms)) 
+    MU_0_VALUE = 800
+    kBT_VALUE = 200
+    local_mu_values = MU_0_VALUE - potential_values 
+    local_betamu_values = local_mu_values / kBT_VALUE
+    noise_free_densities = eos_functions.ideal_fermi_density_um(local_betamu_values, kBT_VALUE)
+    noisy_densities = noise_free_densities * (1.0 + 0.05 * normal_randoms) 
+    fit_results = data_fitting_functions.fit_li6_ideal_fermi_density(potential_values, noisy_densities)
+    popt, pcov = fit_results
+    EXPECTED_POPT = [793.61463, 204.85814]
+    assert np.all(np.isclose(popt, EXPECTED_POPT))
+    POTENTIAL_OFFSET = 3141
+    offset_potential_values = potential_values + POTENTIAL_OFFSET
+    fit_results_offset = data_fitting_functions.fit_li6_ideal_fermi_density(offset_potential_values, noisy_densities)
+    offset_popt, offset_pcov = fit_results_offset 
+    assert np.all(np.isclose(offset_popt, EXPECTED_POPT))
+
+
+def test_fit_li6_ideal_fermi_density_with_prefactor():
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    potential_values = np.linspace(0, 1500, num = len(normal_randoms)) 
+    MU_0_VALUE = 1000
+    kBT_VALUE = 200
+    PREFACTOR_VALUE = 1.5
+    local_mu_values = MU_0_VALUE - potential_values 
+    local_betamu_values = local_mu_values / kBT_VALUE
+    noise_free_densities = PREFACTOR_VALUE * eos_functions.ideal_fermi_density_um(local_betamu_values, kBT_VALUE)
+    noisy_densities = noise_free_densities * (1.0 + 0.05 * normal_randoms) 
+    fit_results = data_fitting_functions.fit_li6_ideal_fermi_density_with_prefactor(potential_values, noisy_densities)
+    popt, pcov = fit_results
+    EXPECTED_POPT = [1024.22259, 192.358369, 1.43997535]
+    assert np.all(np.isclose(popt, EXPECTED_POPT))
+    POTENTIAL_OFFSET = 3141
+    offset_potential_values = potential_values + POTENTIAL_OFFSET
+    fit_results_offset = data_fitting_functions.fit_li6_ideal_fermi_density_with_prefactor(offset_potential_values, noisy_densities)
+    offset_popt, offset_pcov = fit_results_offset 
+    assert np.all(np.isclose(offset_popt, EXPECTED_POPT))
 
 
 def test_bootstrap_fit_covariance():
