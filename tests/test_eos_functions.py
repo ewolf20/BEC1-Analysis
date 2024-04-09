@@ -149,6 +149,33 @@ def test_balanced_F_over_E0_virial():
     _test_balanced_eos_virial_functions_helper("F_over_E0", eos_functions.balanced_F_over_E0_virial)
 
 
+def test_balanced_density_um():
+    #At low temperatures, the Fermi energy should be equal to the chemical potential divided by the Bertsch parameter
+    BERTSCH_PARAMETER = 0.370
+    cold_betamu_values = np.linspace(3.9, 3.2, 100)
+    SAMPLE_KBT_HZ_VALUE = 1337.0 
+    sample_large_betamu_mu_values_Hz = cold_betamu_values * SAMPLE_KBT_HZ_VALUE
+    expected_large_betamu_fermi_energies = sample_large_betamu_mu_values_Hz / BERTSCH_PARAMETER
+    calculated_large_betamu_densities = eos_functions.balanced_density_um(cold_betamu_values, SAMPLE_KBT_HZ_VALUE)
+    calculated_large_betamu_fermi_energies = science_functions.get_fermi_energy_hz_from_density(calculated_large_betamu_densities * 1e18)
+    assert np.all(np.isclose(expected_large_betamu_fermi_energies, calculated_large_betamu_fermi_energies, rtol = 5e-2))
+    #At high temperatures, the density is given by the inverse thermal de Broglie wavelength times the fugacity 
+    hot_betamu_values = np.linspace(-15, -8, 100)
+    hot_kBT_Hz = 420
+    hot_kBT_J = eos_functions.H_MKS * hot_kBT_Hz
+    calculated_hot_densities_um = eos_functions.ideal_fermi_density_um(hot_betamu_values, hot_kBT_Hz)
+    #The thermal de Broglie wavelength is tested separately
+    hot_thermal_de_Broglie_m = eos_functions.thermal_de_broglie_mks(hot_kBT_J, eos_functions.LI_6_MASS_KG)
+    hot_thermal_de_Broglie_um = hot_thermal_de_Broglie_m * 1e6
+    hot_z_values = np.exp(hot_betamu_values)
+    predicted_hot_densities_um = hot_z_values * np.power(hot_thermal_de_Broglie_um, -3.0)
+    assert np.all(np.isclose(predicted_hot_densities_um, calculated_hot_densities_um, atol = 0.0, rtol = 2e-4))
+
+
+
+
+
+
 def _test_ultralow_fugacity_function_helper(key, fun):
     betamu_value = -20.1
     full_virial_function = eos_functions._get_balanced_eos_virial_function(key) 
