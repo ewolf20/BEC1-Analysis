@@ -279,7 +279,6 @@ def test_get_od_pixel_sums_top_double():
     _get_od_pixel_sum_test_helper(type_name, od_pixel_sum_A_split_off)
     _get_od_pixel_sum_test_helper(type_name, od_pixel_sum_B_split_off)
 
-
 li_6_res_cross_section = image_processing_functions._get_res_cross_section_from_species("6Li")
 li_6_linewidth = image_processing_functions._get_linewidth_from_species("6Li")
 
@@ -662,6 +661,48 @@ def test_get_x_integrated_atom_densities_top_double():
 
 def test_get_y_integrated_atom_densities_top_double():
     _get_integrated_densities_test_helper(analysis_functions.get_y_integrated_atom_densities_top_double, 0) 
+
+
+def test_get_xy_atom_density_pixel_coms_top_double():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0,
+        "hf_lock_setpoint":0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0, 
+        "top_um_per_pixel":E_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    no_stored_density_kwargs = {
+        "imaging_mode":"abs"
+    }
+    box_autocut_image = get_box_autocut_absorption_image()
+    cropped_box_autocut_image = get_box_autocut_absorption_image(crop_to_roi = True)
+    box_autocut_image_stack = generate_image_stack_from_absorption(box_autocut_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = box_autocut_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Box is symmetric, so expected COM is in the middle
+        cropped_image_dimensions = cropped_box_autocut_image.shape 
+        cropped_image_y_len, cropped_image_x_len = cropped_image_dimensions 
+        expected_y_com = (cropped_image_y_len - 1) / 2 
+        expected_x_com = (cropped_image_x_len - 1) / 2
+        #Get the expected atom densities
+        x_com_1, y_com_1, x_com_2, y_com_2 = analysis_functions.get_xy_atom_density_pixel_coms_top_double(my_measurement, my_run, **no_stored_density_kwargs)
+        #Then, do store density
+        assert np.isclose(expected_x_com, x_com_1)
+        assert np.isclose(expected_x_com, x_com_2) 
+        assert np.isclose(expected_y_com, y_com_1) 
+        assert np.isclose(expected_y_com, y_com_2)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
 
 def _get_atom_counts_test_helper(type_name, function_to_test, experiment_param_values = None, 
                                            run_param_values = None, fun_kwargs = None):
