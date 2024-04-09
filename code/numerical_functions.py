@@ -36,7 +36,7 @@ Convenience function which generates coefficients related to the Taylor expansio
 
 Specifically, the derivative of the polylog at a given point is given by 
 
-d^n/dz^n (Li_s(z)) = 1/z^n \sum_{j = 0}^n a_{nj} Li_{s - j} (z) 
+d^n/dz^n (Li_s(z)) = 1/z^n sum_{j = 0}^n a_{nj} Li_{s - j} (z) 
 
 where the a_{nj} have a_{00} = 1, a_{0j} = 0, j > 0, and 
 
@@ -63,7 +63,7 @@ Convenience function which generates a series of coefficients related to a taylo
 
 Given center z_0 and order m, returns coefficients b_m given by 
 
-b_m = (1 / m!) \sum_{j = 0}^m a_{mj} Li_{s - j}(z_0)
+b_m = (1 / m!) sum_{j = 0}^m a_{mj} Li_{s - j}(z_0)
 
 Note that the 1/z^m dependence is not included; this will be included in the final taylor series against the (z - z_0)^m term so as to combat over/underflow."""
 def polylog_specific_taylor_series_generator(center, order, s):
