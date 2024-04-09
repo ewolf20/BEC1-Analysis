@@ -79,3 +79,10 @@ def test_load_tabulated_unitary_eos_virial_betamu_data():
     loaded_array_hash = get_sha_hash_string(loaded_array.data.tobytes())
     EXPECTED_ARRAY_HASH = "844344b287815ee0905f1a9175395c8b7920c9e91cb1ee65e3021b6d2058f0dd"
     assert EXPECTED_ARRAY_HASH == loaded_array_hash
+
+
+def test_load_tabulated_ideal_eos_betamu_data():
+    loaded_array = loading_functions.load_tabulated_ideal_eos_betamu_data()
+    loaded_array_hash = get_sha_hash_string(loaded_array.data.tobytes())
+    EXPECTED_ARRAY_HASH = "63f32b57987f8660d57ae6bfb60239973474edcf3a6f9b0903cb22d27f00a494"
+    assert EXPECTED_ARRAY_HASH == loaded_array_hash

@@ -122,8 +122,20 @@ def load_unitary_EOS():
             return eos_dict
         
 def load_tabulated_unitary_eos_virial_betamu_data():
-    TABULATED_VIRIAL_BETAMU_FILE_BASENAME = "Unitary_EOS_Betamu_vs_Other_Values_Tabulated_Virial_Data.npy"
-    with pkg_resources.path(r, TABULATED_VIRIAL_BETAMU_FILE_BASENAME) as file_path:
+    TABULATED_VIRIAL_UNITARY_BETAMU_FILE_BASEPATH = os.path.join(
+        "Tabulated_EOS_Data",
+        "Unitary_EOS_Betamu_vs_Other_Values_Tabulated_Virial_Data.npy")
+    with pkg_resources.as_file(pkg_resources.files(r)) as package_path:
+       file_path = os.path.join(package_path, TABULATED_VIRIAL_UNITARY_BETAMU_FILE_BASEPATH)
+       return np.load(file_path)
+    
+
+def load_tabulated_ideal_eos_betamu_data():
+    TABULATED_IDEAL_EOS_BETAMU_FILE_BASEPATH = os.path.join(
+        "Tabulated_EOS_Data", 
+        "Ideal_EOS_Betamu_vs_Other_Values_Tabulated_Data.npy")
+    with pkg_resources.as_file(pkg_resources.files(r)) as package_path:
+       file_path = os.path.join(package_path, TABULATED_IDEAL_EOS_BETAMU_FILE_BASEPATH)
        return np.load(file_path)
 
 
@@ -132,15 +144,11 @@ def load_polylog_analytic_continuation_parameters():
     COEFFS_1_2_FILENAME = "Polylog_Taylor_Coefficients_1_2.npy"
     COEFFS_3_2_FILENAME = "Polylog_Taylor_Coefficients_3_2.npy"
     COEFFS_5_2_FILENAME = "Polylog_Taylor_Coefficients_5_2.npy"
-    with pkg_resources.path(r, CENTERS_FILENAME) as centers_path, \
-        pkg_resources.path(r, COEFFS_1_2_FILENAME) as coeffs_1_2_path, \
-        pkg_resources.path(r, COEFFS_3_2_FILENAME) as coeffs_3_2_path, \
-        pkg_resources.path(r, COEFFS_5_2_FILENAME) as coeffs_5_2_path:
-        centers = np.load(centers_path)
-        coeffs_1_2 = np.load(coeffs_1_2_path)
-        coeffs_3_2 = np.load(coeffs_3_2_path) 
-        coeffs_5_2 = np.load(coeffs_5_2_path) 
-    return (centers, coeffs_1_2, coeffs_3_2, coeffs_5_2)
+    filenames = [CENTERS_FILENAME, COEFFS_1_2_FILENAME,
+                COEFFS_3_2_FILENAME, COEFFS_5_2_FILENAME]
+    NUMERICAL_DATA_FOLDERNAME = "Tabulated_Numerical_Data"
+    with pkg_resources.as_file(pkg_resources.files(r)) as package_path:
+        return [np.load(os.path.join(package_path, NUMERICAL_DATA_FOLDERNAME, filename)) for filename in filenames]
 
 
 def load_tabulated_ideal_betamu_vs_T_over_TF():
