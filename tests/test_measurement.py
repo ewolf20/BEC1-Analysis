@@ -1,5 +1,5 @@
+import copy
 import hashlib
-import json
 import os 
 import sys 
 import shutil
@@ -256,6 +256,30 @@ class TestMeasurement:
         assert isinstance(analysis_list_true, list) 
         assert analysis_list_true == [Measurement.ANALYSIS_ERROR_INDICATOR_STRING]
 
+
+    @staticmethod
+    def test_get_constant_parameter_value_from_runs():
+        my_measurement = TestMeasurement.initialize_measurement()
+        #Convenient hack to get another, distinct run
+        my_other_measurement = TestMeasurement.initialize_measurement()
+        for run_id in my_measurement.runs_dict:
+            my_run_id = run_id
+        my_measurement.runs_dict[my_run_id + 1] = my_other_measurement.runs_dict[my_run_id]
+        #Check correct behavior in case of identical values
+        for run_id in my_measurement.runs_dict:
+            my_run = my_measurement.runs_dict[run_id] 
+            my_run.parameters["foo"] = 1 
+        assert my_measurement.get_constant_parameter_value_from_runs("foo") == 1
+        #Check for error with distinct values
+        for i, run_id in enumerate(my_measurement.runs_dict):
+            my_run = my_measurement.runs_dict[run_id] 
+            my_run.parameters["foo"] = i 
+        try:
+            my_measurement.get_constant_parameter_value_from_runs("foo")
+        except RuntimeError:
+            assert True
+        else:
+            raise RuntimeError("Failed to throw expected error.")
 
     @staticmethod 
     def test_analyze_runs():

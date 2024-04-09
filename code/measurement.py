@@ -528,6 +528,34 @@ class Measurement():
             combined_param_values_list = [np.array(l) for l in combined_param_values_list]
             combined_analysis_result_list = [np.array(l) for l in combined_analysis_result_list]
         return (*combined_param_values_list, *combined_analysis_result_list)
+    
+
+    def get_constant_parameter_value_from_runs(self, parameter_name, ignore_badshots = False, run_filter = None):
+        returned_parameters = self.get_parameter_value_from_runs(parameter_name, ignore_badshots = ignore_badshots, 
+                                            run_filter = run_filter, numpyfy = False)
+        parameter_name_is_tuple = isinstance(parameter_name, tuple)
+        parameter_values_list = []
+        if not parameter_name_is_tuple:
+            returned_parameters = (returned_parameters,)
+        for returned_parameter_values in returned_parameters:
+            initial_value = returned_parameter_values[0] 
+            initial_value_hash = Measurement._hash_helper(initial_value)
+            for value in returned_parameter_values:
+                current_value_hash = Measurement._hash_helper(value)
+                if not current_value_hash == initial_value_hash:
+                    raise RuntimeError("Parameter not constant over runs.")
+            parameter_values_list.append(initial_value) 
+        if parameter_name_is_tuple:
+            return tuple(parameter_values_list) 
+        else:
+            return parameter_values_list[0]
+
+
+    def _hash_helper(value):
+        if isinstance(value, np.ndarray):
+            return hash(value.data.tobytes())
+        else:
+            return hash(value) 
         
     """
     Performs arbitrary user-specified analysis on the underlying runs dict. 
