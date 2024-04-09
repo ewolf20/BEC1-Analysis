@@ -66,17 +66,23 @@ def test_ideal_fermi_density_um():
     assert np.all(np.isclose(predicted_ultra_hot_densities_um, calculated_ultra_hot_densities_um, atol = 0.0, rtol = 2e-4))
 
 
-
-
-
-def test_get_ideal_fermi_betamu_from_T_over_TF():
-    T_over_TF_values = np.logspace(-3, 3, 1000)
-    betamu_values_direct = eos_functions.get_ideal_fermi_betamu_from_T_over_TF(T_over_TF_values)
-    reconstituted_T_over_TF_values_direct = eos_functions.ideal_fermi_T_over_TF(betamu_values_direct)
-    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_direct, rtol = 1e-8, atol = 0.0))
-    betamu_values_tabulated = eos_functions.get_ideal_fermi_betamu_from_T_over_TF(T_over_TF_values, flag = "tabulated")
-    reconstituted_T_over_TF_values_tabulated = eos_functions.ideal_fermi_T_over_TF(betamu_values_tabulated) 
-    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_tabulated, rtol = 1e-8, atol = 0.0))
+#NOTE: Test is only of internal consistency. Need to figure out some way to compare to known ideal Fermi data
+def test_get_ideal_eos_functions():
+    testing_betamu_values = np.linspace(-20, 100, 13333)
+    independent_variable_options = ["betamu"]
+    independent_variable_options.extend(eos_functions.BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST)
+    betamu_functions = eos_functions.get_ideal_eos_functions(independent_variable = "betamu")
+    for independent_variable in independent_variable_options:
+        independent_variable_betamu_function = betamu_functions[independent_variable]
+        independent_variable_test_values = independent_variable_betamu_function(testing_betamu_values)
+        functions_dict = eos_functions.get_ideal_eos_functions(independent_variable = independent_variable)
+        for key in functions_dict:
+            dependent_function = functions_dict[key]
+            function_calculated_dependent_data = dependent_function(independent_variable_test_values)
+            dependent_betamu_function = betamu_functions[key] 
+            betamu_calculated_dependent_data = dependent_betamu_function(testing_betamu_values)
+            #Atol is necessary to avoid pathological behavior near mu = 0
+            assert np.all(np.isclose(betamu_calculated_dependent_data, function_calculated_dependent_data, atol = 1e-6, rtol = 1e-4))
 
 
 def test_get_balanced_eos_functions():

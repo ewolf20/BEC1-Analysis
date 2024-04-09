@@ -130,11 +130,24 @@ def ideal_fermi_density_um(betamu, kBT_Hz, species = "6Li"):
 def ideal_fermi_E0_uniform(E_F):
     return 3/5 * E_F
 
+
+def get_ideal_eos_functions(key = None, independent_variable = "betamu"):
+    independent_variable_to_betamu_function = _get_ideal_eos_independent_to_betamu_function(independent_variable)
+    returned_function_dict = {}
+    for dict_key in IDEAL_EOS_FUNCTION_DICT:
+        ideal_eos_function = IDEAL_EOS_FUNCTION_DICT[dict_key]
+        converted_ideal_function = _variable_change_wrapper(ideal_eos_function, independent_variable_to_betamu_function)
+        returned_function_dict[dict_key] = converted_ideal_function
+    if key is None:
+        return returned_function_dict
+    else:
+        return returned_function_dict[key]
+
 #Derived from notes in Kardar, 'Statistical Physics of Particles', chapter 7
 def ideal_fermi_kappa_over_kappa0(betamu):
     return _kappa_over_kappa0_f(betamu, ideal_fermi_f_once_deriv, ideal_fermi_f_twice_deriv)
 
-def ideal_fermi_P_over_p0(betamu):
+def ideal_fermi_P_over_P0(betamu):
     return _P_over_P0_f(betamu, ideal_fermi_f, ideal_fermi_f_once_deriv)
 
 def ideal_fermi_Cv_over_NkB(betamu):
@@ -155,73 +168,76 @@ def ideal_fermi_F_over_E0(betamu):
 def ideal_fermi_S_over_NkB(betamu):
     return _S_over_NkB_f(betamu, ideal_fermi_f, ideal_fermi_f_once_deriv)
 
+def ideal_fermi_betamu(betamu):
+    return betamu
 
-def _bruteforce_get_ideal_fermi_betamu_from_T_over_TF(T_over_TF):
-    return fsolve(lambda x: ideal_fermi_T_over_TF(x) - T_over_TF, 0)
-
-#Derived by slight alteration of Equation 64 of Cowan 2019: https://doi.org/10.1007/s10909-019-02228-0
-def _low_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
-    COWAN_COEFFICIENTS = [1, -1/12, -1/80, 247/25920, -16291/777600] 
-    indices = 2 * np.arange(len(COWAN_COEFFICIENTS))
-    pi_T_over_TF = np.pi * T_over_TF 
-    reshaped_pi_T_over_TF = np.expand_dims(pi_T_over_TF, axis = -1) 
-    reshaped_coefficients = np.expand_dims(COWAN_COEFFICIENTS, tuple(np.arange(len(np.shape(pi_T_over_TF)))))
-    reshaped_indices = np.expand_dims(indices, tuple(np.arange(len(np.shape(pi_T_over_TF)))))
-    mu_over_EF = np.sum(reshaped_coefficients * np.power(reshaped_pi_T_over_TF, reshaped_indices), axis = -1)
-    return mu_over_EF / T_over_TF
-
-#From Equation 65 of Cowan 2019. Expansion of T/T_F fi
-def _high_T_get_ideal_betamu_from_T_over_TF(T_over_TF):
-    maxwell_term = T_over_TF * np.log(4.0 / (3.0 * np.sqrt(np.pi) * np.power(T_over_TF, 1.5)))
-    COWAN_COEFFICIENTS = [1.0 / 3.0 * np.sqrt(2 / np.pi), 
-                         -1.0 / (81 * np.pi) * (16 * np.sqrt(3) - 27), 
-                        4 / (243 * np.power(np.pi, 1.5)) * (15 * np.sqrt(2) - 16 * np.sqrt(6) + 18)]
-    T_powers = [-0.5, -2, -3.5]
-    reshaped_coefficients = np.expand_dims(COWAN_COEFFICIENTS, tuple(np.arange(len(np.shape(T_over_TF)))))
-    reshaped_T_over_TF = np.expand_dims(T_over_TF, axis = -1) 
-    reshaped_T_powers = np.expand_dims(T_powers, tuple(np.arange(len(np.shape(T_over_TF)))))
-    mu_over_EF = maxwell_term + np.sum(reshaped_coefficients * np.power(reshaped_T_over_TF, reshaped_T_powers), axis = -1)
-    return mu_over_EF / T_over_TF
+IDEAL_EOS_FUNCTION_DICT = {
+    "kappa_over_kappa0":ideal_fermi_kappa_over_kappa0,
+    "P_over_P0":ideal_fermi_P_over_P0,
+    "Cv_over_NkB":ideal_fermi_Cv_over_NkB,
+    "T_over_TF":ideal_fermi_T_over_TF, 
+    "E_over_E0":ideal_fermi_E_over_E0,
+    "mu_over_EF":ideal_fermi_mu_over_EF, 
+    "F_over_E0":ideal_fermi_F_over_E0, 
+    "S_over_NkB":ideal_fermi_S_over_NkB,
+    "betamu":ideal_fermi_betamu
+}
 
 
-#Initialize globals to allow loading to be done once, and only if the relevant functions are used.
-vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = None
-tabulated_ideal_betamu_interpolant = None
+#Tabulate the values of various independent variables in terms of betamu, for numerical inversion 
+#Inelegant, but sufficiently precise for our needs at a relatively trim 1 MB of data
+def _get_ideal_eos_independent_to_betamu_function(key):
+    if key == "betamu":
+        return ideal_fermi_betamu
+    ULTRALOW_FUGACITY_DICT = {
+        "P_over_P0":ultralow_fugacity_betamu_function_P_over_P0,
+        "T_over_TF":ultralow_fugacity_betamu_function_T_over_TF,
+        "E_over_E0":ultralow_fugacity_betamu_function_E_over_E0,
+        "S_over_NkB":ultralow_fugacity_betamu_function_S_over_NkB
+    }
+    key_to_index_dict = {key:i+1 for i, key in enumerate(BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST)}
+    if not key in BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST:
+        raise ValueError("Unsupported variable for conversion to betamu")
+    ultralow_fugacity_function = ULTRALOW_FUGACITY_DICT[key] 
+    #Betamu is in decreasing order
+    tabulated_data = loading_functions.load_tabulated_ideal_eos_betamu_data()
+    tabulated_betamu_values = tabulated_data[0] 
+    tabulated_experimental_values = tabulated_data[key_to_index_dict[key]] 
+    def tabulated_betamu_function(other_value):
+        return np.interp(other_value, tabulated_experimental_values, tabulated_betamu_values)
+    #All experimental values which are currently available are increasing with decreasing betamu
+    maximum_experimental_value = tabulated_experimental_values[-1] 
+    def betamu_from_other_value_func(other_value):
+        return numerical_functions.smart_where(other_value > maximum_experimental_value, other_value, 
+                                               ultralow_fugacity_function, tabulated_betamu_function)
+    return betamu_from_other_value_func
 
-def get_ideal_fermi_betamu_from_T_over_TF(T_over_TF, flag = "direct"):
-    LOW_T_CUTOFF = 0.01
-    HIGH_T_CUTOFF = 5.0
-    if(flag == "direct"):
-        global vectorized_bruteforce_get_ideal_betamu_from_T_over_TF
-        if(not vectorized_bruteforce_get_ideal_betamu_from_T_over_TF):
-            vectorized_bruteforce_get_ideal_betamu_from_T_over_TF = np.vectorize(_bruteforce_get_ideal_fermi_betamu_from_T_over_TF, otypes = [float])
-        input_scalar = np.isscalar(T_over_TF)
-        if(input_scalar):
-            T_over_TF = np.atleast_1d(T_over_TF)
-        condition = np.zeros(T_over_TF.shape, dtype = int)
-        low_T_indices = (T_over_TF < LOW_T_CUTOFF)
-        high_T_indices = (T_over_TF > HIGH_T_CUTOFF)
-        intermediate_T_indices = (np.logical_and(T_over_TF >= LOW_T_CUTOFF, T_over_TF <= HIGH_T_CUTOFF))
-        condition[low_T_indices] = 0 
-        condition[intermediate_T_indices] = 1
-        condition[high_T_indices] = 2
-        betamu_values = numerical_functions.smart_where(condition, T_over_TF,
-        _low_T_get_ideal_betamu_from_T_over_TF,
-        vectorized_bruteforce_get_ideal_betamu_from_T_over_TF, 
-        _high_T_get_ideal_betamu_from_T_over_TF
-        )
-        #Undo safety cast
-        if(input_scalar):
-            return betamu_values.item()
-        else:
-            return betamu_values
-    elif(flag == "tabulated"):
-        global tabulated_ideal_betamu_interpolant
-        if(not tabulated_ideal_betamu_interpolant):
-            tabulated_T_over_TF, tabulated_ideal_betamu = loading_functions.load_tabulated_ideal_betamu_vs_T_over_TF()
-            tabulated_ideal_betamu_interpolant = interp1d(tabulated_T_over_TF, tabulated_ideal_betamu, kind = "cubic")
-        return tabulated_ideal_betamu_interpolant(T_over_TF)
-    
+
+def generate_and_save_ideal_eos_betamu_from_other_value_data(data_path, metadata_path, 
+                                                                max_betamu = 20, min_betamu = -20, 
+                                                                num_points = 10000):
+    betamu_values = np.linspace(max_betamu, min_betamu, num_points)
+
+    stacked_array = betamu_values
+    for key in BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST:
+        ideal_eos_function = IDEAL_EOS_FUNCTION_DICT[key]
+        eos_values = ideal_eos_function(betamu_values) 
+        stacked_array = np.vstack((stacked_array, eos_values))
+    np.save(data_path, stacked_array)
+    with open(metadata_path, 'w') as f:
+        f.write("Axis 0: parameter (e.g. betamu, P/P_0)\n")
+        f.write("Axis 1: Value\n")
+        f.write("Axis 1 is in order of decreasing betamu.\n")
+        f.write("--------\n") 
+        f.write("Maximum betamu value: {0:.1f}\n".format(max_betamu))
+        f.write("Minimum betamu value: {0:.1f}\n".format(min_betamu))
+        f.write("Number points: {0:d}\n".format(num_points))
+        f.write("--------\n")
+        f.write("Parameter ordering:\n")
+        f.write("Betamu\n")
+        for key in BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST:
+            f.write("{0}\n".format(key))
+
 
 #THERMODYNAMICS OF BALANCED UNITARY GAS
 
@@ -282,7 +298,7 @@ def get_balanced_eos_functions(key = None, independent_variable = "betamu"):
         #closure to avoid issues with changing values of sorted_experimental_data
         interpolated_experimental_function = _interp_wrapper(sorted_independent_variable_values, sorted_experimental_data)
         virial_function = _get_balanced_eos_virial_function(dict_key)
-        converted_virial_function = _virial_wrapper(virial_function, independent_var_to_betamu_virial_function)
+        converted_virial_function = _variable_change_wrapper(virial_function, independent_var_to_betamu_virial_function)
         if independent_variable == "betamu":
             returned_function_dict[dict_key] = _smart_where_wrapper(independent_var_virial_handoff, 
                                                                     interpolated_experimental_function, converted_virial_function)
@@ -306,9 +322,9 @@ def _interp_wrapper(independent, experimental):
         return np.interp(x, independent, experimental)
     return interp_wrapped
 
-def _virial_wrapper(virial_function, independent_variable_to_betamu):
+def _variable_change_wrapper(function_of_betamu, independent_variable_to_betamu):
     def wrapped(indep):
-        return virial_function(independent_variable_to_betamu(indep)) 
+        return function_of_betamu(independent_variable_to_betamu(indep)) 
     return wrapped
 
 #Function f(z) occurring in calculations of thermodynamic quantities. While f(z) is by definition a function of the fugacity 
@@ -375,6 +391,24 @@ def balanced_eos_virial_f_twice_deriv(betamu):
         return np.squeeze(return_value, axis = 0)
     else:
         return return_value
+
+
+_balanced_density_T_over_TF_vs_betamu_func = None
+#Function for calculating the density of a balanced unitary Fermi gas vs. betamu and kBT. 
+#As for the ideal gas, requires the species to be specified
+def balanced_density_um(betamu, kBT_Hz, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG
+    else:
+        raise ValueError("Unsupported species")
+    global _balanced_density_T_over_TF_vs_betamu_func
+    if _balanced_density_T_over_TF_vs_betamu_func is None:
+        _balanced_density_T_over_TF_vs_betamu_func =  get_balanced_eos_functions("T_over_TF")
+    kBT_J = kBT_Hz * H_MKS
+    thermal_de_broglie_m = thermal_de_broglie_mks(kBT_J, mass_kg)
+    thermal_de_broglie_um = thermal_de_broglie_m * 1e6
+    return np.power(thermal_de_broglie_um, -3.0) * 4.0 / (3 * np.sqrt(np.pi)) * np.power(_balanced_density_T_over_TF_vs_betamu_func(betamu), -1.5)
+
 
 
 def balanced_kappa_over_kappa0_virial(betamu):
