@@ -30,20 +30,21 @@ def test_polylog_specific_taylor_series_generator():
     assert np.all(np.isclose(result, EXPECTED_RESULT))
 
 
-vectorized_mpmath_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
+vectorized_mpmath_polylog = np.vectorize(mpmath.polylog, otypes = [complex])
 
 def test_polylog_taylor_series():
     SERIES_CENTER = -100
     SERIES_ORDER = 5
     SERIES_S = 5/2
     polylog_specific_taylor_series_coefficients = numerical_functions.polylog_specific_taylor_series_generator(SERIES_CENTER, SERIES_ORDER, SERIES_S)
-    z_values = np.linspace(-110, -90, 10000) 
+    z_values = np.linspace(-110, -90, 1000) 
     taylor_series_polylog_values = numerical_functions.polylog_taylor_series(z_values, SERIES_CENTER, polylog_specific_taylor_series_coefficients)
     mpmath_polylog_values = vectorized_mpmath_polylog(5/2, z_values)
     assert np.all(np.isclose(taylor_series_polylog_values, mpmath_polylog_values, rtol = 1e-7, atol = 0.0))
 
 
 def test_generate_and_save_taylor_series_coefficients():
+    COEFFS_SAVE_FILENAME_1_2 = "Polylog_Taylor_Coefficients_1_2.npy"
     COEFFS_SAVE_FILENAME_3_2 = "Polylog_Taylor_Coefficients_3_2.npy" 
     COEFFS_SAVE_FILENAME_5_2 = "Polylog_Taylor_Coefficients_5_2.npy" 
     CENTERS_SAVE_FILENAME = "Polylog_Taylor_Centers.npy" 
@@ -52,15 +53,19 @@ def test_generate_and_save_taylor_series_coefficients():
     try:
         os.mkdir(save_directory_pathname)
         centers_save_pathname = os.path.join(save_directory_pathname, CENTERS_SAVE_FILENAME)
+        coeffs_save_pathname_1_2 = os.path.join(save_directory_pathname, COEFFS_SAVE_FILENAME_1_2)
         coeffs_save_pathname_3_2 = os.path.join(save_directory_pathname, COEFFS_SAVE_FILENAME_3_2)
         coeffs_save_pathname_5_2 = os.path.join(save_directory_pathname, COEFFS_SAVE_FILENAME_5_2)
-        numerical_functions.generate_and_save_taylor_series_coefficients(5/2, coeffs_save_pathname_5_2, centers_save_pathname)
+        numerical_functions.generate_and_save_taylor_series_coefficients(1/2, coeffs_save_pathname_1_2, centers_save_pathname)
         numerical_functions.generate_and_save_taylor_series_coefficients(3/2, coeffs_save_pathname_3_2, centers_save_pathname)
+        numerical_functions.generate_and_save_taylor_series_coefficients(5/2, coeffs_save_pathname_5_2, centers_save_pathname)
         just_generated_centers = np.load(centers_save_pathname)
+        just_generated_coeffs_1_2 = np.load(coeffs_save_pathname_1_2)
         just_generated_coeffs_3_2 = np.load(coeffs_save_pathname_3_2)
         just_generated_coeffs_5_2 = np.load(coeffs_save_pathname_5_2)
-        stored_centers, stored_coeffs_3_2, stored_coeffs_5_2 = loading_functions.load_polylog_analytic_continuation_parameters()
+        stored_centers, stored_coeffs_1_2, stored_coeffs_3_2, stored_coeffs_5_2 = loading_functions.load_polylog_analytic_continuation_parameters()
         assert np.all(np.isclose(just_generated_centers, stored_centers))
+        assert np.all(np.isclose(just_generated_coeffs_1_2, stored_coeffs_1_2))
         assert np.all(np.isclose(just_generated_coeffs_3_2, stored_coeffs_3_2))
         assert np.all(np.isclose(just_generated_coeffs_5_2, stored_coeffs_5_2))
     finally:
@@ -68,11 +73,14 @@ def test_generate_and_save_taylor_series_coefficients():
 
 
 def test_stored_coeffs_polylog_taylor_series():
-    centers, coeffs_3_2, coeffs_5_2 = loading_functions.load_polylog_analytic_continuation_parameters()
-    z_values = -np.logspace(-0.1, 10.0, num = 1000, base = np.e)
+    centers, coeffs_1_2, coeffs_3_2, coeffs_5_2 = loading_functions.load_polylog_analytic_continuation_parameters()
+    z_values = -np.logspace(-0.1, 10.0, num = 100, base = np.e)
+    mp_math_values_1_2 = vectorized_mpmath_polylog(1/2, z_values)
     mp_math_values_3_2 = vectorized_mpmath_polylog(3/2, z_values)
     mp_math_values_5_2 = vectorized_mpmath_polylog(5/2, z_values)
+    homebrew_values_1_2 = numerical_functions.stored_coeffs_polylog_taylor_series(z_values, centers, coeffs_1_2)
     homebrew_values_3_2 = numerical_functions.stored_coeffs_polylog_taylor_series(z_values, centers, coeffs_3_2)
     homebrew_values_5_2 = numerical_functions.stored_coeffs_polylog_taylor_series(z_values, centers, coeffs_5_2)
+    assert np.all(np.isclose(homebrew_values_1_2, mp_math_values_1_2, rtol = 1e-10, atol = 0.0))
     assert np.all(np.isclose(homebrew_values_3_2, mp_math_values_3_2, rtol = 1e-10, atol = 0.0))
     assert np.all(np.isclose(homebrew_values_5_2, mp_math_values_5_2, rtol = 1e-10, atol = 0.0))

@@ -6,8 +6,9 @@ from scipy.interpolate import interp1d
 from scipy.special import erf, erfinv
 from scipy.signal import argrelextrema
 
-from .science_functions import two_level_system_population_rabi
+from .science_functions import two_level_system_population_rabi, get_fermi_energy_hz_from_density
 from .statistics_functions import filter_1d_residuals, generalized_bootstrap
+from .eos_functions import ideal_fermi_density_um
 
 def fit_lorentzian(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None,
                                     filter_outliers = False, report_inliers = False):
@@ -660,6 +661,55 @@ def crop_box(atom_densities, vert_crop_point = 0.5, horiz_crop_point = 0.01, hor
     return (h_crop_min, v_crop_min, h_crop_max, v_crop_max)
 
 
+#Fitting ideal Fermi density data
+
+#Fit the (3d) fermi density of ideal lithium-6 vs potential to extract the global chemical potential mu_0 and kBT in Hz. 
+#Note that the chemical potential is returned in absolute terms; if an additive constant is added to the potentials, the same 
+#constant will be added to the chemical potential.
+def fit_li6_ideal_fermi_density(potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, kBT_Hz_guess = None):
+    return _fit_li6_ideal_fermi_density_helper(
+        li6_ideal_fermi_density, potentials_Hz, densities_um, errors = errors, absolute_mu_0_Hz_guess = absolute_mu_0_Hz_guess, 
+        kBT_Hz_guess = kBT_Hz_guess)
+
+#Fit the (3d) Fermi density of ideal lithium-6 as above, but with a free initial multiplicative prefactor
+#representing a possible miscalibration of density. Here, fitting the chemical potential requires exploring 
+#regions of sufficiently high fugacity to go beyond the ideal gas limit. 
+def fit_li6_ideal_fermi_density_with_prefactor(potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, kBT_Hz_guess = None, 
+                                               prefactor_guess = 1.0):
+    return _fit_li6_ideal_fermi_density_helper(
+        li6_ideal_fermi_density_with_prefactor, potentials_Hz, densities_um, errors = errors, absolute_mu_0_Hz_guess= absolute_mu_0_Hz_guess, 
+        kBT_Hz_guess=kBT_Hz_guess, prefactor_guess=prefactor_guess
+    )
+
+def _fit_li6_ideal_fermi_density_helper(function, potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, 
+                                        kBT_Hz_guess = None, prefactor_guess = None):
+    potentials_Hz, densities_um, errors = _numpy_condition_data(potentials_Hz, densities_um, errors = errors)
+    potential_minimum = np.min(potentials_Hz)
+    if absolute_mu_0_Hz_guess is None:
+        #Assume zero temperature fermi gas at maximum density point
+        peak_density_um = np.max(densities_um)
+        relative_mu_0_Hz_guess = get_fermi_energy_hz_from_density(peak_density_um * 1e18)
+        absolute_mu_0_Hz_guess = relative_mu_0_Hz_guess + potential_minimum
+    if kBT_Hz_guess is None: 
+        #Assume T/T_F value of 0.5. Inconsistent with above... but useful for getting order of magnitude
+        kBT_Hz_guess = 0.5 * (absolute_mu_0_Hz_guess - potential_minimum)
+    #None means we don't fit with prefactor
+    if prefactor_guess is None:
+        param_guesses = [absolute_mu_0_Hz_guess, kBT_Hz_guess]
+    else:
+        param_guesses = [absolute_mu_0_Hz_guess, kBT_Hz_guess, prefactor_guess]
+    results = curve_fit(function, potentials_Hz, densities_um, p0 = param_guesses, sigma = errors)
+    return results
+
+def li6_ideal_fermi_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz):
+    local_mu_values = absolute_mu_0_Hz - potentials_Hz
+    local_betamu_values = local_mu_values / kBT_Hz 
+    return ideal_fermi_density_um(local_betamu_values, kBT_Hz, species = "6Li")
+
+def li6_ideal_fermi_density_with_prefactor(potentials_Hz, absolute_mu_0_Hz, kBT_Hz, prefactor):
+    return prefactor * li6_ideal_fermi_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz)
+
+
 def _sort_and_deduplicate_xy_data(x_values, y_values):
     sorted_x_values, sorted_y_values = zip(*sorted(zip(x_values, y_values), key = lambda f: f[0]))
     sorted_x_values = np.array(sorted_x_values) 
@@ -786,6 +836,6 @@ def fit_report(model_function, fit_results, precision = 3):
 
 def get_varnames_from_function(my_func):
     arg_names = my_func.__code__.co_varnames[:my_func.__code__.co_argcount]
-    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'x_values', 'rf_freqs']
+    DEFAULT_INDEPENDENT_VARNAMES = ['t', 'x', 'y', 'x_values', 'rf_freqs', 'potentials_Hz']
     arg_names = [f for f in arg_names if (not f in DEFAULT_INDEPENDENT_VARNAMES)]
     return arg_names

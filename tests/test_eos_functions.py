@@ -15,34 +15,74 @@ sys.path.insert(0, path_to_analysis)
 
 RESOURCES_DIRECTORY_PATH = "./resources"
 
-from BEC1_Analysis.code import eos_functions, loading_functions
+from BEC1_Analysis.code import eos_functions, loading_functions, science_functions
 
 
 def test_kardar_f_minus_function():
     LOWER_LOG_BOUND = -10
     UPPER_LOG_BOUND = 100
-    S_VALUE_1 = 3/2
-    S_VALUE_2 = 5/2
-    log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 10000)
-    vectorized_mpmath_polylog = np.vectorize(mpmath.fp.polylog, otypes = [complex])
-    mp_math_values_1 = -vectorized_mpmath_polylog(S_VALUE_1, -np.exp(log_z_values))
-    mp_math_values_2 = -vectorized_mpmath_polylog(S_VALUE_2, -np.exp(log_z_values))
-    homebrew_values_1 = eos_functions.kardar_f_minus_function(S_VALUE_1, log_z_values)
-    homebrew_values_2 = eos_functions.kardar_f_minus_function(S_VALUE_2, log_z_values)
-    assert np.all(np.isclose(mp_math_values_1, homebrew_values_1, atol = 0.0, rtol = 1e-6))
-    assert np.all(np.isclose(mp_math_values_2, homebrew_values_2, atol = 0.0, rtol = 1e-6))
+    s_values = [1/2, 3/2, 5/2]
+    log_z_values = np.linspace(LOWER_LOG_BOUND, UPPER_LOG_BOUND, 1000)
+    vectorized_mpmath_polylog_fp = np.vectorize(mpmath.fp.polylog, otypes = [complex])
+    vectorized_mpmath_polylog = np.vectorize(mpmath.polylog, otypes = [complex])
+    for s_value in s_values:
+        if s_value == 0.5:
+            mp_math_values = -vectorized_mpmath_polylog(s_value, -np.exp(log_z_values))
+        else:
+            mp_math_values = -vectorized_mpmath_polylog_fp(s_value, -np.exp(log_z_values))
+        homebrew_values = eos_functions.kardar_f_minus_function(s_value, log_z_values)
+        assert np.all(np.isclose(mp_math_values, homebrew_values, atol = 0.0, rtol = 1e-6))
 
 
-def test_get_ideal_betamu_from_T_over_TF():
-    T_over_TF_values = np.logspace(-3, 3, 1000)
-    betamu_values_direct = eos_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values)
-    reconstituted_T_over_TF_values_direct = eos_functions.ideal_T_over_TF(betamu_values_direct)
-    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_direct, rtol = 1e-8, atol = 0.0))
-    betamu_values_tabulated = eos_functions.get_ideal_betamu_from_T_over_TF(T_over_TF_values, flag = "tabulated")
-    reconstituted_T_over_TF_values_tabulated = eos_functions.ideal_T_over_TF(betamu_values_tabulated) 
-    assert np.all(np.isclose(T_over_TF_values, reconstituted_T_over_TF_values_tabulated, rtol = 1e-8, atol = 0.0))
+def test_thermal_de_broglie_mks():
+    sample_kBT_J = 1000 * eos_functions.H_MKS
+    sample_mass_kg = 1.67262e-27
+    #Manually calculated value, independent of code:
+    EXPECTED_WAVELENGTH_M = 7.94035e-6
+    calculated_wavelength_m = eos_functions.thermal_de_broglie_mks(sample_kBT_J, sample_mass_kg)
+    assert np.isclose(EXPECTED_WAVELENGTH_M, calculated_wavelength_m)
 
 
+
+def test_ideal_fermi_density_um():
+    #First test for correct results in the ultra cold limit
+    ultra_cold_betamu_values = np.linspace(10, 20, 100) 
+    ultra_cold_kBT_Hz = 1337
+    ultra_cold_mu_values = ultra_cold_betamu_values * ultra_cold_kBT_Hz 
+    calculated_ultra_cold_densities_um = eos_functions.ideal_fermi_density_um(ultra_cold_betamu_values, ultra_cold_kBT_Hz)
+    #This function is tested separately
+    calculated_ultra_cold_density_fermi_energies = science_functions.get_fermi_energy_hz_from_density(calculated_ultra_cold_densities_um * 1e18)
+    assert np.all(np.isclose(ultra_cold_mu_values, calculated_ultra_cold_density_fermi_energies, rtol = 1e-2, atol = 0.0))
+    #Then test for correct results in the ultra hot limit 
+    ultra_hot_betamu_values = np.linspace(-15, -8, 100)
+    ultra_hot_kBT_Hz = 420
+    ultra_hot_kBT_J = eos_functions.H_MKS * ultra_hot_kBT_Hz
+    calculated_ultra_hot_densities_um = eos_functions.ideal_fermi_density_um(ultra_hot_betamu_values, ultra_hot_kBT_Hz)
+    #The thermal de Broglie wavelength is tested separately
+    ultra_hot_thermal_de_Broglie_m = eos_functions.thermal_de_broglie_mks(ultra_hot_kBT_J, eos_functions.LI_6_MASS_KG)
+    ultra_hot_thermal_de_Broglie_um = ultra_hot_thermal_de_Broglie_m * 1e6
+    ultra_hot_z_values = np.exp(ultra_hot_betamu_values)
+    predicted_ultra_hot_densities_um = ultra_hot_z_values * np.power(ultra_hot_thermal_de_Broglie_um, -3.0)
+    assert np.all(np.isclose(predicted_ultra_hot_densities_um, calculated_ultra_hot_densities_um, atol = 0.0, rtol = 2e-4))
+
+
+#NOTE: Test is only of internal consistency. Need to figure out some way to compare to known ideal Fermi data
+def test_get_ideal_eos_functions():
+    testing_betamu_values = np.linspace(-20, 100, 13333)
+    independent_variable_options = ["betamu"]
+    independent_variable_options.extend(eos_functions.BALANCED_EOS_REVERSIBLE_VALUES_NAMES_LIST)
+    betamu_functions = eos_functions.get_ideal_eos_functions(independent_variable = "betamu")
+    for independent_variable in independent_variable_options:
+        independent_variable_betamu_function = betamu_functions[independent_variable]
+        independent_variable_test_values = independent_variable_betamu_function(testing_betamu_values)
+        functions_dict = eos_functions.get_ideal_eos_functions(independent_variable = independent_variable)
+        for key in functions_dict:
+            dependent_function = functions_dict[key]
+            function_calculated_dependent_data = dependent_function(independent_variable_test_values)
+            dependent_betamu_function = betamu_functions[key] 
+            betamu_calculated_dependent_data = dependent_betamu_function(testing_betamu_values)
+            #Atol is necessary to avoid pathological behavior near mu = 0
+            assert np.all(np.isclose(betamu_calculated_dependent_data, function_calculated_dependent_data, atol = 1e-6, rtol = 1e-4))
 
 
 def test_get_balanced_eos_functions():
@@ -107,6 +147,33 @@ def test_balanced_S_over_NkB_virial():
 
 def test_balanced_F_over_E0_virial():
     _test_balanced_eos_virial_functions_helper("F_over_E0", eos_functions.balanced_F_over_E0_virial)
+
+
+def test_balanced_density_um():
+    #At low temperatures, the Fermi energy should be equal to the chemical potential divided by the Bertsch parameter
+    BERTSCH_PARAMETER = 0.370
+    cold_betamu_values = np.linspace(3.9, 3.2, 100)
+    SAMPLE_KBT_HZ_VALUE = 1337.0 
+    sample_large_betamu_mu_values_Hz = cold_betamu_values * SAMPLE_KBT_HZ_VALUE
+    expected_large_betamu_fermi_energies = sample_large_betamu_mu_values_Hz / BERTSCH_PARAMETER
+    calculated_large_betamu_densities = eos_functions.balanced_density_um(cold_betamu_values, SAMPLE_KBT_HZ_VALUE)
+    calculated_large_betamu_fermi_energies = science_functions.get_fermi_energy_hz_from_density(calculated_large_betamu_densities * 1e18)
+    assert np.all(np.isclose(expected_large_betamu_fermi_energies, calculated_large_betamu_fermi_energies, rtol = 5e-2))
+    #At high temperatures, the density is given by the inverse thermal de Broglie wavelength times the fugacity 
+    hot_betamu_values = np.linspace(-15, -8, 100)
+    hot_kBT_Hz = 420
+    hot_kBT_J = eos_functions.H_MKS * hot_kBT_Hz
+    calculated_hot_densities_um = eos_functions.ideal_fermi_density_um(hot_betamu_values, hot_kBT_Hz)
+    #The thermal de Broglie wavelength is tested separately
+    hot_thermal_de_Broglie_m = eos_functions.thermal_de_broglie_mks(hot_kBT_J, eos_functions.LI_6_MASS_KG)
+    hot_thermal_de_Broglie_um = hot_thermal_de_Broglie_m * 1e6
+    hot_z_values = np.exp(hot_betamu_values)
+    predicted_hot_densities_um = hot_z_values * np.power(hot_thermal_de_Broglie_um, -3.0)
+    assert np.all(np.isclose(predicted_hot_densities_um, calculated_hot_densities_um, atol = 0.0, rtol = 2e-4))
+
+
+
+
 
 
 def _test_ultralow_fugacity_function_helper(key, fun):
