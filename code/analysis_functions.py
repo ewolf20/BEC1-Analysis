@@ -316,6 +316,7 @@ def get_y_integrated_atom_densities_top_double(my_measurement, my_run, first_sto
     return (density_1_y_integrated, density_2_y_integrated)
 
 
+
 def get_xy_atom_density_pixel_coms_top_double(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                         imaging_mode = "polrot", **get_density_kwargs):
     x_int_density_1, x_int_density_2 = get_x_integrated_atom_densities_top_double(
@@ -396,7 +397,7 @@ def get_atom_counts_top_polrot(my_measurement, my_run, first_stored_density_name
 
 #HYBRID TRAP - BOX EXP
 
-def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = True, 
+def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
                                                   first_stored_density_name = None, second_stored_density_name = None, 
                                                   imaging_mode = "polrot", **get_density_kwargs):
     atom_density_first, atom_density_second = _load_densities_top_double(
@@ -420,7 +421,23 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocu
         positions_second = positions_second[second_start_index:second_stop_index] 
         densities_second = densities_second[second_start_index:second_stop_index]
     return (positions_first, densities_first, positions_second, densities_second)
+    
 
+def get_hybrid_trap_potentials_and_densities_along_harmonic_axis(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+                                    autocut = False, imaging_mode = "polrot",
+                                    first_stored_density_name = None, second_stored_density_name = None, **get_density_kwargs):
+    positions_first, densities_first, positions_second, densities_second = get_hybrid_trap_densities_along_harmonic_axis( 
+                                                                    my_measurement, my_run, first_state_index = first_state_index, 
+                                                                    second_state_index = second_state_index, autocut = autocut, 
+                                                                    imaging_mode = imaging_mode,
+                                                                    first_stored_density_name = first_stored_density_name, 
+                                                                    second_stored_density_name = second_stored_density_name, 
+                                                                    **get_density_kwargs)
+    axial_trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
+    potentials_first = science_functions.get_li_energy_hz_in_1D_trap(positions_first * 1e-6, axial_trap_freq)
+    potentials_second = science_functions.get_li_energy_hz_in_1D_trap(positions_second * 1e-6, axial_trap_freq)
+    return (potentials_first, densities_first, potentials_second, densities_second)
+    
 
 def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                                     autocut = True, imaging_mode = "polrot", return_sub_energies = False,
@@ -432,26 +449,20 @@ def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1
                                                                     first_stored_density_name = first_stored_density_name, 
                                                                     second_stored_density_name = second_stored_density_name, 
                                                                     **get_density_kwargs)
-    axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
-    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
-    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
-    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
-    top_radius_um = um_per_pixel * axicon_diameter_pix / 2
-    trap_cross_section_um = image_processing_functions.get_hybrid_cross_section_um(top_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
+    trap_cross_section_um = _get_hybrid_cross_section_um(my_measurement)
     trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
-    #Autocut False because it's already been done...
     average_energy_first = science_functions.get_hybrid_trap_average_energy(positions_first, densities_first, trap_cross_section_um,
-                                                                            trap_freq, autocut = False) 
+                                                                            trap_freq) 
     counts_first = trapezoid(trap_cross_section_um * densities_first, x = positions_first)
     average_energy_second = science_functions.get_hybrid_trap_average_energy(positions_second, densities_second, trap_cross_section_um,
-                                                                            trap_freq, autocut = False) 
+                                                                            trap_freq) 
     counts_second = trapezoid(trap_cross_section_um * densities_second, x = positions_second)
     overall_average_energy = (average_energy_first * counts_first + average_energy_second * counts_second) / (counts_first + counts_second)
     if return_sub_energies:
         return (overall_average_energy, average_energy_first, average_energy_second) 
     else:
         return overall_average_energy
-
+    
 
 #BOX TRAP
 
@@ -531,14 +542,10 @@ def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_sto
         counts_first, counts_second = get_atom_counts_top_AB_abs(my_measurement, my_run, first_stored_density_name = first_stored_density_name, 
                                                                  second_stored_density_name = second_stored_density_name, 
                                                                  **get_density_kwargs)
-    axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     box_length_pix = my_measurement.experiment_parameters["box_length_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     box_length_um = box_length_pix * um_per_pixel
-    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
-    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
-    box_radius_um = um_per_pixel * axicon_diameter_pix / 2
-    cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
+    cross_section_um = _get_hybrid_cross_section_um(my_measurement)
     first_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_first, cross_section_um, box_length_um)
     second_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_second, cross_section_um, box_length_um)
     return (first_fermi_energy_hz, second_fermi_energy_hz)
@@ -721,6 +728,16 @@ def _load_densities_polrot(my_measurement, my_run, first_stored_density_name, se
         atom_density_first = my_run.analysis_results[first_stored_density_name]
         atom_density_second = my_run.analysis_results[second_stored_density_name]
     return (atom_density_first, atom_density_second)
+
+
+def _get_hybrid_cross_section_um(my_measurement):
+    axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
+    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
+    box_radius_um = um_per_pixel * axicon_diameter_pix / 2
+    cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
+    return cross_section_um
 
 
 
