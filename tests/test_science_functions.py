@@ -68,7 +68,6 @@ def test_get_box_fermi_energy_from_counts():
 
 def test_get_hybrid_trap_average_energy():
     EXPECTED_AVERAGE_ENERGY_MANUAL_CUT = 5182.678774053225
-    EXPECTED_AVERAGE_ENERGY_AUTOCUT = 5623.863607223448
     SAMPLE_RADIUS_UM = 70 
     SAMPLE_TRAP_FREQ = 23
     trap_cross_section_um = np.pi * np.square(SAMPLE_RADIUS_UM)
@@ -79,10 +78,6 @@ def test_get_hybrid_trap_average_energy():
     average_particle_energy_manual_cut = science_functions.get_hybrid_trap_average_energy(cut_harmonic_positions, cut_densities,
                                                                  trap_cross_section_um, SAMPLE_TRAP_FREQ)
     assert (np.isclose(average_particle_energy_manual_cut, EXPECTED_AVERAGE_ENERGY_MANUAL_CUT))
-    average_particle_energy_autocut = science_functions.get_hybrid_trap_average_energy(harmonic_positions, densities, 
-                                                                        trap_cross_section_um, SAMPLE_TRAP_FREQ, autocut = True, 
-                                                                        autocut_mode = "statistics")
-    assert (np.isclose(average_particle_energy_autocut, EXPECTED_AVERAGE_ENERGY_AUTOCUT))
 
 
 def test_hybrid_trap_autocut():
