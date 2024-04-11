@@ -6,9 +6,7 @@ from scipy.interpolate import interp1d
 from scipy.special import erf, erfinv
 from scipy.signal import argrelextrema
 
-from .science_functions import two_level_system_population_rabi, get_fermi_energy_hz_from_density
-from .statistics_functions import filter_1d_residuals, generalized_bootstrap
-from .eos_functions import ideal_fermi_density_um
+from . import science_functions, statistics_functions, eos_functions
 
 def fit_lorentzian(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None,
                                     filter_outliers = False, report_inliers = False):
@@ -326,7 +324,7 @@ def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_fre
 def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
     omega_rabi = 2 * np.pi * rabi_freq
     detunings = 2 * np.pi * (rf_freqs - center)
-    populations_excited = two_level_system_population_rabi(tau, omega_rabi, detunings)[1]
+    populations_excited = science_functions.two_level_system_population_rabi(tau, omega_rabi, detunings)[1]
     return populations_excited
 
 
@@ -667,7 +665,7 @@ def crop_box(atom_densities, vert_crop_point = 0.5, horiz_crop_point = 0.01, hor
 #Note that the chemical potential is returned in absolute terms; if an additive constant is added to the potentials, the same 
 #constant will be added to the chemical potential.
 def fit_li6_ideal_fermi_density(potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, kBT_Hz_guess = None):
-    return _fit_li6_ideal_fermi_density_helper(
+    return _fit_li6_density_helper(
         li6_ideal_fermi_density, potentials_Hz, densities_um, errors = errors, absolute_mu_0_Hz_guess = absolute_mu_0_Hz_guess, 
         kBT_Hz_guess = kBT_Hz_guess)
 
@@ -676,19 +674,35 @@ def fit_li6_ideal_fermi_density(potentials_Hz, densities_um, errors = None, abso
 #regions of sufficiently high fugacity to go beyond the ideal gas limit. 
 def fit_li6_ideal_fermi_density_with_prefactor(potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, kBT_Hz_guess = None, 
                                                prefactor_guess = 1.0):
-    return _fit_li6_ideal_fermi_density_helper(
+    return _fit_li6_density_helper(
         li6_ideal_fermi_density_with_prefactor, potentials_Hz, densities_um, errors = errors, absolute_mu_0_Hz_guess= absolute_mu_0_Hz_guess, 
         kBT_Hz_guess=kBT_Hz_guess, prefactor_guess=prefactor_guess
     )
 
-def _fit_li6_ideal_fermi_density_helper(function, potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, 
+
+#Ibid above, but with the balanced EOS replacing the spin-polarized EOS
+def fit_li6_balanced_density(potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, kBT_Hz_guess = None):
+    return _fit_li6_density_helper(
+        li6_balanced_density, potentials_Hz, densities_um, errors = errors, absolute_mu_0_Hz_guess = absolute_mu_0_Hz_guess, 
+        kBT_Hz_guess = kBT_Hz_guess)
+
+
+def fit_li6_balanced_density_with_prefactor(potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, kBT_Hz_guess = None, 
+                                               prefactor_guess = 1.0):
+    return _fit_li6_density_helper(
+        li6_balanced_density_with_prefactor, potentials_Hz, densities_um, errors = errors, absolute_mu_0_Hz_guess= absolute_mu_0_Hz_guess, 
+        kBT_Hz_guess=kBT_Hz_guess, prefactor_guess=prefactor_guess
+    )
+
+
+def _fit_li6_density_helper(function, potentials_Hz, densities_um, errors = None, absolute_mu_0_Hz_guess = None, 
                                         kBT_Hz_guess = None, prefactor_guess = None):
     potentials_Hz, densities_um, errors = _numpy_condition_data(potentials_Hz, densities_um, errors = errors)
     potential_minimum = np.min(potentials_Hz)
     if absolute_mu_0_Hz_guess is None:
         #Assume zero temperature fermi gas at maximum density point
         peak_density_um = np.max(densities_um)
-        relative_mu_0_Hz_guess = get_fermi_energy_hz_from_density(peak_density_um * 1e18)
+        relative_mu_0_Hz_guess = science_functions.get_fermi_energy_hz_from_density(peak_density_um * 1e18)
         absolute_mu_0_Hz_guess = relative_mu_0_Hz_guess + potential_minimum
     if kBT_Hz_guess is None: 
         #Assume T/T_F value of 0.5. Inconsistent with above... but useful for getting order of magnitude
@@ -704,10 +718,19 @@ def _fit_li6_ideal_fermi_density_helper(function, potentials_Hz, densities_um, e
 def li6_ideal_fermi_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz):
     local_mu_values = absolute_mu_0_Hz - potentials_Hz
     local_betamu_values = local_mu_values / kBT_Hz 
-    return ideal_fermi_density_um(local_betamu_values, kBT_Hz, species = "6Li")
+    return eos_functions.ideal_fermi_density_um(local_betamu_values, kBT_Hz, species = "6Li")
 
 def li6_ideal_fermi_density_with_prefactor(potentials_Hz, absolute_mu_0_Hz, kBT_Hz, prefactor):
     return prefactor * li6_ideal_fermi_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz)
+
+
+def li6_balanced_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz):
+    local_mu_values = absolute_mu_0_Hz - potentials_Hz
+    local_betamu_values = local_mu_values / kBT_Hz
+    return eos_functions.balanced_density_um(local_betamu_values, kBT_Hz, species = "6Li")
+
+def li6_balanced_density_with_prefactor(potentials_Hz, absolute_mu_0_Hz, kBT_Hz, prefactor):
+    return prefactor * li6_balanced_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz)
 
 
 def _sort_and_deduplicate_xy_data(x_values, y_values):
@@ -767,7 +790,7 @@ def bootstrap_fit_covariance(fit_function, x_data, y_data, popt, n_resamples = 5
         results = curve_fit(fit_function, x_data_array, y_data_array, p0 = popt)
         statistic_popt, _ = results
         return statistic_popt 
-    bootstrap_result = generalized_bootstrap(like_x_y_data_list, fit_statistic, n_resamples = n_resamples, vectorized = False, 
+    bootstrap_result = statistics_functions.generalized_bootstrap(like_x_y_data_list, fit_statistic, n_resamples = n_resamples, vectorized = False, 
                         ignore_errors = ignore_errors, rng_seed = rng_seed)
     if return_full_bootstrap_result:
         return bootstrap_result 
@@ -785,7 +808,7 @@ def _filter_1d_outliers(x_values, y_values, fitting_func, popt, alpha = 1e-4):
     num_params = len(popt)
     fit_values = fitting_func(x_values, *popt)
     residuals = y_values - fit_values
-    return filter_1d_residuals(residuals, num_params)
+    return statistics_functions.filter_1d_residuals(residuals, num_params)
 
 
 
