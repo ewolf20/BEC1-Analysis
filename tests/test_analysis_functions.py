@@ -922,7 +922,8 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
         "axicon_tilt_deg":0.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
-        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "axial_trap_frequency_hz":E_DUMMY
     }
     run_param_values = {
         "ImagFreq1":0.0, 
@@ -967,58 +968,18 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
                                                                             second_stored_density_name = "densities_3")
         _, hybrid_integrated_density_autocropped, _, _ = hybrid_integrated_values_autocropped 
         assert np.all(np.isclose(hybrid_integrated_density_autocropped, expected_hybrid_integrated_densities_autocropped, rtol = 1e-3, atol = 1e-4))
-    finally:
-        shutil.rmtree(measurement_pathname)
-
-
-def test_get_hybrid_trap_potentials_and_densities_along_harmonic_axis():
-    hf_atom_density_experiment_param_values = {
-        "state_1_unitarity_res_freq_MHz": 0.0,
-        "state_3_unitarity_res_freq_MHz":0.0,
-        "hf_lock_unitarity_resonance_value":0.0,
-        "hf_lock_setpoint":0.0,
-        "hf_lock_frequency_multiplier":1.0,
-        "li_top_sigma_multiplier":1.0,
-        "li_hf_freq_multiplier":1.0,
-        "top_um_per_pixel":SQRT_2_DUMMY, 
-        "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
-        "axicon_side_aspect_ratio":1.0, 
-        "axicon_side_angle_deg":0.0,
-        "axial_trap_frequency_hz":E_DUMMY,
-        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH
-    }
-    run_param_values = {
-        "ImagFreq1":0.0, 
-        "ImagFreq2":0.0
-    }
-    hybrid_sample_image = get_hybrid_sample_absorption_image()
-    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
-    try:
-        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
-                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
-                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
-        #Test and compare gettting vs. storing the densities 
-        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
-        hybrid_positions_and_densities_stored = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, 
-                                                                            imaging_mode = "abs", autocut = False,  
+        #Also check that the potential return option works
+        hybrid_values_potential_returned =analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", autocut = False, return_potentials = True, 
                                                                             first_stored_density_name = "densities_1", 
                                                                             second_stored_density_name = "densities_3")
-        positions_1, expected_densities_1, positions_2, expected_densities_2 = hybrid_positions_and_densities_stored
-        trap_freq = hf_atom_density_experiment_param_values["axial_trap_frequency_hz"]
-        expected_potentials_1 = science_functions.get_li_energy_hz_in_1D_trap(positions_1 * 1e-6, trap_freq)
-        expected_potentials_2 = science_functions.get_li_energy_hz_in_1D_trap(positions_2 * 1e-6, trap_freq)
-        extracted_potentials_1, extracted_densities_1, extracted_potentials_2, extracted_densities_2 = (
-            analysis_functions.get_hybrid_trap_potentials_and_densities_along_harmonic_axis(
-                my_measurement, my_run, imaging_mode = "abs", autocut = False, first_stored_density_name = "densities_1", 
-                second_stored_density_name = "densities_3"
-            ))
-        assert np.all(np.isclose(expected_potentials_1, extracted_potentials_1))
-        assert np.all(np.isclose(expected_potentials_2, extracted_potentials_2))
-        assert np.all(np.isclose(expected_densities_1, extracted_densities_1))
-        assert np.all(np.isclose(expected_densities_2, extracted_densities_2))
+        _, hybrid_integrated_potentials, *_ = hybrid_values_potential_returned
+        expected_hybrid_integrated_potentials = science_functions.get_li_energy_hz_in_1D_trap(hybrid_integrated_positions * 1e-6,
+                                                        hf_atom_density_experiment_param_values["axial_trap_frequency_hz"])
+        assert np.all(np.isclose(hybrid_integrated_potentials, expected_hybrid_integrated_potentials))
     finally:
         shutil.rmtree(measurement_pathname)
+
 
 def test_get_hybrid_trap_average_energy():
     hf_atom_density_experiment_param_values = {
@@ -1116,14 +1077,9 @@ def test_get_hybrid_trap_compressibilities():
                                                         run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
                                                         ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
         my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
-        potentials_1, densities_1, potentials_2, densities_2 = (
-            analysis_functions.get_hybrid_trap_potentials_and_densities_along_harmonic_axis(
-                my_measurement, my_run, imaging_mode = "abs", autocut = False, first_stored_density_name = "densities_1", 
-                second_stored_density_name = "densities_3"
-            ))
-        positions_1, _, positions_2, _ = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(
-                my_measurement, my_run, imaging_mode = "abs", autocut = False, first_stored_density_name = "densities_1", 
-                second_stored_density_name = "densities_3"
+        positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2 = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(
+                my_measurement, my_run, imaging_mode = "abs", autocut = False, return_potentials = True,
+                first_stored_density_name = "densities_1", second_stored_density_name = "densities_3"
             )
         
         TEST_WINDOW_SIZE = 15

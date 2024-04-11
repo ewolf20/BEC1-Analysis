@@ -399,7 +399,8 @@ def get_atom_counts_top_polrot(my_measurement, my_run, first_stored_density_name
 
 def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
                                                   first_stored_density_name = None, second_stored_density_name = None, 
-                                                  imaging_mode = "polrot", **get_density_kwargs):
+                                                  imaging_mode = "polrot", return_positions = True, return_potentials = False, 
+                                                    **get_density_kwargs):
     atom_density_first, atom_density_second = _load_densities_top_double(
                                                 my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                 imaging_mode, **get_density_kwargs)
@@ -420,23 +421,22 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocu
         second_start_index, second_stop_index = science_functions.hybrid_trap_autocut(densities_second) 
         positions_second = positions_second[second_start_index:second_stop_index] 
         densities_second = densities_second[second_start_index:second_stop_index]
-    return (positions_first, densities_first, positions_second, densities_second)
-    
 
-def get_hybrid_trap_potentials_and_densities_along_harmonic_axis(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                                    autocut = False, imaging_mode = "polrot",
-                                    first_stored_density_name = None, second_stored_density_name = None, **get_density_kwargs):
-    positions_first, densities_first, positions_second, densities_second = get_hybrid_trap_densities_along_harmonic_axis( 
-                                                                    my_measurement, my_run, first_state_index = first_state_index, 
-                                                                    second_state_index = second_state_index, autocut = autocut, 
-                                                                    imaging_mode = imaging_mode,
-                                                                    first_stored_density_name = first_stored_density_name, 
-                                                                    second_stored_density_name = second_stored_density_name, 
-                                                                    **get_density_kwargs)
     axial_trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
     potentials_first = science_functions.get_li_energy_hz_in_1D_trap(positions_first * 1e-6, axial_trap_freq)
     potentials_second = science_functions.get_li_energy_hz_in_1D_trap(positions_second * 1e-6, axial_trap_freq)
-    return (potentials_first, densities_first, potentials_second, densities_second)
+
+    first_return_list = []
+    second_return_list = []
+    if return_positions:
+        first_return_list.append(positions_first)
+        second_return_list.append(positions_second)
+    if return_potentials:
+        first_return_list.append(potentials_first)
+        second_return_list.append(potentials_second)
+    first_return_list.append(densities_first)
+    second_return_list.append(densities_second)
+    return (*first_return_list, *second_return_list)
     
 
 def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
@@ -468,10 +468,11 @@ def get_hybrid_trap_compressibilities(my_measurement, my_run, first_state_index 
                                     autocut = False, imaging_mode = "polrot", return_errors = False, return_positions = False, 
                                     return_potentials = True, window_size = 21, first_stored_density_name = None,
                                       second_stored_density_name = None, **get_density_kwargs):
-    positions_1, densities_1, positions_2, densities_2 = get_hybrid_trap_densities_along_harmonic_axis( 
+    positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2 = get_hybrid_trap_densities_along_harmonic_axis( 
                                                                     my_measurement, my_run, first_state_index = first_state_index, 
                                                                     second_state_index = second_state_index, autocut = autocut, 
                                                                     imaging_mode = imaging_mode,
+                                                                    return_potentials = True, return_positions = True,
                                                                     first_stored_density_name = first_stored_density_name, 
                                                                     second_stored_density_name = second_stored_density_name, 
                                                                     **get_density_kwargs)
