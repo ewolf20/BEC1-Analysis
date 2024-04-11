@@ -464,6 +464,64 @@ def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1
         return overall_average_energy
     
 
+def get_hybrid_trap_compressibilities(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+                                    autocut = False, imaging_mode = "polrot", return_errors = False, return_positions = False, 
+                                    return_potentials = True, window_size = 21, first_stored_density_name = None,
+                                      second_stored_density_name = None, **get_density_kwargs):
+    positions_1, densities_1, positions_2, densities_2 = get_hybrid_trap_densities_along_harmonic_axis( 
+                                                                    my_measurement, my_run, first_state_index = first_state_index, 
+                                                                    second_state_index = second_state_index, autocut = autocut, 
+                                                                    imaging_mode = imaging_mode,
+                                                                    first_stored_density_name = first_stored_density_name, 
+                                                                    second_stored_density_name = second_stored_density_name, 
+                                                                    **get_density_kwargs)
+    trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
+    potentials_1 = science_functions.get_li_energy_hz_in_1D_trap(positions_1 * 1e-6, trap_freq)
+    index_breakpoints_1 = np.arange(0, len(potentials_1), window_size)
+    energy_midpoints_1 = (potentials_1[index_breakpoints_1][:-1] + potentials_1[index_breakpoints_1 - 1][1:]) / 2.0
+    position_midpoints_1 = (positions_1[index_breakpoints_1][:-1] + positions_1[index_breakpoints_1 - 1][1:]) / 2.0
+
+    potentials_2 = science_functions.get_li_energy_hz_in_1D_trap(positions_2 * 1e-6, trap_freq)
+    index_breakpoints_2 = np.arange(0, len(potentials_2), window_size)
+    energy_midpoints_2 = (potentials_2[index_breakpoints_2][:-1] + potentials_2[index_breakpoints_2 - 1][1:]) / 2.0
+    position_midpoints_2 = (positions_2[index_breakpoints_2][:-1] + positions_1[index_breakpoints_2 - 1][1:]) / 2.0
+    compressibility_result_1 = science_functions.get_hybrid_trap_compressibilities_window_fit(
+        potentials_1, densities_1, index_breakpoints_1, return_errors = return_errors
+    )
+
+    compressibility_result_2 = science_functions.get_hybrid_trap_compressibilities_window_fit(
+        potentials_2, densities_2, index_breakpoints_2, return_errors = return_errors
+    )
+
+    return_list_1 = [] 
+    if return_errors:
+        compressibility_1, error_1 = compressibility_result_1
+        return_list_1.append(compressibility_1)
+        return_list_1.append(error_1) 
+    else:
+        compressibility_1 = compressibility_result_1
+        return_list_1.append(compressibility_1)
+    if return_positions:
+        return_list_1.append(position_midpoints_1)
+    if return_potentials:
+        return_list_1.append(energy_midpoints_1)
+    return_list_2 = []
+    if return_errors:
+        compressibility_2, error_2 = compressibility_result_2
+        return_list_2.append(compressibility_2)
+        return_list_2.append(error_2) 
+    else:
+        compressibility_2 = compressibility_result_2
+        return_list_2.append(compressibility_2)
+    if return_positions:
+        return_list_2.append(position_midpoints_2)
+    if return_potentials:
+        return_list_2.append(energy_midpoints_2)
+    return (*return_list_1, *return_list_2)
+
+    
+    
+
 #BOX TRAP
 
 """

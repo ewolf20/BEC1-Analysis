@@ -120,16 +120,15 @@ def get_hybrid_trap_compressibilities_savgol(harmonic_trap_positions_um, three_d
     return compressibilities
 
 #TODO: Speed up this unintelligent for loop implementation with numpy syntax
-def get_hybrid_trap_compressibilities_window_fit(potentials_hz, three_d_density_trap_profile_um, energy_breakpoints_hz, 
+def get_hybrid_trap_compressibilities_window_fit(potentials_hz, three_d_density_trap_profile_um, breakpoint_indices, 
                                                  return_errors = False, polyorder = 2):
     fermi_energies = get_fermi_energy_hz_from_density(three_d_density_trap_profile_um * 1e18)
     compressibilities_list = []
     errors_list = []
-    for lower_breakpoint, upper_breakpoint in zip(energy_breakpoints_hz[:-1], energy_breakpoints_hz[1:]):
-        included_indices = np.logical_and(potentials_hz >= lower_breakpoint, potentials_hz < upper_breakpoint)
-        midpoint = (lower_breakpoint + upper_breakpoint) / 2.0
-        included_potentials = potentials_hz[included_indices] 
-        included_fermi_energies = fermi_energies[included_indices]
+    for lower_breakpoint_index, upper_breakpoint_index in zip(breakpoint_indices[:-1], breakpoint_indices[1:]):
+        included_potentials = potentials_hz[lower_breakpoint_index:upper_breakpoint_index] 
+        midpoint = (included_potentials[0] + included_potentials[-1]) / 2.0
+        included_fermi_energies = fermi_energies[lower_breakpoint_index:upper_breakpoint_index]
         coeffs, pcov = np.polyfit(included_potentials - midpoint, included_fermi_energies, polyorder, cov = True)
         _, lin_sigma, _ = np.sqrt(np.diag(pcov))
         _, lin_coeff, _ = coeffs 

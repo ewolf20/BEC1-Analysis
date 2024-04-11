@@ -135,17 +135,15 @@ def test_get_hybrid_trap_compressibilities_window_fit():
     sample_potentials_hz = science_functions.get_li_energy_hz_in_1D_trap(sample_positions_um * 1e-6, SAMPLE_TRAP_FREQ)
     expected_compressibilities, sample_densities = _generate_sample_compressibilities_and_densities(sample_positions_um, SAMPLE_TRAP_FREQ)
     #Use a simulated ideal fermi distribution
-    energy_breakpoints = sample_potentials_hz[::20]
-    energy_midpoints = (energy_breakpoints[1:] + energy_breakpoints[:-1]) / 2.0
+    breakpoint_indices = np.arange(0, sample_potentials_hz.size, 20)
+    energy_midpoints = (sample_potentials_hz[breakpoint_indices - 1][1:] + sample_potentials_hz[breakpoint_indices][:-1]) / 2.0
     POLYORDER = 2
     extracted_compressibilities = science_functions.get_hybrid_trap_compressibilities_window_fit(sample_potentials_hz, 
-                                                                                sample_densities, energy_breakpoints, 
+                                                                                sample_densities, breakpoint_indices, 
                                                                                 polyorder = POLYORDER)
-    for energy_midpoint, extracted_compressibility in zip(energy_midpoints, extracted_compressibilities):
-        closest_energy_index = np.argmin(np.abs(sample_potentials_hz - energy_midpoint))
-        closest_compressibility = expected_compressibilities[closest_energy_index] 
-        assert np.isclose(closest_compressibility, extracted_compressibility, rtol = 1e-3)
-    
+
+    interpolated_expected_compressibilities = np.interp(energy_midpoints, sample_potentials_hz, expected_compressibilities)
+    assert np.all(np.isclose(interpolated_expected_compressibilities, extracted_compressibilities, rtol = 1e-3))
 
 def test_get_li6_br_energy_MHz():
     sample_field_G = 690
