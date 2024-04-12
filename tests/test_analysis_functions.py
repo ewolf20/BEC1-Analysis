@@ -1114,6 +1114,94 @@ def test_get_hybrid_trap_compressibilities():
     finally:
         shutil.rmtree(measurement_pathname)
 
+
+def test_get_axial_squish_densities_along_harmonic_axis():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "axial_trap_frequency_hz":E_DUMMY,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "hybrid_trap_center_pix_polrot":255,
+        "axial_gradient_hz_per_um_V":SQRT_5_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0,
+        "Axial_Squish_Imaging_Grad_V":SQRT_7_DUMMY
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        densities_1, densities_2 = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(
+                my_measurement, my_run, imaging_mode = "abs", autocut = False, return_positions = False,
+                first_stored_density_name = "densities_1", second_stored_density_name = "densities_3"
+            )
+        
+        #First test without autocutting
+        expected_uncut_indices = np.arange(len(densities_1))
+        absolute_harmonic_center = my_measurement.experiment_parameters["hybrid_trap_center_pix_polrot"]
+        _, ymin, *_ = my_measurement.measurement_parameters["ROI"]
+        relative_harmonic_center = absolute_harmonic_center - ymin
+        expected_uncut_referenced_index_positions = expected_uncut_indices - relative_harmonic_center
+        expected_uncut_positions = expected_uncut_referenced_index_positions * my_measurement.experiment_parameters["top_um_per_pixel"]
+        gradient_potential = (expected_uncut_positions *
+                 my_measurement.experiment_parameters["axial_gradient_hz_per_um_V"] * my_run.parameters["Axial_Squish_Imaging_Grad_V"])
+        trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
+        harmonic_potential = science_functions.get_li_energy_hz_in_1D_trap(expected_uncut_positions * 1e-6, trap_freq)
+        expected_uncut_potential = gradient_potential + harmonic_potential
+
+        (uncut_positions_1, uncut_potentials_1, uncut_densities_1,
+         uncut_positions_2, uncut_potentials_2, uncut_densities_2) = analysis_functions.get_axial_squish_densities_along_harmonic_axis(
+                                                        my_measurement, my_run, autocut = False, return_positions = True, return_potentials = True, 
+                                                        first_stored_density_name = "densities_1", second_stored_density_name = "densities_3")
+        assert np.all(np.isclose(uncut_positions_1, expected_uncut_positions))
+        assert np.all(np.isclose(uncut_potentials_1, expected_uncut_potential))
+        assert np.all(np.isclose(uncut_densities_1, densities_1))
+        assert np.all(np.isclose(uncut_positions_2, expected_uncut_positions))
+        assert np.all(np.isclose(uncut_potentials_2, expected_uncut_potential))
+        assert np.all(np.isclose(uncut_densities_2, densities_2))
+
+        #Now test with autocutting, just the densities
+        HARDCODED_LOWER_CUT_BUFFER = 5
+        expected_low_cut_index = np.argmax(densities_1) + HARDCODED_LOWER_CUT_BUFFER
+        _, expected_high_cut_index_1 = science_functions.hybrid_trap_autocut(densities_1)
+        _, expected_high_cut_index_2 = science_functions.hybrid_trap_autocut(densities_2)
+        expected_autocut_densities_1 = densities_1[expected_low_cut_index:expected_high_cut_index_1]
+        expected_autocut_densities_2 = densities_2[expected_low_cut_index:expected_high_cut_index_2] 
+        expected_autocut_potentials_1 = expected_uncut_potential[expected_low_cut_index:expected_high_cut_index_1]
+        expected_autocut_potentials_2 = expected_uncut_potential[expected_low_cut_index:expected_high_cut_index_2]
+        expected_autocut_positions_1 = expected_uncut_positions[expected_low_cut_index:expected_high_cut_index_1] 
+        expected_autocut_positions_2 = expected_uncut_positions[expected_low_cut_index:expected_high_cut_index_2]
+        (cut_positions_1, cut_potentials_1, cut_densities_1,
+         cut_positions_2, cut_potentials_2, cut_densities_2) = analysis_functions.get_axial_squish_densities_along_harmonic_axis(
+                                                        my_measurement, my_run, autocut = True, return_positions = True, return_potentials = True, 
+                                                        first_stored_density_name = "densities_1", second_stored_density_name = "densities_3")
+        assert np.all(np.isclose(cut_positions_1, expected_autocut_positions_1))
+        assert np.all(np.isclose(cut_potentials_1, expected_autocut_potentials_1))
+        assert np.all(np.isclose(cut_densities_1, expected_autocut_densities_1))
+        assert np.all(np.isclose(cut_positions_2, expected_autocut_positions_2))
+        assert np.all(np.isclose(cut_potentials_2, expected_autocut_potentials_2))
+        assert np.all(np.isclose(cut_densities_2, expected_autocut_densities_2))
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
+
+
 def test_get_box_shake_fourier_amplitudes():
     hf_atom_density_experiment_param_values = {
         "state_1_unitarity_res_freq_MHz": 0.0,

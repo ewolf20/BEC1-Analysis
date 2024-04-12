@@ -520,7 +520,61 @@ def get_hybrid_trap_compressibilities(my_measurement, my_run, first_state_index 
         return_list_2.append(energy_midpoints_2)
     return (*return_list_1, *return_list_2)
 
-    
+
+def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
+                                                  first_stored_density_name = None, second_stored_density_name = None, 
+                                                  imaging_mode = "polrot", return_positions = False, return_potentials = True, 
+                                                    **get_density_kwargs):
+    densities_first, densities_second = get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
+                                        first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
+                                        imaging_mode = imaging_mode, return_positions = False, return_potentials = False, 
+                                        **get_density_kwargs)
+    index_positions = np.arange(len(densities_first)) 
+    absolute_hybrid_center_index = my_measurement.experiment_parameters["hybrid_trap_center_pix_polrot"]
+    _, roi_ymin, *_ = my_measurement.measurement_parameters["ROI"]
+    relative_hybrid_center_index = absolute_hybrid_center_index - roi_ymin
+    center_referenced_index_positions = index_positions - relative_hybrid_center_index
+    center_referenced_positions_um = center_referenced_index_positions * my_measurement.experiment_parameters["top_um_per_pixel"]
+    trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
+    harmonic_potential = science_functions.get_li_energy_hz_in_1D_trap(center_referenced_positions_um * 1e-6, trap_freq)
+    gradient_voltage = my_run.parameters["Axial_Squish_Imaging_Grad_V"]
+    gradient_voltage_to_Hz_um = my_measurement.experiment_parameters["axial_gradient_hz_per_um_V"]
+    gradient_Hz_um = gradient_voltage * gradient_voltage_to_Hz_um 
+    gradient_potential = center_referenced_positions_um * gradient_Hz_um 
+    overall_potential = gradient_potential + harmonic_potential
+    if autocut:
+        #Lower cut is done at majority cloud max density, upper cut as for the hybrid trap 
+        if np.sum(densities_first) > np.sum(densities_second):
+            majority_densities = densities_first 
+        else:
+            majority_densities = densities_second 
+        LOWER_CUT_BUFFER = 5
+        lower_cut_index = np.argmax(majority_densities) + LOWER_CUT_BUFFER
+        _, upper_cut_index_1 = science_functions.hybrid_trap_autocut(densities_first)
+        _, upper_cut_index_2 = science_functions.hybrid_trap_autocut(densities_second)
+        densities_first = densities_first[lower_cut_index:upper_cut_index_1] 
+        densities_second = densities_second[lower_cut_index:upper_cut_index_2] 
+        potentials_first = overall_potential[lower_cut_index:upper_cut_index_1] 
+        potentials_second = overall_potential[lower_cut_index:upper_cut_index_2] 
+        positions_first = center_referenced_positions_um[lower_cut_index:upper_cut_index_1] 
+        positions_second = center_referenced_positions_um[lower_cut_index:upper_cut_index_2]
+    else:
+        potentials_first = overall_potential
+        potentials_second = overall_potential
+        positions_first = center_referenced_positions_um 
+        positions_second = center_referenced_positions_um
+    return_list_1 = [] 
+    return_list_2 = [] 
+    if return_positions:
+        return_list_1.append(positions_first) 
+        return_list_2.append(positions_second)
+    if return_potentials:
+        return_list_1.append(potentials_first) 
+        return_list_2.append(potentials_second)
+    return_list_1.append(densities_first)
+    return_list_2.append(densities_second)
+    return (*return_list_1, *return_list_2)
+
     
 
 #BOX TRAP

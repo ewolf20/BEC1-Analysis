@@ -144,10 +144,6 @@ def get_hybrid_trap_compressibilities_window_fit(potentials_hz, three_d_density_
         return compressibilities
 
 
-
-
-
-
     
 
 def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
