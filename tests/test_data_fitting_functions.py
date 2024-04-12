@@ -390,6 +390,50 @@ def test_fit_li6_ideal_fermi_density_with_prefactor():
     assert np.all(np.isclose(offset_popt, expected_offset_popt))
 
 
+
+def test_fit_li6_balanced_density():
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    potential_values = np.linspace(0, 1500, num = len(normal_randoms)) 
+    MU_0_VALUE = 800
+    kBT_VALUE = 200
+    local_mu_values = MU_0_VALUE - potential_values 
+    local_betamu_values = local_mu_values / kBT_VALUE
+    noise_free_densities = eos_functions.balanced_density_um(local_betamu_values, kBT_VALUE)
+    noisy_densities = noise_free_densities * (1.0 + 0.05 * normal_randoms) 
+    fit_results = data_fitting_functions.fit_li6_balanced_density(potential_values, noisy_densities)
+    popt, pcov = fit_results
+    EXPECTED_POPT = np.array([797.4867, 196.17915])
+    assert np.all(np.isclose(popt, EXPECTED_POPT))
+    POTENTIAL_OFFSET = 3141
+    offset_potential_values = potential_values + POTENTIAL_OFFSET
+    fit_results_offset = data_fitting_functions.fit_li6_balanced_density(offset_potential_values, noisy_densities)
+    offset_popt, offset_pcov = fit_results_offset 
+    expected_offset_popt = EXPECTED_POPT + np.array([POTENTIAL_OFFSET, 0.0])
+    assert np.all(np.isclose(offset_popt, expected_offset_popt))
+
+
+def test_fit_li6_balanced_density_with_prefactor():
+    normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
+    potential_values = np.linspace(0, 1500, num = len(normal_randoms)) 
+    MU_0_VALUE = 1000
+    kBT_VALUE = 250
+    PREFACTOR_VALUE = 1.5
+    local_mu_values = MU_0_VALUE - potential_values 
+    local_betamu_values = local_mu_values / kBT_VALUE
+    noise_free_densities = PREFACTOR_VALUE * eos_functions.balanced_density_um(local_betamu_values, kBT_VALUE)
+    noisy_densities = noise_free_densities * (1.0 + 0.01 * normal_randoms) 
+    fit_results = data_fitting_functions.fit_li6_balanced_density_with_prefactor(potential_values, noisy_densities)
+    popt, pcov = fit_results
+    EXPECTED_POPT = np.array([1001.1053, 251.1914, 1.4951678])
+    assert np.all(np.isclose(popt, EXPECTED_POPT))
+    POTENTIAL_OFFSET = 3141
+    offset_potential_values = potential_values + POTENTIAL_OFFSET
+    fit_results_offset = data_fitting_functions.fit_li6_balanced_density_with_prefactor(offset_potential_values, noisy_densities)
+    offset_popt, offset_pcov = fit_results_offset 
+    expected_offset_popt = EXPECTED_POPT + np.array([POTENTIAL_OFFSET, 0.0, 0.0])
+    assert np.all(np.isclose(offset_popt, expected_offset_popt))
+
+
 def test_bootstrap_fit_covariance():
     RNG_SEED = 1337
     NUM_SAMPLES = 500
