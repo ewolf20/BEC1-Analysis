@@ -538,7 +538,7 @@ def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autoc
     trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
     harmonic_potential = science_functions.get_li_energy_hz_in_1D_trap(center_referenced_positions_um * 1e-6, trap_freq)
     gradient_voltage = my_run.parameters["Axial_Squish_Imaging_Grad_V"]
-    gradient_voltage_to_Hz_um = my_measurement.experiment_parameters["axial_gradient_hz_per_um_V"]
+    gradient_voltage_to_Hz_um = my_measurement.experiment_parameters["axial_gradient_Hz_per_um_V"]
     gradient_Hz_um = gradient_voltage * gradient_voltage_to_Hz_um 
     gradient_potential = center_referenced_positions_um * gradient_Hz_um 
     overall_potential = gradient_potential + harmonic_potential

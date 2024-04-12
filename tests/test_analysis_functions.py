@@ -1132,7 +1132,7 @@ def test_get_axial_squish_densities_along_harmonic_axis():
         "axial_trap_frequency_hz":E_DUMMY,
         "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
         "hybrid_trap_center_pix_polrot":255,
-        "axial_gradient_hz_per_um_V":SQRT_5_DUMMY
+        "axial_gradient_Hz_per_um_V":SQRT_5_DUMMY
     }
     run_param_values = {
         "ImagFreq1":0.0, 
