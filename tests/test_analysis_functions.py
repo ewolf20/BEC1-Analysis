@@ -1159,7 +1159,7 @@ def test_get_axial_squish_densities_along_harmonic_axis():
         expected_uncut_referenced_index_positions = expected_uncut_indices - relative_harmonic_center
         expected_uncut_positions = expected_uncut_referenced_index_positions * my_measurement.experiment_parameters["top_um_per_pixel"]
         gradient_potential = (expected_uncut_positions *
-                 my_measurement.experiment_parameters["axial_gradient_hz_per_um_V"] * my_run.parameters["Axial_Squish_Imaging_Grad_V"])
+                 my_measurement.experiment_parameters["axial_gradient_Hz_per_um_V"] * my_run.parameters["Axial_Squish_Imaging_Grad_V"])
         trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
         harmonic_potential = science_functions.get_li_energy_hz_in_1D_trap(expected_uncut_positions * 1e-6, trap_freq)
         expected_uncut_potential = gradient_potential + harmonic_potential
@@ -1199,6 +1199,90 @@ def test_get_axial_squish_densities_along_harmonic_axis():
     finally:
         shutil.rmtree(measurement_pathname)
 
+
+def test_get_balanced_axial_squish_fitted_mu_and_T():
+    _mu_and_T_fit_test_helper(analysis_functions.get_balanced_axial_squish_fitted_mu_and_T, 
+                              data_fitting_functions.fit_li6_balanced_density, 
+                              data_fitting_functions.fit_li6_balanced_density_with_prefactor)
+    
+def test_get_imbalanced_axial_squish_fitted_mu_and_T():
+    _mu_and_T_fit_test_helper(analysis_functions.get_imbalanced_axial_squish_fitted_mu_and_T, 
+                              data_fitting_functions.fit_li6_ideal_fermi_density, 
+                              data_fitting_functions.fit_li6_ideal_fermi_density_with_prefactor)
+
+
+def _mu_and_T_fit_test_helper(tested_analysis_function, fit_function, fit_function_with_prefactor):
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "axial_trap_frequency_hz":E_DUMMY,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "hybrid_trap_center_pix_polrot":255,
+        "axial_gradient_Hz_per_um_V":SQRT_5_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0,
+        "Axial_Squish_Imaging_Grad_V":SQRT_7_DUMMY
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        #Zero out densities 3 so that logic also works for imbalanced fitting
+        my_run.analysis_results["densities_3"] = np.zeros(my_run.analysis_results["densities_1"].shape)
+        #Obtain expected densities as cut by autocut
+        potentials_1, densities_1, potentials_2, densities_2 = analysis_functions.get_axial_squish_densities_along_harmonic_axis(
+                my_measurement, my_run, imaging_mode = "abs", autocut = True, return_positions = False,
+                first_stored_density_name = "densities_1", second_stored_density_name = "densities_3"
+            )
+        #Fit will be terrible, but just check logic
+        expected_fit_results_no_prefactor = fit_function(potentials_1, densities_1)
+        no_prefactor_popt, no_prefactor_pcov = expected_fit_results_no_prefactor
+        expected_mu_np, expected_T_np = no_prefactor_popt
+        expected_mu_error_np, expected_T_error_np = np.sqrt(np.diag(no_prefactor_pcov))
+
+
+        expected_fit_results_with_prefactor = fit_function_with_prefactor(potentials_1, densities_1)
+        with_prefactor_popt, with_prefactor_pcov = expected_fit_results_with_prefactor
+        expected_mu_wp, expected_T_wp, expected_prefactor = with_prefactor_popt
+        expected_mu_error_wp, expected_T_error_wp, expected_prefactor_error = np.sqrt(np.diag(with_prefactor_pcov))
+
+        #Now get the returns from the function itself
+        extracted_mu_np, extracted_T_np, extracted_mu_error_np, extracted_T_error_np = tested_analysis_function(
+            my_measurement, my_run, fit_prefactor = False, return_errors = True, first_stored_density_name = "densities_1", 
+            second_stored_density_name = "densities_3"
+        )
+        assert np.isclose(extracted_mu_np, expected_mu_np)
+        assert np.isclose(extracted_mu_error_np, expected_mu_error_np)
+        assert np.isclose(extracted_T_np, expected_T_np)
+        assert np.isclose(extracted_T_error_np, expected_T_error_np)
+        (extracted_mu_wp, extracted_T_wp, extracted_prefactor, extracted_mu_error_wp, 
+         extracted_T_error_wp, extracted_prefactor_error) = tested_analysis_function(
+            my_measurement, my_run, fit_prefactor = True, return_errors = True, first_stored_density_name = "densities_1", 
+            second_stored_density_name = "densities_3"
+        )
+        assert np.isclose(extracted_mu_wp, expected_mu_wp)
+        assert np.isclose(extracted_mu_error_wp, expected_mu_error_wp)
+        assert np.isclose(extracted_T_wp, expected_T_wp)
+        assert np.isclose(extracted_T_error_wp, expected_T_error_wp)
+        assert np.isclose(extracted_prefactor, expected_prefactor)
+        assert np.isclose(extracted_prefactor_error, expected_prefactor_error)
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 
 

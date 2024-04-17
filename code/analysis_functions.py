@@ -1,3 +1,6 @@
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import trapezoid 
 from scipy import ndimage
@@ -574,6 +577,126 @@ def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autoc
     return_list_1.append(densities_first)
     return_list_2.append(densities_second)
     return (*return_list_1, *return_list_2)
+
+
+def get_balanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, 
+                                                  first_stored_density_name = None, second_stored_density_name = None, 
+                                                  imaging_mode = "polrot", fit_prefactor = False, return_errors = False,
+                                                  show_plots = False, save_plots = False, save_pathname = ".",
+                                                    **get_density_kwargs):
+    #Only one species is important, since the gas is by assumption balanced
+    potentials_1, densities_1, *_ = get_axial_squish_densities_along_harmonic_axis(
+        my_measurement, my_run, autocut = autocut, first_stored_density_name = first_stored_density_name, 
+        second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, 
+        return_positions = False, return_potentials = True, **get_density_kwargs)
+    if fit_prefactor:
+        fit_results = data_fitting_functions.fit_li6_balanced_density_with_prefactor(potentials_1, densities_1)
+    else:
+        fit_results = data_fitting_functions.fit_li6_balanced_density(potentials_1, densities_1)
+    fit_popt, fit_pcov = fit_results 
+    if show_plots or save_plots:
+        run_id = my_run.parameters["id"]
+        plt.plot(potentials_1, densities_1, label = "Data")
+        if not fit_prefactor:
+            mu, T = fit_popt 
+            mu_kHz = mu / 1000 
+            T_kHz = T / 1000
+            plt.plot(potentials_1, data_fitting_functions.li6_balanced_density(potentials_1, *fit_popt), 
+                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz".format(mu_kHz, T_kHz))
+        else:
+            mu, T, prefactor = fit_popt 
+            mu_kHz = mu / 1000 
+            T_kHz = T / 1000
+            plt.plot(potentials_1, data_fitting_functions.li6_balanced_density_with_prefactor(potentials_1, *fit_popt), 
+                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz, Prefactor = {2:.2f}".format(mu_kHz, T_kHz, prefactor))
+        plt.legend()
+        plt.xlabel("Potential (Hz)") 
+        plt.ylabel("Density $\left(\mu m^{-3}\\right)$")
+        plt.suptitle("Balanced Density Fitting, Run ID = {0:d}".format(run_id))
+        if save_plots:
+            figure_name = "{0:d}_Balanced_Squish_Fit.png".format(run_id)
+            full_save_name = os.path.join(save_pathname, figure_name)
+            plt.savefig(full_save_name, bbox_inches = "tight")
+        if show_plots:
+            plt.show()
+        else:
+            plt.cla()
+    if return_errors:
+        errors = np.sqrt(np.diag(fit_pcov))
+        return (*fit_popt, *errors)
+    else:
+        return (*fit_popt,) 
+    
+
+def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, 
+                                                  first_stored_density_name = None, second_stored_density_name = None, 
+                                                  imaging_mode = "polrot", fit_prefactor = False, return_errors = False,
+                                                  show_plots = False, save_plots = False, save_pathname = ".",
+                                                    **get_density_kwargs):
+    potentials_1, densities_1, potentials_2, densities_2 = get_axial_squish_densities_along_harmonic_axis(
+        my_measurement, my_run, autocut = autocut, first_stored_density_name = first_stored_density_name, 
+        second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, 
+        return_positions = False, return_potentials = True, **get_density_kwargs)
+    if np.sum(densities_1) > np.sum(densities_2):
+        majority_densities = densities_1 
+        majority_potentials = potentials_1 
+        minority_potentials = potentials_2 
+        minority_densities = densities_2
+    else:
+        majority_densities = densities_2
+        majority_potentials = potentials_2
+        minority_potentials = potentials_1
+        minority_densities = densities_2
+
+    #If the autocutting hasn't been done yet, it MUST be done on the minority species on the right hand side
+    if not autocut:
+        _, spin_polarized_clip_index = science_functions.hybrid_trap_autocut(minority_densities)
+    else:
+        spin_polarized_clip_index = len(minority_potentials)
+
+    clipped_majority_densities = majority_densities[spin_polarized_clip_index:]
+    clipped_majority_potentials = majority_potentials[spin_polarized_clip_index:]
+
+    if fit_prefactor:
+        fit_results = data_fitting_functions.fit_li6_ideal_fermi_density_with_prefactor(clipped_majority_potentials, clipped_majority_densities)
+    else:
+        fit_results = data_fitting_functions.fit_li6_ideal_fermi_density(clipped_majority_potentials, clipped_majority_densities)
+    fit_popt, fit_pcov = fit_results 
+
+    if show_plots or save_plots:
+        run_id = my_run.parameters["id"]
+        plt.plot(clipped_majority_potentials, clipped_majority_densities, label = "Data")
+        if not fit_prefactor:
+            mu, T = fit_popt 
+            mu_kHz = mu / 1000 
+            T_kHz = T / 1000
+            plt.plot(clipped_majority_potentials, data_fitting_functions.li6_ideal_fermi_density(clipped_majority_potentials, *fit_popt), 
+                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz".format(mu_kHz, T_kHz))
+        else:
+            mu, T, prefactor = fit_popt 
+            mu_kHz = mu / 1000 
+            T_kHz = T / 1000
+            plt.plot(clipped_majority_potentials, data_fitting_functions.li6_ideal_fermi_density_with_prefactor(clipped_majority_potentials, *fit_popt), 
+                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz, Prefactor = {2:.2f}".format(mu_kHz, T_kHz, prefactor))
+        plt.legend()
+        plt.xlabel("Potential (Hz)") 
+        plt.ylabel("Density $\left(\mu m^{-3}\\right)$")
+        plt.suptitle("Ideal Fermi Density Fitting, Run ID = {0:d}".format(run_id))
+        if save_plots:
+            figure_name = "{0:d}_B_Squish_Fit.png".format(run_id)
+            full_save_name = os.path.join(save_pathname, figure_name)
+            plt.savefig(full_save_name, bbox_inches = "tight")
+        if show_plots:
+            plt.show()
+        else:
+            plt.cla()
+
+
+    if return_errors:
+        errors = np.sqrt(np.diag(fit_pcov))
+        return (*fit_popt, *errors)
+    else:
+        return (*fit_popt,)
 
     
 
