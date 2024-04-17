@@ -279,7 +279,6 @@ def test_get_od_pixel_sums_top_double():
     _get_od_pixel_sum_test_helper(type_name, od_pixel_sum_A_split_off)
     _get_od_pixel_sum_test_helper(type_name, od_pixel_sum_B_split_off)
 
-
 li_6_res_cross_section = image_processing_functions._get_res_cross_section_from_species("6Li")
 li_6_linewidth = image_processing_functions._get_linewidth_from_species("6Li")
 
@@ -663,6 +662,48 @@ def test_get_x_integrated_atom_densities_top_double():
 def test_get_y_integrated_atom_densities_top_double():
     _get_integrated_densities_test_helper(analysis_functions.get_y_integrated_atom_densities_top_double, 0) 
 
+
+def test_get_xy_atom_density_pixel_coms_top_double():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0,
+        "hf_lock_setpoint":0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0, 
+        "top_um_per_pixel":E_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    no_stored_density_kwargs = {
+        "imaging_mode":"abs"
+    }
+    box_autocut_image = get_box_autocut_absorption_image()
+    cropped_box_autocut_image = get_box_autocut_absorption_image(crop_to_roi = True)
+    box_autocut_image_stack = generate_image_stack_from_absorption(box_autocut_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = box_autocut_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Box is symmetric, so expected COM is in the middle
+        cropped_image_dimensions = cropped_box_autocut_image.shape 
+        cropped_image_y_len, cropped_image_x_len = cropped_image_dimensions 
+        expected_y_com = (cropped_image_y_len - 1) / 2 
+        expected_x_com = (cropped_image_x_len - 1) / 2
+        #Get the expected atom densities
+        x_com_1, y_com_1, x_com_2, y_com_2 = analysis_functions.get_xy_atom_density_pixel_coms_top_double(my_measurement, my_run, **no_stored_density_kwargs)
+        #Then, do store density
+        assert np.isclose(expected_x_com, x_com_1)
+        assert np.isclose(expected_x_com, x_com_2) 
+        assert np.isclose(expected_y_com, y_com_1) 
+        assert np.isclose(expected_y_com, y_com_2)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
 def _get_atom_counts_test_helper(type_name, function_to_test, experiment_param_values = None, 
                                            run_param_values = None, fun_kwargs = None):
     if fun_kwargs is None:
@@ -881,7 +922,8 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
         "axicon_tilt_deg":0.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
-        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "axial_trap_frequency_hz":E_DUMMY
     }
     run_param_values = {
         "ImagFreq1":0.0, 
@@ -926,8 +968,18 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
                                                                             second_stored_density_name = "densities_3")
         _, hybrid_integrated_density_autocropped, _, _ = hybrid_integrated_values_autocropped 
         assert np.all(np.isclose(hybrid_integrated_density_autocropped, expected_hybrid_integrated_densities_autocropped, rtol = 1e-3, atol = 1e-4))
+        #Also check that the potential return option works
+        hybrid_values_potential_returned =analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", autocut = False, return_potentials = True, 
+                                                                            first_stored_density_name = "densities_1", 
+                                                                            second_stored_density_name = "densities_3")
+        _, hybrid_integrated_potentials, *_ = hybrid_values_potential_returned
+        expected_hybrid_integrated_potentials = science_functions.get_li_energy_hz_in_1D_trap(hybrid_integrated_positions * 1e-6,
+                                                        hf_atom_density_experiment_param_values["axial_trap_frequency_hz"])
+        assert np.all(np.isclose(hybrid_integrated_potentials, expected_hybrid_integrated_potentials))
     finally:
         shutil.rmtree(measurement_pathname)
+
 
 def test_get_hybrid_trap_average_energy():
     hf_atom_density_experiment_param_values = {
@@ -980,8 +1032,7 @@ def test_get_hybrid_trap_average_energy():
         expected_hybrid_integrated_positions = (np.arange(expected_densities_length) - (expected_densities_length - 1) // 2) * um_per_pixel
         expected_average_energy_uncropped = science_functions.get_hybrid_trap_average_energy(
             expected_hybrid_integrated_positions, expected_hybrid_integrated_densities, 
-            box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"], autocut = False
-        )
+            box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"])
         average_energy_uncropped = analysis_functions.get_hybrid_trap_average_energy(my_measurement, my_run, 
                                                                                      autocut = False, 
                                                                                      first_stored_density_name = "densities_1", 
@@ -993,11 +1044,247 @@ def test_get_hybrid_trap_average_energy():
         expected_hybrid_integrated_positions_autocut = expected_hybrid_integrated_positions[autocut_start_index:autocut_stop_index] 
         expected_average_energy_autocut = science_functions.get_hybrid_trap_average_energy(
             expected_hybrid_integrated_positions_autocut, expected_hybrid_integrated_densities_autocut, 
-            box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"], autocut = False
-        )
+            box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"])
         assert np.isclose(expected_average_energy_autocut, average_energy_autocut)
     finally:
         shutil.rmtree(measurement_pathname)
+
+def test_get_hybrid_trap_compressibilities():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "axial_trap_frequency_hz":E_DUMMY,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2 = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(
+                my_measurement, my_run, imaging_mode = "abs", autocut = False, return_potentials = True,
+                first_stored_density_name = "densities_1", second_stored_density_name = "densities_3"
+            )
+        
+        TEST_WINDOW_SIZE = 15
+        expected_index_breakpoints_1 = np.arange(0, len(potentials_1), TEST_WINDOW_SIZE)
+        expected_position_midpoints_1 = (positions_1[expected_index_breakpoints_1][:-1] + positions_1[expected_index_breakpoints_1 - 1][1:]) / 2.0 
+        expected_potential_midpoints_1 = (potentials_1[expected_index_breakpoints_1][:-1] + potentials_1[expected_index_breakpoints_1 - 1][1:]) / 2.0
+        expected_compressibilities_1, expected_errors_1 = science_functions.get_hybrid_trap_compressibilities_window_fit(potentials_1, densities_1, 
+                                                                            expected_index_breakpoints_1, return_errors = True)
+        
+        expected_index_breakpoints_2 = np.arange(0, len(potentials_2), TEST_WINDOW_SIZE)
+        expected_position_midpoints_2 = (positions_2[expected_index_breakpoints_2][:-1] + positions_2[expected_index_breakpoints_2 - 1][1:]) / 2.0 
+        expected_potential_midpoints_2 = (potentials_2[expected_index_breakpoints_2][:-1] + potentials_2[expected_index_breakpoints_2 - 1][1:]) / 2.0
+        expected_compressibilities_2, expected_errors_2 = science_functions.get_hybrid_trap_compressibilities_window_fit(potentials_2, densities_2, 
+                                                                            expected_index_breakpoints_2, return_errors = True)
+
+        (extracted_compressibilities_1, extracted_errors_1, extracted_positions_1,
+          extracted_potentials_1, extracted_compressibilities_2, extracted_errors_2,
+            extracted_positions_2, extracted_potentials_2) = analysis_functions.get_hybrid_trap_compressibilities(my_measurement, my_run, 
+                                                    first_stored_density_name = "densities_1", second_stored_density_name = "densities_3", 
+                                                    return_errors = True, return_positions = True, return_potentials = True, 
+                                                    window_size = TEST_WINDOW_SIZE)
+        assert np.all(np.isclose(extracted_compressibilities_1, expected_compressibilities_1))
+        assert np.all(np.isclose(extracted_errors_1, expected_errors_1))
+        assert np.all(np.isclose(expected_position_midpoints_1, extracted_positions_1))
+        assert np.all(np.isclose(expected_potential_midpoints_1, extracted_potentials_1))
+
+        assert np.all(np.isclose(extracted_compressibilities_2, expected_compressibilities_2))
+        assert np.all(np.isclose(extracted_errors_2, expected_errors_2))
+        assert np.all(np.isclose(expected_position_midpoints_2, extracted_positions_2))
+        assert np.all(np.isclose(expected_potential_midpoints_2, extracted_potentials_2))
+
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
+def test_get_axial_squish_densities_along_harmonic_axis():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "axial_trap_frequency_hz":E_DUMMY,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "hybrid_trap_center_pix_polrot":255,
+        "axial_gradient_Hz_per_um_V":SQRT_5_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0,
+        "Axial_Squish_Imaging_Grad_V":SQRT_7_DUMMY
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        densities_1, densities_2 = analysis_functions.get_hybrid_trap_densities_along_harmonic_axis(
+                my_measurement, my_run, imaging_mode = "abs", autocut = False, return_positions = False,
+                first_stored_density_name = "densities_1", second_stored_density_name = "densities_3"
+            )
+        
+        #First test without autocutting
+        expected_uncut_indices = np.arange(len(densities_1))
+        absolute_harmonic_center = my_measurement.experiment_parameters["hybrid_trap_center_pix_polrot"]
+        _, ymin, *_ = my_measurement.measurement_parameters["ROI"]
+        relative_harmonic_center = absolute_harmonic_center - ymin
+        expected_uncut_referenced_index_positions = expected_uncut_indices - relative_harmonic_center
+        expected_uncut_positions = expected_uncut_referenced_index_positions * my_measurement.experiment_parameters["top_um_per_pixel"]
+        gradient_potential = (expected_uncut_positions *
+                 my_measurement.experiment_parameters["axial_gradient_Hz_per_um_V"] * my_run.parameters["Axial_Squish_Imaging_Grad_V"])
+        trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
+        harmonic_potential = science_functions.get_li_energy_hz_in_1D_trap(expected_uncut_positions * 1e-6, trap_freq)
+        expected_uncut_potential = gradient_potential + harmonic_potential
+
+        (uncut_positions_1, uncut_potentials_1, uncut_densities_1,
+         uncut_positions_2, uncut_potentials_2, uncut_densities_2) = analysis_functions.get_axial_squish_densities_along_harmonic_axis(
+                                                        my_measurement, my_run, autocut = False, return_positions = True, return_potentials = True, 
+                                                        first_stored_density_name = "densities_1", second_stored_density_name = "densities_3")
+        assert np.all(np.isclose(uncut_positions_1, expected_uncut_positions))
+        assert np.all(np.isclose(uncut_potentials_1, expected_uncut_potential))
+        assert np.all(np.isclose(uncut_densities_1, densities_1))
+        assert np.all(np.isclose(uncut_positions_2, expected_uncut_positions))
+        assert np.all(np.isclose(uncut_potentials_2, expected_uncut_potential))
+        assert np.all(np.isclose(uncut_densities_2, densities_2))
+
+        #Now test with autocutting, just the densities
+        HARDCODED_LOWER_CUT_BUFFER = 5
+        expected_low_cut_index = np.argmax(densities_1) + HARDCODED_LOWER_CUT_BUFFER
+        _, expected_high_cut_index_1 = science_functions.hybrid_trap_autocut(densities_1)
+        _, expected_high_cut_index_2 = science_functions.hybrid_trap_autocut(densities_2)
+        expected_autocut_densities_1 = densities_1[expected_low_cut_index:expected_high_cut_index_1]
+        expected_autocut_densities_2 = densities_2[expected_low_cut_index:expected_high_cut_index_2] 
+        expected_autocut_potentials_1 = expected_uncut_potential[expected_low_cut_index:expected_high_cut_index_1]
+        expected_autocut_potentials_2 = expected_uncut_potential[expected_low_cut_index:expected_high_cut_index_2]
+        expected_autocut_positions_1 = expected_uncut_positions[expected_low_cut_index:expected_high_cut_index_1] 
+        expected_autocut_positions_2 = expected_uncut_positions[expected_low_cut_index:expected_high_cut_index_2]
+        (cut_positions_1, cut_potentials_1, cut_densities_1,
+         cut_positions_2, cut_potentials_2, cut_densities_2) = analysis_functions.get_axial_squish_densities_along_harmonic_axis(
+                                                        my_measurement, my_run, autocut = True, return_positions = True, return_potentials = True, 
+                                                        first_stored_density_name = "densities_1", second_stored_density_name = "densities_3")
+        assert np.all(np.isclose(cut_positions_1, expected_autocut_positions_1))
+        assert np.all(np.isclose(cut_potentials_1, expected_autocut_potentials_1))
+        assert np.all(np.isclose(cut_densities_1, expected_autocut_densities_1))
+        assert np.all(np.isclose(cut_positions_2, expected_autocut_positions_2))
+        assert np.all(np.isclose(cut_potentials_2, expected_autocut_potentials_2))
+        assert np.all(np.isclose(cut_densities_2, expected_autocut_densities_2))
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
+def test_get_balanced_axial_squish_fitted_mu_and_T():
+    _mu_and_T_fit_test_helper(analysis_functions.get_balanced_axial_squish_fitted_mu_and_T, 
+                              data_fitting_functions.fit_li6_balanced_density, 
+                              data_fitting_functions.fit_li6_balanced_density_with_prefactor)
+    
+def test_get_imbalanced_axial_squish_fitted_mu_and_T():
+    _mu_and_T_fit_test_helper(analysis_functions.get_imbalanced_axial_squish_fitted_mu_and_T, 
+                              data_fitting_functions.fit_li6_ideal_fermi_density, 
+                              data_fitting_functions.fit_li6_ideal_fermi_density_with_prefactor)
+
+
+def _mu_and_T_fit_test_helper(tested_analysis_function, fit_function, fit_function_with_prefactor):
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "axial_trap_frequency_hz":E_DUMMY,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "hybrid_trap_center_pix_polrot":255,
+        "axial_gradient_Hz_per_um_V":SQRT_5_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0,
+        "Axial_Squish_Imaging_Grad_V":SQRT_7_DUMMY
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        #Zero out densities 3 so that logic also works for imbalanced fitting
+        my_run.analysis_results["densities_3"] = np.zeros(my_run.analysis_results["densities_1"].shape)
+        #Obtain expected densities as cut by autocut
+        potentials_1, densities_1, potentials_2, densities_2 = analysis_functions.get_axial_squish_densities_along_harmonic_axis(
+                my_measurement, my_run, imaging_mode = "abs", autocut = True, return_positions = False,
+                first_stored_density_name = "densities_1", second_stored_density_name = "densities_3"
+            )
+        #Fit will be terrible, but just check logic
+        expected_fit_results_no_prefactor = fit_function(potentials_1, densities_1)
+        no_prefactor_popt, no_prefactor_pcov = expected_fit_results_no_prefactor
+        expected_mu_np, expected_T_np = no_prefactor_popt
+        expected_mu_error_np, expected_T_error_np = np.sqrt(np.diag(no_prefactor_pcov))
+
+
+        expected_fit_results_with_prefactor = fit_function_with_prefactor(potentials_1, densities_1)
+        with_prefactor_popt, with_prefactor_pcov = expected_fit_results_with_prefactor
+        expected_mu_wp, expected_T_wp, expected_prefactor = with_prefactor_popt
+        expected_mu_error_wp, expected_T_error_wp, expected_prefactor_error = np.sqrt(np.diag(with_prefactor_pcov))
+
+        #Now get the returns from the function itself
+        extracted_mu_np, extracted_T_np, extracted_mu_error_np, extracted_T_error_np = tested_analysis_function(
+            my_measurement, my_run, fit_prefactor = False, return_errors = True, first_stored_density_name = "densities_1", 
+            second_stored_density_name = "densities_3"
+        )
+        assert np.isclose(extracted_mu_np, expected_mu_np)
+        assert np.isclose(extracted_mu_error_np, expected_mu_error_np)
+        assert np.isclose(extracted_T_np, expected_T_np)
+        assert np.isclose(extracted_T_error_np, expected_T_error_np)
+        (extracted_mu_wp, extracted_T_wp, extracted_prefactor, extracted_mu_error_wp, 
+         extracted_T_error_wp, extracted_prefactor_error) = tested_analysis_function(
+            my_measurement, my_run, fit_prefactor = True, return_errors = True, first_stored_density_name = "densities_1", 
+            second_stored_density_name = "densities_3"
+        )
+        assert np.isclose(extracted_mu_wp, expected_mu_wp)
+        assert np.isclose(extracted_mu_error_wp, expected_mu_error_wp)
+        assert np.isclose(extracted_T_wp, expected_T_wp)
+        assert np.isclose(extracted_T_error_wp, expected_T_error_wp)
+        assert np.isclose(extracted_prefactor, expected_prefactor)
+        assert np.isclose(extracted_prefactor_error, expected_prefactor_error)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
 
 def test_get_box_shake_fourier_amplitudes():
     hf_atom_density_experiment_param_values = {

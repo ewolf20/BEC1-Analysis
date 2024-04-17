@@ -1,3 +1,6 @@
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import trapezoid 
 from scipy import ndimage
@@ -314,6 +317,32 @@ def get_y_integrated_atom_densities_top_double(my_measurement, my_run, first_sto
     density_1_y_integrated = np.sum(density_1, axis = 0) * my_measurement.experiment_parameters["top_um_per_pixel"]
     density_2_y_integrated = np.sum(density_2, axis = 0) * my_measurement.experiment_parameters["top_um_per_pixel"]
     return (density_1_y_integrated, density_2_y_integrated)
+
+
+
+def get_xy_atom_density_pixel_coms_top_double(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
+                                        imaging_mode = "polrot", **get_density_kwargs):
+    x_int_density_1, x_int_density_2 = get_x_integrated_atom_densities_top_double(
+        my_measurement, my_run, first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
+        imaging_mode = imaging_mode, **get_density_kwargs
+    )
+    y_int_density_1, y_int_density_2 = get_y_integrated_atom_densities_top_double(
+        my_measurement, my_run, first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
+        imaging_mode = imaging_mode, **get_density_kwargs
+    )
+
+    y_size = len(x_int_density_1)
+    y_pixel_positions = np.arange(y_size) 
+    y_com_1 = np.sum(x_int_density_1 * y_pixel_positions) / np.sum(x_int_density_1)
+    y_com_2 = np.sum(x_int_density_2 * y_pixel_positions) / np.sum(x_int_density_2)
+
+    x_size = len(y_int_density_1)
+    x_pixel_positions = np.arange(x_size) 
+    x_com_1 = np.sum(y_int_density_1 * x_pixel_positions) / np.sum(y_int_density_1)
+    x_com_2 = np.sum(y_int_density_2 * x_pixel_positions) / np.sum(y_int_density_2)
+
+    return (x_com_1, y_com_1, x_com_2, y_com_2)
+
 #ATOM COUNTS
 
 """
@@ -371,9 +400,10 @@ def get_atom_counts_top_polrot(my_measurement, my_run, first_stored_density_name
 
 #HYBRID TRAP - BOX EXP
 
-def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = True, 
+def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
                                                   first_stored_density_name = None, second_stored_density_name = None, 
-                                                  imaging_mode = "polrot", **get_density_kwargs):
+                                                  imaging_mode = "polrot", return_positions = True, return_potentials = False, 
+                                                    **get_density_kwargs):
     atom_density_first, atom_density_second = _load_densities_top_double(
                                                 my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                 imaging_mode, **get_density_kwargs)
@@ -394,8 +424,23 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocu
         second_start_index, second_stop_index = science_functions.hybrid_trap_autocut(densities_second) 
         positions_second = positions_second[second_start_index:second_stop_index] 
         densities_second = densities_second[second_start_index:second_stop_index]
-    return (positions_first, densities_first, positions_second, densities_second)
 
+    axial_trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
+    potentials_first = science_functions.get_li_energy_hz_in_1D_trap(positions_first * 1e-6, axial_trap_freq)
+    potentials_second = science_functions.get_li_energy_hz_in_1D_trap(positions_second * 1e-6, axial_trap_freq)
+
+    first_return_list = []
+    second_return_list = []
+    if return_positions:
+        first_return_list.append(positions_first)
+        second_return_list.append(positions_second)
+    if return_potentials:
+        first_return_list.append(potentials_first)
+        second_return_list.append(potentials_second)
+    first_return_list.append(densities_first)
+    second_return_list.append(densities_second)
+    return (*first_return_list, *second_return_list)
+    
 
 def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
                                     autocut = True, imaging_mode = "polrot", return_sub_energies = False,
@@ -407,26 +452,253 @@ def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1
                                                                     first_stored_density_name = first_stored_density_name, 
                                                                     second_stored_density_name = second_stored_density_name, 
                                                                     **get_density_kwargs)
-    axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
-    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
-    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
-    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
-    top_radius_um = um_per_pixel * axicon_diameter_pix / 2
-    trap_cross_section_um = image_processing_functions.get_hybrid_cross_section_um(top_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
+    trap_cross_section_um = _get_hybrid_cross_section_um(my_measurement)
     trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
-    #Autocut False because it's already been done...
     average_energy_first = science_functions.get_hybrid_trap_average_energy(positions_first, densities_first, trap_cross_section_um,
-                                                                            trap_freq, autocut = False) 
+                                                                            trap_freq) 
     counts_first = trapezoid(trap_cross_section_um * densities_first, x = positions_first)
     average_energy_second = science_functions.get_hybrid_trap_average_energy(positions_second, densities_second, trap_cross_section_um,
-                                                                            trap_freq, autocut = False) 
+                                                                            trap_freq) 
     counts_second = trapezoid(trap_cross_section_um * densities_second, x = positions_second)
     overall_average_energy = (average_energy_first * counts_first + average_energy_second * counts_second) / (counts_first + counts_second)
     if return_sub_energies:
         return (overall_average_energy, average_energy_first, average_energy_second) 
     else:
         return overall_average_energy
+    
 
+def get_hybrid_trap_compressibilities(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
+                                    autocut = False, imaging_mode = "polrot", return_errors = False, return_positions = False, 
+                                    return_potentials = True, window_size = 21, first_stored_density_name = None,
+                                      second_stored_density_name = None, **get_density_kwargs):
+    positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2 = get_hybrid_trap_densities_along_harmonic_axis( 
+                                                                    my_measurement, my_run, first_state_index = first_state_index, 
+                                                                    second_state_index = second_state_index, autocut = autocut, 
+                                                                    imaging_mode = imaging_mode,
+                                                                    return_potentials = True, return_positions = True,
+                                                                    first_stored_density_name = first_stored_density_name, 
+                                                                    second_stored_density_name = second_stored_density_name, 
+                                                                    **get_density_kwargs)
+    trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
+    potentials_1 = science_functions.get_li_energy_hz_in_1D_trap(positions_1 * 1e-6, trap_freq)
+    index_breakpoints_1 = np.arange(0, len(potentials_1), window_size)
+    energy_midpoints_1 = (potentials_1[index_breakpoints_1][:-1] + potentials_1[index_breakpoints_1 - 1][1:]) / 2.0
+    position_midpoints_1 = (positions_1[index_breakpoints_1][:-1] + positions_1[index_breakpoints_1 - 1][1:]) / 2.0
+
+    potentials_2 = science_functions.get_li_energy_hz_in_1D_trap(positions_2 * 1e-6, trap_freq)
+    index_breakpoints_2 = np.arange(0, len(potentials_2), window_size)
+    energy_midpoints_2 = (potentials_2[index_breakpoints_2][:-1] + potentials_2[index_breakpoints_2 - 1][1:]) / 2.0
+    position_midpoints_2 = (positions_2[index_breakpoints_2][:-1] + positions_1[index_breakpoints_2 - 1][1:]) / 2.0
+    compressibility_result_1 = science_functions.get_hybrid_trap_compressibilities_window_fit(
+        potentials_1, densities_1, index_breakpoints_1, return_errors = return_errors
+    )
+
+    compressibility_result_2 = science_functions.get_hybrid_trap_compressibilities_window_fit(
+        potentials_2, densities_2, index_breakpoints_2, return_errors = return_errors
+    )
+
+    return_list_1 = [] 
+    if return_errors:
+        compressibility_1, error_1 = compressibility_result_1
+        return_list_1.append(compressibility_1)
+        return_list_1.append(error_1) 
+    else:
+        compressibility_1 = compressibility_result_1
+        return_list_1.append(compressibility_1)
+    if return_positions:
+        return_list_1.append(position_midpoints_1)
+    if return_potentials:
+        return_list_1.append(energy_midpoints_1)
+    return_list_2 = []
+    if return_errors:
+        compressibility_2, error_2 = compressibility_result_2
+        return_list_2.append(compressibility_2)
+        return_list_2.append(error_2) 
+    else:
+        compressibility_2 = compressibility_result_2
+        return_list_2.append(compressibility_2)
+    if return_positions:
+        return_list_2.append(position_midpoints_2)
+    if return_potentials:
+        return_list_2.append(energy_midpoints_2)
+    return (*return_list_1, *return_list_2)
+
+
+def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
+                                                  first_stored_density_name = None, second_stored_density_name = None, 
+                                                  imaging_mode = "polrot", return_positions = False, return_potentials = True, 
+                                                    **get_density_kwargs):
+    densities_first, densities_second = get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
+                                        first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
+                                        imaging_mode = imaging_mode, return_positions = False, return_potentials = False, 
+                                        **get_density_kwargs)
+    index_positions = np.arange(len(densities_first)) 
+    absolute_hybrid_center_index = my_measurement.experiment_parameters["hybrid_trap_center_pix_polrot"]
+    _, roi_ymin, *_ = my_measurement.measurement_parameters["ROI"]
+    relative_hybrid_center_index = absolute_hybrid_center_index - roi_ymin
+    center_referenced_index_positions = index_positions - relative_hybrid_center_index
+    center_referenced_positions_um = center_referenced_index_positions * my_measurement.experiment_parameters["top_um_per_pixel"]
+    trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
+    harmonic_potential = science_functions.get_li_energy_hz_in_1D_trap(center_referenced_positions_um * 1e-6, trap_freq)
+    gradient_voltage = my_run.parameters["Axial_Squish_Imaging_Grad_V"]
+    gradient_voltage_to_Hz_um = my_measurement.experiment_parameters["axial_gradient_Hz_per_um_V"]
+    gradient_Hz_um = gradient_voltage * gradient_voltage_to_Hz_um 
+    gradient_potential = center_referenced_positions_um * gradient_Hz_um 
+    overall_potential = gradient_potential + harmonic_potential
+    if autocut:
+        #Lower cut is done at majority cloud max density, upper cut as for the hybrid trap 
+        if np.sum(densities_first) > np.sum(densities_second):
+            majority_densities = densities_first 
+        else:
+            majority_densities = densities_second 
+        LOWER_CUT_BUFFER = 5
+        lower_cut_index = np.argmax(majority_densities) + LOWER_CUT_BUFFER
+        _, upper_cut_index_1 = science_functions.hybrid_trap_autocut(densities_first)
+        _, upper_cut_index_2 = science_functions.hybrid_trap_autocut(densities_second)
+        densities_first = densities_first[lower_cut_index:upper_cut_index_1] 
+        densities_second = densities_second[lower_cut_index:upper_cut_index_2] 
+        potentials_first = overall_potential[lower_cut_index:upper_cut_index_1] 
+        potentials_second = overall_potential[lower_cut_index:upper_cut_index_2] 
+        positions_first = center_referenced_positions_um[lower_cut_index:upper_cut_index_1] 
+        positions_second = center_referenced_positions_um[lower_cut_index:upper_cut_index_2]
+    else:
+        potentials_first = overall_potential
+        potentials_second = overall_potential
+        positions_first = center_referenced_positions_um 
+        positions_second = center_referenced_positions_um
+    return_list_1 = [] 
+    return_list_2 = [] 
+    if return_positions:
+        return_list_1.append(positions_first) 
+        return_list_2.append(positions_second)
+    if return_potentials:
+        return_list_1.append(potentials_first) 
+        return_list_2.append(potentials_second)
+    return_list_1.append(densities_first)
+    return_list_2.append(densities_second)
+    return (*return_list_1, *return_list_2)
+
+
+def get_balanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, 
+                                                  first_stored_density_name = None, second_stored_density_name = None, 
+                                                  imaging_mode = "polrot", fit_prefactor = False, return_errors = False,
+                                                  show_plots = False, save_plots = False, save_pathname = ".",
+                                                    **get_density_kwargs):
+    #Only one species is important, since the gas is by assumption balanced
+    potentials_1, densities_1, *_ = get_axial_squish_densities_along_harmonic_axis(
+        my_measurement, my_run, autocut = autocut, first_stored_density_name = first_stored_density_name, 
+        second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, 
+        return_positions = False, return_potentials = True, **get_density_kwargs)
+    if fit_prefactor:
+        fit_results = data_fitting_functions.fit_li6_balanced_density_with_prefactor(potentials_1, densities_1)
+    else:
+        fit_results = data_fitting_functions.fit_li6_balanced_density(potentials_1, densities_1)
+    fit_popt, fit_pcov = fit_results 
+    if show_plots or save_plots:
+        run_id = my_run.parameters["id"]
+        plt.plot(potentials_1, densities_1, label = "Data")
+        if not fit_prefactor:
+            mu, T = fit_popt 
+            mu_kHz = mu / 1000 
+            T_kHz = T / 1000
+            plt.plot(potentials_1, data_fitting_functions.li6_balanced_density(potentials_1, *fit_popt), 
+                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz".format(mu_kHz, T_kHz))
+        else:
+            mu, T, prefactor = fit_popt 
+            mu_kHz = mu / 1000 
+            T_kHz = T / 1000
+            plt.plot(potentials_1, data_fitting_functions.li6_balanced_density_with_prefactor(potentials_1, *fit_popt), 
+                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz, Prefactor = {2:.2f}".format(mu_kHz, T_kHz, prefactor))
+        plt.legend()
+        plt.xlabel("Potential (Hz)") 
+        plt.ylabel("Density $\left(\mu m^{-3}\\right)$")
+        plt.suptitle("Balanced Density Fitting, Run ID = {0:d}".format(run_id))
+        if save_plots:
+            figure_name = "{0:d}_Balanced_Squish_Fit.png".format(run_id)
+            full_save_name = os.path.join(save_pathname, figure_name)
+            plt.savefig(full_save_name, bbox_inches = "tight")
+        if show_plots:
+            plt.show()
+        else:
+            plt.cla()
+    if return_errors:
+        errors = np.sqrt(np.diag(fit_pcov))
+        return (*fit_popt, *errors)
+    else:
+        return (*fit_popt,) 
+    
+
+def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, 
+                                                  first_stored_density_name = None, second_stored_density_name = None, 
+                                                  imaging_mode = "polrot", fit_prefactor = False, return_errors = False,
+                                                  show_plots = False, save_plots = False, save_pathname = ".",
+                                                    **get_density_kwargs):
+    potentials_1, densities_1, potentials_2, densities_2 = get_axial_squish_densities_along_harmonic_axis(
+        my_measurement, my_run, autocut = autocut, first_stored_density_name = first_stored_density_name, 
+        second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, 
+        return_positions = False, return_potentials = True, **get_density_kwargs)
+    if np.sum(densities_1) > np.sum(densities_2):
+        majority_densities = densities_1 
+        majority_potentials = potentials_1 
+        minority_potentials = potentials_2 
+        minority_densities = densities_2
+    else:
+        majority_densities = densities_2
+        majority_potentials = potentials_2
+        minority_potentials = potentials_1
+        minority_densities = densities_2
+
+    #If the autocutting hasn't been done yet, it MUST be done on the minority species on the right hand side
+    if not autocut:
+        _, spin_polarized_clip_index = science_functions.hybrid_trap_autocut(minority_densities)
+    else:
+        spin_polarized_clip_index = len(minority_potentials)
+
+    clipped_majority_densities = majority_densities[spin_polarized_clip_index:]
+    clipped_majority_potentials = majority_potentials[spin_polarized_clip_index:]
+
+    if fit_prefactor:
+        fit_results = data_fitting_functions.fit_li6_ideal_fermi_density_with_prefactor(clipped_majority_potentials, clipped_majority_densities)
+    else:
+        fit_results = data_fitting_functions.fit_li6_ideal_fermi_density(clipped_majority_potentials, clipped_majority_densities)
+    fit_popt, fit_pcov = fit_results 
+
+    if show_plots or save_plots:
+        run_id = my_run.parameters["id"]
+        plt.plot(clipped_majority_potentials, clipped_majority_densities, label = "Data")
+        if not fit_prefactor:
+            mu, T = fit_popt 
+            mu_kHz = mu / 1000 
+            T_kHz = T / 1000
+            plt.plot(clipped_majority_potentials, data_fitting_functions.li6_ideal_fermi_density(clipped_majority_potentials, *fit_popt), 
+                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz".format(mu_kHz, T_kHz))
+        else:
+            mu, T, prefactor = fit_popt 
+            mu_kHz = mu / 1000 
+            T_kHz = T / 1000
+            plt.plot(clipped_majority_potentials, data_fitting_functions.li6_ideal_fermi_density_with_prefactor(clipped_majority_potentials, *fit_popt), 
+                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz, Prefactor = {2:.2f}".format(mu_kHz, T_kHz, prefactor))
+        plt.legend()
+        plt.xlabel("Potential (Hz)") 
+        plt.ylabel("Density $\left(\mu m^{-3}\\right)$")
+        plt.suptitle("Ideal Fermi Density Fitting, Run ID = {0:d}".format(run_id))
+        if save_plots:
+            figure_name = "{0:d}_B_Squish_Fit.png".format(run_id)
+            full_save_name = os.path.join(save_pathname, figure_name)
+            plt.savefig(full_save_name, bbox_inches = "tight")
+        if show_plots:
+            plt.show()
+        else:
+            plt.cla()
+
+
+    if return_errors:
+        errors = np.sqrt(np.diag(fit_pcov))
+        return (*fit_popt, *errors)
+    else:
+        return (*fit_popt,)
+
+    
 
 #BOX TRAP
 
@@ -506,14 +778,10 @@ def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_sto
         counts_first, counts_second = get_atom_counts_top_AB_abs(my_measurement, my_run, first_stored_density_name = first_stored_density_name, 
                                                                  second_stored_density_name = second_stored_density_name, 
                                                                  **get_density_kwargs)
-    axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     box_length_pix = my_measurement.experiment_parameters["box_length_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     box_length_um = box_length_pix * um_per_pixel
-    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
-    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
-    box_radius_um = um_per_pixel * axicon_diameter_pix / 2
-    cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
+    cross_section_um = _get_hybrid_cross_section_um(my_measurement)
     first_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_first, cross_section_um, box_length_um)
     second_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_second, cross_section_um, box_length_um)
     return (first_fermi_energy_hz, second_fermi_energy_hz)
@@ -696,6 +964,16 @@ def _load_densities_polrot(my_measurement, my_run, first_stored_density_name, se
         atom_density_first = my_run.analysis_results[first_stored_density_name]
         atom_density_second = my_run.analysis_results[second_stored_density_name]
     return (atom_density_first, atom_density_second)
+
+
+def _get_hybrid_cross_section_um(my_measurement):
+    axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
+    axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
+    box_radius_um = um_per_pixel * axicon_diameter_pix / 2
+    cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
+    return cross_section_um
 
 
 

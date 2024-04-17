@@ -13,7 +13,7 @@ sys.path.insert(0, path_to_analysis)
 
 RESOURCES_DIRECTORY_PATH = "./resources"
 
-from BEC1_Analysis.code import science_functions, loading_functions
+from BEC1_Analysis.code import science_functions, eos_functions
 
 
 def test_two_level_system_population_rabi():
@@ -68,7 +68,6 @@ def test_get_box_fermi_energy_from_counts():
 
 def test_get_hybrid_trap_average_energy():
     EXPECTED_AVERAGE_ENERGY_MANUAL_CUT = 5182.678774053225
-    EXPECTED_AVERAGE_ENERGY_AUTOCUT = 5623.863607223448
     SAMPLE_RADIUS_UM = 70 
     SAMPLE_TRAP_FREQ = 23
     trap_cross_section_um = np.pi * np.square(SAMPLE_RADIUS_UM)
@@ -79,10 +78,6 @@ def test_get_hybrid_trap_average_energy():
     average_particle_energy_manual_cut = science_functions.get_hybrid_trap_average_energy(cut_harmonic_positions, cut_densities,
                                                                  trap_cross_section_um, SAMPLE_TRAP_FREQ)
     assert (np.isclose(average_particle_energy_manual_cut, EXPECTED_AVERAGE_ENERGY_MANUAL_CUT))
-    average_particle_energy_autocut = science_functions.get_hybrid_trap_average_energy(harmonic_positions, densities, 
-                                                                        trap_cross_section_um, SAMPLE_TRAP_FREQ, autocut = True, 
-                                                                        autocut_mode = "statistics")
-    assert (np.isclose(average_particle_energy_autocut, EXPECTED_AVERAGE_ENERGY_AUTOCUT))
 
 
 def test_hybrid_trap_autocut():
@@ -100,14 +95,55 @@ def test_hybrid_trap_autocut():
     assert savgol_stop_index == EXPECTED_SAVGOL_STOP
 
 
+def _generate_sample_compressibilities_and_densities(positions_um, trap_freq):
+    #Use a simulated ideal fermi distribution
+    sample_potentials = science_functions.get_li_energy_hz_in_1D_trap(positions_um * 1e-6, trap_freq)
+    sample_potential_max = np.max(sample_potentials)
+    SAMPLE_CHEMICAL_POTENTIAL = 0.5 * sample_potential_max
+    SAMPLE_TEMPERATURE = 0.200 * sample_potential_max
+    local_chemical_potentials = SAMPLE_CHEMICAL_POTENTIAL - sample_potentials 
+    local_betamus = local_chemical_potentials / SAMPLE_TEMPERATURE
+    sample_densities = eos_functions.ideal_fermi_density_um(local_betamus, SAMPLE_TEMPERATURE)
+    compressibility_vs_betamu_function = eos_functions.get_ideal_eos_functions(key = "kappa_over_kappa0")
+    expected_compressibilities = compressibility_vs_betamu_function(local_betamus)
+    return (expected_compressibilities, sample_densities)
 
-def test_get_hybrid_trap_compressibility():
-    SAMPLE_TRAP_FREQ = 23.6
-    sample_hybrid_trap_cut_data = np.load("resources/Sample_Box_Exp_Cut.npy")
-    harmonic_positions, densities = sample_hybrid_trap_cut_data
-    harmonic_energies = science_functions.get_li_energy_hz_in_1D_trap(harmonic_positions * 1e-6, SAMPLE_TRAP_FREQ)
-    positions, compressibilities = science_functions.get_hybrid_trap_compressibilities(harmonic_positions, densities, SAMPLE_TRAP_FREQ)
-    
+
+
+def test_get_hybrid_trap_compressibilities_savgol():
+    SAMPLE_TRAP_FREQ = 12.3
+    num_samples = 500 
+    sample_positions_um = np.linspace(0, 300, num = num_samples)
+    expected_compressibilities, sample_densities = _generate_sample_compressibilities_and_densities(sample_positions_um, SAMPLE_TRAP_FREQ)
+    SAVGOL_WINDOW = 15
+    SAVGOL_POLYORDER = 2
+    extracted_compressibilities = science_functions.get_hybrid_trap_compressibilities_savgol(sample_positions_um, 
+                                                                                sample_densities, SAMPLE_TRAP_FREQ, 
+                                                                                savgol_window_length = SAVGOL_WINDOW, 
+                                                                                savgol_polyorder = SAVGOL_POLYORDER)
+    #Savitzky-Golay method must necessarily have edge effects; remove high edge where issues occur
+    high_clip_index = SAVGOL_WINDOW
+    clipped_extracted_compressibilities = extracted_compressibilities[high_clip_index:]
+    clipped_expected_compressibilities = expected_compressibilities[high_clip_index:]
+    assert np.all(np.isclose(clipped_expected_compressibilities, clipped_extracted_compressibilities, rtol = 5e-2))
+
+
+def test_get_hybrid_trap_compressibilities_window_fit():
+    SAMPLE_TRAP_FREQ = 12.3
+    num_samples = 500
+    sample_positions_um = np.linspace(0, 300, num = num_samples)
+    sample_potentials_hz = science_functions.get_li_energy_hz_in_1D_trap(sample_positions_um * 1e-6, SAMPLE_TRAP_FREQ)
+    expected_compressibilities, sample_densities = _generate_sample_compressibilities_and_densities(sample_positions_um, SAMPLE_TRAP_FREQ)
+    #Use a simulated ideal fermi distribution
+    breakpoint_indices = np.arange(0, sample_potentials_hz.size, 20)
+    energy_midpoints = (sample_potentials_hz[breakpoint_indices - 1][1:] + sample_potentials_hz[breakpoint_indices][:-1]) / 2.0
+    POLYORDER = 2
+    extracted_compressibilities = science_functions.get_hybrid_trap_compressibilities_window_fit(sample_potentials_hz, 
+                                                                                sample_densities, breakpoint_indices, 
+                                                                                polyorder = POLYORDER)
+
+    interpolated_expected_compressibilities = np.interp(energy_midpoints, sample_potentials_hz, expected_compressibilities)
+    assert np.all(np.isclose(interpolated_expected_compressibilities, extracted_compressibilities, rtol = 1e-3))
 
 def test_get_li6_br_energy_MHz():
     sample_field_G = 690

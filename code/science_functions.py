@@ -50,12 +50,7 @@ def get_box_fermi_energy_from_counts(atom_counts, box_cross_section_um, box_leng
     return get_fermi_energy_hz_from_density(atom_density_m)
 
 
-def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
-                                autocut_mode = "statistics"):
-    if autocut:
-        start_index, stop_index = hybrid_trap_autocut(three_d_density_trap_profile_um, mode = autocut_mode)
-        harmonic_trap_positions_um = harmonic_trap_positions_um[start_index:stop_index]
-        three_d_density_trap_profile_um = three_d_density_trap_profile_um[start_index:stop_index]
+def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq):
     harmonic_trap_energies = get_li_energy_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq)
     total_potential_energy = trapezoid(harmonic_trap_energies * three_d_density_trap_profile_um * trap_cross_section_um, x = harmonic_trap_positions_um)
     #1D Virial theorem; see Zhenjie Yan's PhD thesis
@@ -64,10 +59,8 @@ def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_tra
     return total_energy
 
 
-def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, autocut = False, 
-                                    autocut_mode = "statistics"):
-    total_energy = get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq, 
-                                        autocut = autocut, autocut_mode = autocut_mode)
+def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq):
+    total_energy = get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq)
     total_counts = trapezoid(trap_cross_section_um * three_d_density_trap_profile_um, x = harmonic_trap_positions_um)
     return total_energy / total_counts
 
@@ -112,30 +105,46 @@ def hybrid_trap_autocut(three_d_density_trap_profile_um, mode = "statistics"):
     stop_index_exclusive = first_second_half_zero_index
     return (start_index, stop_index_exclusive)
 
-def get_hybrid_trap_compressibilities(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_freq, 
-                                        energy_cutoff_hz = 10000):
-    ENERGY_BIN_NUMBER = 100 
-    SAVGOL_FILTER_WINDOW_LENGTH = 20
-    SAVGOL_FILTER_POLYORDER = 2
+#TODO: Support the case where positions aren't in ascending order...
+def get_hybrid_trap_compressibilities_savgol(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_freq, 
+                                        savgol_window_length = 21, savgol_polyorder = 2):
+    if not np.all(np.isclose(np.diff(harmonic_trap_positions_um), np.diff(harmonic_trap_positions_um)[0])):
+        raise ValueError("Savitzky-Golay differentiation requires equal position spacings")
     fermi_energies = get_fermi_energy_hz_from_density(three_d_density_trap_profile_um * 1e18)
-    harmonic_energies = get_li_energy_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq)
-    energy_bins = np.linspace(0, energy_cutoff_hz, ENERGY_BIN_NUMBER)
-    delta_E_bin = energy_bins[1] - energy_bins[0]
-    #Minus 1 adopts the convention that index i is assigned to a value satisfying bins[i] <= val < bins[i + 1]
-    bin_indices = np.digitize(harmonic_energies, energy_bins) - 1
-    average_fermi_energies = np.zeros(ENERGY_BIN_NUMBER)
-    fermi_energy_errors = np.zeros(ENERGY_BIN_NUMBER)
-    for i in range(ENERGY_BIN_NUMBER):
-        indices_for_current_bin = np.where((bin_indices) == i)
-        current_bin_slice = fermi_energies[indices_for_current_bin]
-        current_bin_average = np.sum(current_bin_slice) / current_bin_slice.size
-        current_bin_standard_error_mean = np.sqrt(np.sum(np.square(current_bin_slice - current_bin_average))) / current_bin_slice.size
-        fermi_energy_errors[i] = current_bin_standard_error_mean
-        average_fermi_energies[i] = current_bin_average
-    displacement_bins = get_li_displacement_um_from_1D_trap_energy(energy_bins, trap_freq)
-    #TODO: Consider using the fermi energy errors in the savgol numerical differentiation.
-    compressibilities = - savgol_filter(average_fermi_energies, SAVGOL_FILTER_WINDOW_LENGTH, SAVGOL_FILTER_POLYORDER, deriv = 1, delta = delta_E_bin)
-    return (displacement_bins, compressibilities)
+    potentials = get_li_energy_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq)
+    potential_index_deriv = np.diff(potentials)
+    potential_index_deriv_extended = np.append(potential_index_deriv, potential_index_deriv[-1])
+    fermi_energy_index_deriv = savgol_filter(fermi_energies, savgol_window_length, savgol_polyorder, deriv = 1)
+    fermi_energy_potential_deriv = fermi_energy_index_deriv / potential_index_deriv_extended
+    compressibilities = -fermi_energy_potential_deriv
+    return compressibilities
+
+#TODO: Speed up this unintelligent for loop implementation with numpy syntax
+def get_hybrid_trap_compressibilities_window_fit(potentials_hz, three_d_density_trap_profile_um, breakpoint_indices, 
+                                                 return_errors = False, polyorder = 2):
+    fermi_energies = get_fermi_energy_hz_from_density(three_d_density_trap_profile_um * 1e18)
+    compressibilities_list = []
+    errors_list = []
+    for lower_breakpoint_index, upper_breakpoint_index in zip(breakpoint_indices[:-1], breakpoint_indices[1:]):
+        included_potentials = potentials_hz[lower_breakpoint_index:upper_breakpoint_index] 
+        midpoint = (included_potentials[0] + included_potentials[-1]) / 2.0
+        included_fermi_energies = fermi_energies[lower_breakpoint_index:upper_breakpoint_index]
+        coeffs, pcov = np.polyfit(included_potentials - midpoint, included_fermi_energies, polyorder, cov = True)
+        _, lin_sigma, _ = np.sqrt(np.diag(pcov))
+        _, lin_coeff, _ = coeffs 
+        fermi_energy_potential_deriv = lin_coeff 
+        compressibility = -fermi_energy_potential_deriv
+        compressibilities_list.append(compressibility) 
+        errors_list.append(lin_sigma)
+    compressibilities = np.array(compressibilities_list) 
+    errors = np.array(errors_list)
+    if return_errors:
+        return (compressibilities, errors) 
+    else:
+        return compressibilities
+
+
+    
 
 def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)
