@@ -143,9 +143,33 @@ def get_hybrid_trap_compressibilities_window_fit(potentials_hz, three_d_density_
         return (compressibilities, errors) 
     else:
         return compressibilities
-
-
     
+"""
+Method for obtaining absolute pressure, given potentials and 3d densities. 
+
+Exploit the relation dP = -n dV to calclate pressures, given densities vs. 
+a 1D potential. 
+
+Parameters:
+
+potentials: The potential, in Hz. These are not required to be monotonic, but should be 
+spatially contiguous
+
+densities: The densities. If more than one dimensional, the last axis is presumed to correspond to the 
+one-dimensional potential, and the remainder are broadcast over. """
+def get_absolute_pressures(potentials, densities_3d):
+    potentials_length = len(potentials) 
+    #Hacky method of doing sliding integral quickly
+    indicator_array = np.triu(np.ones((potentials_length, potentials_length)))
+    def indicate_function(arr):
+        return arr * indicator_array
+    indicated_density_array = np.apply_along_axis(indicate_function, -1, densities_3d)
+    pressures_array = np.trapz(indicated_density_array, x=potentials)
+    #Using trapezoidal rule causes issues - fix
+    pressures_array[...,1:] = pressures_array[...,1:] - 0.5 * densities_3d[...,1:] * np.diff(potentials)
+    return pressures_array
+
+
 
 def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)

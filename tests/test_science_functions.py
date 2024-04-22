@@ -145,6 +145,18 @@ def test_get_hybrid_trap_compressibilities_window_fit():
     interpolated_expected_compressibilities = np.interp(energy_midpoints, sample_potentials_hz, expected_compressibilities)
     assert np.all(np.isclose(interpolated_expected_compressibilities, extracted_compressibilities, rtol = 1e-3))
 
+
+def test_get_absolute_pressures():
+    sample_potentials = np.linspace(0, 1, 100)
+    sample_densities_1d = np.pi * np.linspace(0, 1, 100)
+    expected_pressures = np.array([np.trapz(sample_densities_1d[i:], x = sample_potentials[i:]) for i in range(len(sample_densities_1d))])
+    extracted_pressures = science_functions.get_absolute_pressures(sample_potentials, sample_densities_1d)
+    assert np.allclose(extracted_pressures, expected_pressures)
+    sample_densities_2d = np.expand_dims(sample_densities_1d, 0) * np.arange(4).reshape((4, 1))
+    expected_pressures_2d = np.expand_dims(expected_pressures, 0) * np.arange(4).reshape((4, 1)) 
+    extracted_pressures_2d = science_functions.get_absolute_pressures(sample_potentials, sample_densities_2d) 
+    assert np.allclose(extracted_pressures_2d, expected_pressures_2d)
+
 def test_get_li6_br_energy_MHz():
     sample_field_G = 690
     EXPECTED_STATE_1_ENERGY = -1049.0933
