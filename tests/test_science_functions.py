@@ -147,7 +147,7 @@ def test_get_hybrid_trap_compressibilities_window_fit():
 
 
 def test_get_absolute_pressures():
-    sample_potentials = np.linspace(0, 1, 100)
+    sample_potentials = np.e * np.linspace(0, 1, 100)
     sample_densities_1d = np.pi * np.linspace(0, 1, 100)
     expected_pressures = np.array([np.trapz(sample_densities_1d[i:], x = sample_potentials[i:]) for i in range(len(sample_densities_1d))])
     extracted_pressures = science_functions.get_absolute_pressures(sample_potentials, sample_densities_1d)
