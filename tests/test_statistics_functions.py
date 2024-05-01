@@ -87,6 +87,23 @@ def test_mean_location_test():
 
 
 
+def test_linear_center_location_test():
+    random_normals = np.load("resources/Sample_Normal_Randoms.npy")[:-1]
+    random_normals_length = len(random_normals)
+    assert random_normals_length % 2 == 1
+    x_values = np.arange(random_normals_length) - (random_normals_length - 1) / 2
+    ADDED_SLOPE = 5.00
+    random_normals_plus_slope = random_normals + ADDED_SLOPE * x_values
+    assert statistics_functions.linear_center_location_test(x_values, random_normals_plus_slope, -0.25, confidence_level = 0.975) 
+    assert statistics_functions.linear_center_location_test(x_values, random_normals_plus_slope, -0.5, confidence_level = 0.999)
+    assert not statistics_functions.linear_center_location_test(x_values, random_normals_plus_slope, 0.1, confidence_level = 0.95)
+
+    ARRAY_DIMENSION_LENGTH = 10
+    random_normals_array = np.expand_dims(random_normals_plus_slope, 0) * np.expand_dims(np.ones(ARRAY_DIMENSION_LENGTH), 1)
+    broadcast_x_values = np.broadcast_to(x_values, random_normals_array.shape)
+    assert np.all(statistics_functions.linear_center_location_test(broadcast_x_values, random_normals_array, -0.25, axis = -1)) 
+
+
 
 def test_filter_1d_residuals():
     randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))

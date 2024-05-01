@@ -221,14 +221,45 @@ def mean_location_test(data, mean_test_value, confidence_level = 0.95, axis = -1
     student_sigma = np.sqrt(np.sum(np.square(deviations), axis = axis) / (number_samples - 1))
     studentized_mean_difference = (sample_mean - mean_test_value) / (student_sigma / np.sqrt(number_samples))
     t = studentized_mean_difference
-    #Degrees of freedom
-    nu = number_samples - 1
-    x = nu / (np.square(t) + nu)
-    alpha = 1.0 - confidence_level
-    #Fraction of the t distribution lying at above the studentized mean difference
-    probability_of_t_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
-    return np.where(sample_mean < mean_test_value, False, probability_of_t_occurrence < alpha)
+    return _student_t_test_helper(t, number_samples, 1, confidence_level)
 
+"""
+Given y_data and x_data, return a boolean which indicates whether a line fitted through the data 
+is above the horizontal line y=test_value with the specified confidence at the center of the x-data. 
+
+Given x_data and y_data, use a linear regression to calculate a straight line mx + b
+through the data. Then, use a Student t-test to determine whether the 
+line is above test_value with the given confidence at the center-of-mass of the x-data. 
+
+Useful for determining when varying signals fall below some cutoff threshold in a noise-robust way.
+
+See e.g. https://en.wikipedia.org/wiki/Simple_linear_regression"""
+
+def linear_center_location_test(x_data, y_data, test_value, confidence_level = 0.95, axis = -1):
+    number_samples = np.size(x_data, axis = axis) 
+    b_estimate = np.sum(y_data, axis = axis, keepdims = True) / number_samples
+    zero_centered_x_data = x_data - np.sum(x_data, axis = axis, keepdims = True)
+    x_squared_sum = np.sum(np.square(zero_centered_x_data), axis = axis, keepdims = True) 
+    m_estimate = np.sum(y_data * zero_centered_x_data, axis = axis, keepdims = True) / x_squared_sum
+    residuals = y_data - (m_estimate * zero_centered_x_data + b_estimate) 
+    #Fitting a straight line, so estimation of underlying variance has two degrees of freedom
+    student_sigma = np.std(residuals, ddof = 2, axis = axis)
+    b_estimate_reshaped = np.reshape(b_estimate, student_sigma.shape)
+    b_estimate_error = student_sigma / np.sqrt(number_samples)
+    studentized_b_estimate_difference = (b_estimate_reshaped - test_value) / b_estimate_error
+    t = studentized_b_estimate_difference
+    return _student_t_test_helper(t, number_samples, 2, confidence_level)
+
+
+"""
+Remark: Returns true if null hypothesis is rejected"""
+def _student_t_test_helper(t, number_samples, ddof, confidence_level):
+    nu = number_samples - ddof 
+    x = nu / (np.square(t) + nu) 
+    alpha = 1 - confidence_level
+    incomplete_beta_values = 0.5 * betainc(nu / 2, 0.5, x)
+    probability_of_t_occurrence = np.where(t > 0, incomplete_beta_values, 1 - incomplete_beta_values)
+    return probability_of_t_occurrence < alpha
 
 
 """
@@ -253,7 +284,7 @@ def filter_1d_residuals(residuals, degs_of_freedom, alpha = 1e-4, iterative = Fa
         sigma_squared_sans_one_array = sigma_sum_sans_one_array * (1.0 / (num_samples - degs_of_freedom - 1))
         sigma_sans_one_array = np.sqrt(sigma_squared_sans_one_array)
         studentized_residuals = masked_residuals / sigma_sans_one_array
-        is_outlier_array = np.logical_not(_studentized_residual_test(studentized_residuals, num_samples - degs_of_freedom - 1, alpha))
+        is_outlier_array = _student_t_test_helper(studentized_residuals, num_samples - 1,  degs_of_freedom, 1 - alpha)
         current_mask = np.logical_or(current_mask, np.ma.filled(is_outlier_array, fill_value = True))
         if not iterative or not np.any(is_outlier_array):
             break
@@ -285,24 +316,12 @@ def filter_mean_outliers(values, alpha = 1e-4, iterative = False):
         sigma_squared_sans_one_array = sigma_sum_sans_one_array * (1.0 / (num_samples - DEGREES_OF_FREEDOM - 1))
         sigma_sans_one_array = np.sqrt(sigma_squared_sans_one_array) 
         studentized_deviations = masked_deviations / sigma_sans_one_array 
-        is_outlier_array = np.logical_not(_studentized_residual_test(studentized_deviations, num_samples - DEGREES_OF_FREEDOM - 1, alpha))
+        is_outlier_array = _student_t_test_helper(studentized_deviations, num_samples - 1,  1, 1 - alpha)
         current_mask = np.logical_or(current_mask, np.ma.filled(is_outlier_array, fill_value = True))
         if not iterative or not np.any(is_outlier_array):
             break
     inlier_indices = np.nonzero(np.logical_not(current_mask))[0] 
     return inlier_indices
-
-
-
-#Source for approach: https://en.wikipedia.org/wiki/Studentized_residual
-def _studentized_residual_test(t, degrees_of_freedom, alpha):
-    nu = degrees_of_freedom
-    abs_t = np.abs(t)
-    x = nu / (np.square(t) + nu)
-    #Formula source: https://en.wikipedia.org/wiki/Student%27s_t-distribution
-    #Scipy betainc is the _regularized_ incomplete beta function
-    probability_of_occurrence = 0.5 * betainc(nu / 2, 0.5, x)
-    return probability_of_occurrence > alpha
 
 
 """
