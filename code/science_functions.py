@@ -67,7 +67,7 @@ def get_hybrid_trap_average_energy(harmonic_trap_positions_um, three_d_density_t
 """
 Helper function for autocutting the hybrid trap data to avoid wings where it is zero."""
 def hybrid_trap_autocut(three_d_density_trap_profile_um, mode = "statistics"):
-    AUTOCUT_WINDOW = 101
+    AUTOCUT_WINDOW = 51
     AUTOCUT_SAVGOL_ORDER = 2
     data_length = len(three_d_density_trap_profile_um)
     middle_index = int(np.floor(data_length / 2))
@@ -83,7 +83,8 @@ def hybrid_trap_autocut(three_d_density_trap_profile_um, mode = "statistics"):
         window_indices = np.where(window_indices < 0, np.abs(window_indices), window_indices)
         window_indices = np.where(window_indices > data_length - 1, 2 * (data_length - 1) - window_indices, window_indices)
         data_window_array = three_d_density_trap_profile_um[window_indices]
-        data_window_is_nonzero_array = statistics_functions.mean_location_test(data_window_array, 0.0, axis = -1)
+        data_indices_array = np.arange(len(three_d_density_trap_profile_um))[window_indices]
+        data_window_is_nonzero_array = statistics_functions.linear_center_location_test(data_indices_array, data_window_array, 0.0, axis = -1)
     elif(mode == "savgol"):
         filtered_data = savgol_filter(three_d_density_trap_profile_um, AUTOCUT_WINDOW, AUTOCUT_SAVGOL_ORDER)
         data_window_is_nonzero_array = filtered_data > 0.0
