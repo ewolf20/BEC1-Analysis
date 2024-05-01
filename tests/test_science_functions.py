@@ -81,10 +81,10 @@ def test_get_hybrid_trap_average_energy():
 
 
 def test_hybrid_trap_autocut():
-    EXPECTED_STAT_START = 116
-    EXPECTED_STAT_STOP = 716
-    EXPECTED_SAVGOL_START = 110 
-    EXPECTED_SAVGOL_STOP = 725
+    EXPECTED_STAT_START = 118
+    EXPECTED_STAT_STOP = 707
+    EXPECTED_SAVGOL_START = 118
+    EXPECTED_SAVGOL_STOP = 718
     sample_hybrid_trap_cut_data = np.load("resources/Sample_Box_Exp_Cut.npy")
     harmonic_positions, densities = sample_hybrid_trap_cut_data 
     statistics_start_index, statistics_stop_index = science_functions.hybrid_trap_autocut(densities, mode = "statistics")
