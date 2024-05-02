@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import trapezoid 
 from scipy import ndimage
+from scipy.signal import savgol_filter
 
 from . import data_fitting_functions, image_processing_functions, science_functions
 from .measurement import Run
@@ -444,12 +445,10 @@ def get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocu
     return (*first_return_list, *second_return_list)
     
 
-def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                                    autocut = True, imaging_mode = "polrot", return_sub_energies = False,
+def get_hybrid_trap_average_energy(my_measurement, my_run, autocut = True, imaging_mode = "polrot", return_sub_energies = False,
                                     first_stored_density_name = None, second_stored_density_name = None, **get_density_kwargs):
     positions_first, densities_first, positions_second, densities_second = get_hybrid_trap_densities_along_harmonic_axis( 
-                                                                    my_measurement, my_run, first_state_index = first_state_index, 
-                                                                    second_state_index = second_state_index, autocut = autocut, 
+                                                                    my_measurement, my_run, autocut = autocut, 
                                                                     imaging_mode = imaging_mode,
                                                                     first_stored_density_name = first_stored_density_name, 
                                                                     second_stored_density_name = second_stored_density_name, 
@@ -469,25 +468,26 @@ def get_hybrid_trap_average_energy(my_measurement, my_run, first_state_index = 1
         return overall_average_energy
     
 
-def get_hybrid_trap_compressibilities(my_measurement, my_run, first_state_index = 1, second_state_index = 3, 
-                                    autocut = False, imaging_mode = "polrot", return_errors = False, return_positions = False, 
-                                    return_potentials = True, window_size = 21, first_stored_density_name = None,
+def get_hybrid_trap_compressibilities(my_measurement, my_run, autocut = False, imaging_mode = "polrot", return_errors = False, 
+                                    return_positions = False, return_potentials = True, window_size = 21, first_stored_density_name = None,
                                       second_stored_density_name = None, **get_density_kwargs):
     positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2 = get_hybrid_trap_densities_along_harmonic_axis( 
-                                                                    my_measurement, my_run, first_state_index = first_state_index, 
-                                                                    second_state_index = second_state_index, autocut = autocut, 
+                                                                    my_measurement, my_run, autocut = autocut, 
                                                                     imaging_mode = imaging_mode,
                                                                     return_potentials = True, return_positions = True,
                                                                     first_stored_density_name = first_stored_density_name, 
                                                                     second_stored_density_name = second_stored_density_name, 
                                                                     **get_density_kwargs)
-    trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
-    potentials_1 = science_functions.get_li_energy_hz_in_1D_trap(positions_1 * 1e-6, trap_freq)
+    return _compressibility_helper(positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2, 
+                                   return_positions, return_potentials, return_errors, window_size)
+  
+
+def _compressibility_helper(positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2, 
+                            return_positions, return_potentials, return_errors, window_size):
     index_breakpoints_1 = np.arange(0, len(potentials_1), window_size)
     energy_midpoints_1 = (potentials_1[index_breakpoints_1][:-1] + potentials_1[index_breakpoints_1 - 1][1:]) / 2.0
     position_midpoints_1 = (positions_1[index_breakpoints_1][:-1] + positions_1[index_breakpoints_1 - 1][1:]) / 2.0
 
-    potentials_2 = science_functions.get_li_energy_hz_in_1D_trap(positions_2 * 1e-6, trap_freq)
     index_breakpoints_2 = np.arange(0, len(potentials_2), window_size)
     energy_midpoints_2 = (potentials_2[index_breakpoints_2][:-1] + potentials_2[index_breakpoints_2 - 1][1:]) / 2.0
     position_midpoints_2 = (positions_2[index_breakpoints_2][:-1] + positions_1[index_breakpoints_2 - 1][1:]) / 2.0
@@ -523,7 +523,7 @@ def get_hybrid_trap_compressibilities(my_measurement, my_run, first_state_index 
         return_list_2.append(position_midpoints_2)
     if return_potentials:
         return_list_2.append(energy_midpoints_2)
-    return (*return_list_1, *return_list_2)
+    return (*return_list_1, *return_list_2)    
 
 
 def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
@@ -580,6 +580,174 @@ def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autoc
     return_list_2.append(densities_second)
     return (*return_list_1, *return_list_2)
 
+
+def get_axial_squish_absolute_pressures(my_measurement, my_run, autocut = True, 
+                                                  first_stored_density_name = None, second_stored_density_name = None, 
+                                                  imaging_mode = "polrot", return_positions = False, return_potentials = True,
+                                                  return_densities = False, **get_density_kwargs):
+    positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2 = get_axial_squish_densities_along_harmonic_axis(
+        my_measurement, my_run, autocut = autocut, first_stored_density_name = first_stored_density_name, 
+        second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, return_positions = True, 
+        return_potentials = True, **get_density_kwargs
+    )
+    pressures_1_absolute = science_functions.get_absolute_pressures(potentials_1, densities_1)
+    pressures_2_absolute = science_functions.get_absolute_pressures(potentials_2, densities_2)
+    return_list_1 = []
+    return_list_2 = []
+    if return_positions:
+        return_list_1.append(positions_1)
+        return_list_2.append(positions_2)
+    if return_potentials:
+        return_list_1.append(potentials_1)
+        return_list_2.append(potentials_2)
+    if return_densities:
+        return_list_1.append(densities_1)
+        return_list_2.append(densities_2)
+    return_list_1.append(pressures_1_absolute)
+    return_list_2.append(pressures_2_absolute)
+    return (*return_list_1, *return_list_2)
+
+
+def get_axial_squish_normalized_pressures(my_measurement, my_run, autocut = True, normalized_pressure_cut = True, 
+                                          normalized_pressure_relative_cut_point = 0.1, first_stored_density_name = None, 
+                                          second_stored_density_name = None, imaging_mode = "polrot", return_positions = False,
+                                            return_potentials = True, return_densities = False, **get_density_kwargs):
+    (positions_1, potentials_1, densities_1, pressures_1_absolute, 
+     positions_2, potentials_2, densities_2, pressures_2_absolute) = get_axial_squish_absolute_pressures(
+         my_measurement, my_run, autocut = autocut, first_stored_density_name=first_stored_density_name, 
+         second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, 
+         return_positions = True, return_potentials = True, return_densities = True, **get_density_kwargs)
+    fermi_pressures_1 = science_functions.get_ideal_fermi_pressure_hz_um_from_density(densities_1 * 1e18) 
+    fermi_pressures_2 = science_functions.get_ideal_fermi_pressure_hz_um_from_density(densities_2 * 1e18)
+    normalized_pressures_1 = pressures_1_absolute / fermi_pressures_1 
+    normalized_pressures_2 = pressures_2_absolute / fermi_pressures_2
+    if normalized_pressure_cut:
+        density_cut_point_1 = normalized_pressure_relative_cut_point * np.max(densities_1)
+        _, pressure_cut_index_1 = science_functions.hybrid_trap_autocut(densities_1, cut_value = density_cut_point_1)
+        density_cut_point_2 = normalized_pressure_relative_cut_point * np.max(densities_2)
+        _, pressure_cut_index_2 = science_functions.hybrid_trap_autocut(densities_2, cut_value = density_cut_point_2)
+
+        normalized_pressures_1 = normalized_pressures_1[:pressure_cut_index_1] 
+        normalized_pressures_2 = normalized_pressures_2[:pressure_cut_index_2]
+
+        positions_1 = positions_1[:pressure_cut_index_1] 
+        positions_2 = positions_2[:pressure_cut_index_2]
+
+        potentials_1 = potentials_1[:pressure_cut_index_1] 
+        potentials_2 = potentials_2[:pressure_cut_index_2]
+
+        densities_1 = densities_1[:pressure_cut_index_1] 
+        densities_2 = densities_2[:pressure_cut_index_2] 
+    return_list_1 = [] 
+    return_list_2 = [] 
+    if return_positions:
+        return_list_1.append(positions_1) 
+        return_list_2.append(positions_2) 
+    if return_potentials:
+        return_list_1.append(potentials_1) 
+        return_list_2.append(potentials_2) 
+    if return_densities:
+        return_list_1.append(densities_1) 
+        return_list_2.append(densities_2) 
+    return (*return_list_1, *return_list_2) 
+
+
+def get_axial_squish_compressibilities(my_measurement, my_run, autocut = False, imaging_mode = "polrot", return_errors = False, 
+                                    return_positions = False, return_potentials = True, return_densities = False, 
+                                      window_size = 21, first_stored_density_name = None,
+                                      second_stored_density_name = None, **get_density_kwargs):
+    positions_1, potentials_1, densities_1, positions_2, potentials_2, densities_2 = get_axial_squish_densities_along_harmonic_axis(
+        my_measurement, my_run, autocut = autocut, first_stored_density_name=first_stored_density_name, 
+        second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, return_positions = True, 
+        return_potentials = True, **get_density_kwargs)
+    return _compressibility_helper(positions_1, potentials_1, densities_1, 
+                    positions_2, potentials_2, densities_2, return_positions, return_potentials, return_errors, 
+                    window_size)
+
+
+def get_axial_squish_compressibilities_vs_pressure(my_measurement, my_run, autocut = True, imaging_mode = "polrot", return_errors = False, 
+                                    return_imbalances = False, window_size = 21, normalized_pressure_cut = True,
+                                    normalized_pressure_relative_cut_point = 0.1, first_stored_density_name = None,
+                                      second_stored_density_name = None, **get_density_kwargs):
+    compressibility_return_values = get_axial_squish_compressibilities(
+            my_measurement, my_run, autocut = autocut, imaging_mode = imaging_mode, return_errors = return_errors, 
+            return_positions = True, return_potentials = False, return_densities = False, window_size = window_size, 
+            first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
+            **get_density_kwargs)
+    if return_errors:
+        position_midpoints_1, compressibilities_1, errors_1, position_midpoints_2, compressibilities_2, errors_2 = compressibility_return_values
+    else:
+        position_midpoints_1, compressibilities_1, position_midpoints_2, compressibilities_2 = compressibility_return_values
+    positions_1, densities_1, normalized_pressures_1, positions_2, densities_2, normalized_pressures_2 = get_axial_squish_normalized_pressures(
+        my_measurement, my_run, autocut = autocut, normalized_pressure_cut = normalized_pressure_cut, 
+        normalized_pressure_relative_cut_point = normalized_pressure_relative_cut_point, 
+        first_stored_density_name = first_stored_density_name, 
+        second_stored_density_name = second_stored_density_name, 
+        imaging_mode = imaging_mode, return_positions = True, return_potentials = False, **get_density_kwargs)
+    
+    position_range_1_lower = np.min(positions_1)
+    position_range_1_upper = np.max(positions_1)
+
+    position_range_2_lower = np.min(positions_2)
+    position_range_2_upper = np.min(positions_2)
+
+    included_indices_1 = np.logical_and(position_midpoints_1 > position_range_1_lower, position_midpoints_1 < position_range_1_upper)
+    included_indices_2 = np.logical_and(position_midpoints_2 > position_range_2_lower, position_midpoints_2 < position_range_2_upper)
+
+    included_position_midpoints_1 = position_midpoints_1[included_indices_1] 
+    included_compressibilities_1 = compressibilities_1[included_indices_1]
+
+    included_position_midpoints_2 = position_midpoints_2[included_indices_2]
+    included_compressibilities_2 = compressibilities_2[included_indices_2]
+
+    if return_errors: 
+        included_errors_1 = errors_1[included_indices_1] 
+        included_errors_2 = errors_2[included_indices_2] 
+
+    smoothed_normalized_pressures_1 = savgol_filter(normalized_pressures_1, window_size, 2)
+    smoothed_normalized_pressures_2 = savgol_filter(normalized_pressures_2, window_size, 2) 
+
+    #Positions are monotonically increasing
+    compressibility_interpolated_pressures_1 = np.interp(included_position_midpoints_1, positions_1, smoothed_normalized_pressures_1)
+    compressibility_interpolated_pressures_2 = np.interp(included_position_midpoints_2, positions_2, smoothed_normalized_pressures_2)
+
+    smoothed_densities_1 = savgol_filter(densities_1, window_size, 2)
+    smoothed_densities_2 = savgol_filter(densities_2, window_size, 2)
+
+    compressibility_interpolated_densities_1 = np.interp(included_position_midpoints_1, positions_1, smoothed_densities_1)
+    compressibility_interpolated_densities_2 = np.interp(included_position_midpoints_2, positions_2, smoothed_densities_2)
+
+    if len(positions_1) > len(positions_2):
+        longer_cut_interpolated_densities = compressibility_interpolated_densities_1 
+        shorter_cut_interpolated_densities = compressibility_interpolated_densities_2
+        length_difference = len(positions_1) - len(positions_2)
+        imbalance_sign = -1.0
+    else:
+        longer_cut_interpolated_densities = compressibility_interpolated_densities_2 
+        shorter_cut_interpolated_densities = compressibility_interpolated_densities_1
+        imbalance_sign = 1.0 
+    length_difference = len(longer_cut_interpolated_densities) - len(shorter_cut_interpolated_densities)
+    zero_padded_shorter_cut_interpolated_densities = np.append(shorter_cut_interpolated_densities, np.zeros(length_difference))
+    imbalances = imbalance_sign * ((longer_cut_interpolated_densities - zero_padded_shorter_cut_interpolated_densities) /
+                                    (longer_cut_interpolated_densities + zero_padded_shorter_cut_interpolated_densities))
+    return_list_1 = [] 
+    return_list_2 = [] 
+
+    return_list_1.append(compressibility_interpolated_pressures_1)
+    return_list_2.append(compressibility_interpolated_pressures_2)
+
+    return_list_1.append(included_compressibilities_1) 
+    return_list_2.append(included_compressibilities_2) 
+
+    if return_errors:
+        return_list_1.append(included_errors_1) 
+        return_list_2.append(included_errors_2) 
+    
+    if return_imbalances:
+        return (*return_list_1, *return_list_2, imbalances)
+    else:
+        return (*return_list_1, *return_list_2)
+    
 
 def get_balanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, 
                                                   first_stored_density_name = None, second_stored_density_name = None, 
