@@ -490,7 +490,7 @@ def _compressibility_helper(positions_1, potentials_1, densities_1, positions_2,
 
     index_breakpoints_2 = np.arange(0, len(potentials_2), window_size)
     energy_midpoints_2 = (potentials_2[index_breakpoints_2][:-1] + potentials_2[index_breakpoints_2 - 1][1:]) / 2.0
-    position_midpoints_2 = (positions_2[index_breakpoints_2][:-1] + positions_1[index_breakpoints_2 - 1][1:]) / 2.0
+    position_midpoints_2 = (positions_2[index_breakpoints_2][:-1] + positions_2[index_breakpoints_2 - 1][1:]) / 2.0
     compressibility_result_1 = science_functions.get_hybrid_trap_compressibilities_window_fit(
         potentials_1, densities_1, index_breakpoints_1, return_errors = return_errors
     )
@@ -500,29 +500,26 @@ def _compressibility_helper(positions_1, potentials_1, densities_1, positions_2,
     )
 
     return_list_1 = [] 
+    return_list_2 = []
+
+    if return_positions:
+        return_list_1.append(position_midpoints_1)
+        return_list_2.append(position_midpoints_2)
+    if return_potentials:
+        return_list_1.append(energy_midpoints_1)
+        return_list_2.append(energy_midpoints_2)
     if return_errors:
         compressibility_1, error_1 = compressibility_result_1
         return_list_1.append(compressibility_1)
         return_list_1.append(error_1) 
+        compressibility_2, error_2 = compressibility_result_2
+        return_list_2.append(compressibility_2)
+        return_list_2.append(error_2)
     else:
         compressibility_1 = compressibility_result_1
         return_list_1.append(compressibility_1)
-    if return_positions:
-        return_list_1.append(position_midpoints_1)
-    if return_potentials:
-        return_list_1.append(energy_midpoints_1)
-    return_list_2 = []
-    if return_errors:
-        compressibility_2, error_2 = compressibility_result_2
+        compressibility_2 = compressibility_result_2 
         return_list_2.append(compressibility_2)
-        return_list_2.append(error_2) 
-    else:
-        compressibility_2 = compressibility_result_2
-        return_list_2.append(compressibility_2)
-    if return_positions:
-        return_list_2.append(position_midpoints_2)
-    if return_potentials:
-        return_list_2.append(energy_midpoints_2)
     return (*return_list_1, *return_list_2)    
 
 
@@ -649,6 +646,10 @@ def get_axial_squish_normalized_pressures(my_measurement, my_run, autocut = True
     if return_densities:
         return_list_1.append(densities_1) 
         return_list_2.append(densities_2) 
+
+    return_list_1.append(normalized_pressures_1) 
+    return_list_2.append(normalized_pressures_2)
+
     return (*return_list_1, *return_list_2) 
 
 
@@ -683,13 +684,14 @@ def get_axial_squish_compressibilities_vs_pressure(my_measurement, my_run, autoc
         normalized_pressure_relative_cut_point = normalized_pressure_relative_cut_point, 
         first_stored_density_name = first_stored_density_name, 
         second_stored_density_name = second_stored_density_name, 
-        imaging_mode = imaging_mode, return_positions = True, return_potentials = False, **get_density_kwargs)
+        imaging_mode = imaging_mode, return_positions = True, return_potentials = False, return_densities = True, 
+         **get_density_kwargs)
     
     position_range_1_lower = np.min(positions_1)
     position_range_1_upper = np.max(positions_1)
 
     position_range_2_lower = np.min(positions_2)
-    position_range_2_upper = np.min(positions_2)
+    position_range_2_upper = np.max(positions_2)
 
     included_indices_1 = np.logical_and(position_midpoints_1 > position_range_1_lower, position_midpoints_1 < position_range_1_upper)
     included_indices_2 = np.logical_and(position_midpoints_2 > position_range_2_lower, position_midpoints_2 < position_range_2_upper)
@@ -714,40 +716,41 @@ def get_axial_squish_compressibilities_vs_pressure(my_measurement, my_run, autoc
     smoothed_densities_1 = savgol_filter(densities_1, window_size, 2)
     smoothed_densities_2 = savgol_filter(densities_2, window_size, 2)
 
-    compressibility_interpolated_densities_1 = np.interp(included_position_midpoints_1, positions_1, smoothed_densities_1)
-    compressibility_interpolated_densities_2 = np.interp(included_position_midpoints_2, positions_2, smoothed_densities_2)
+    def imbalance_interpolant_function(position):
+        interp_densities_1 = np.interp(position, positions_1, smoothed_densities_1) 
+        interp_densities_2 = np.interp(position, positions_2, smoothed_densities_2)
+        return (interp_densities_2 - interp_densities_1) / (interp_densities_2 + interp_densities_1)
 
-    if len(positions_1) > len(positions_2):
-        longer_cut_interpolated_densities = compressibility_interpolated_densities_1 
-        shorter_cut_interpolated_densities = compressibility_interpolated_densities_2
-        length_difference = len(positions_1) - len(positions_2)
-        imbalance_sign = -1.0
-    else:
-        longer_cut_interpolated_densities = compressibility_interpolated_densities_2 
-        shorter_cut_interpolated_densities = compressibility_interpolated_densities_1
-        imbalance_sign = 1.0 
-    length_difference = len(longer_cut_interpolated_densities) - len(shorter_cut_interpolated_densities)
-    zero_padded_shorter_cut_interpolated_densities = np.append(shorter_cut_interpolated_densities, np.zeros(length_difference))
-    imbalances = imbalance_sign * ((longer_cut_interpolated_densities - zero_padded_shorter_cut_interpolated_densities) /
-                                    (longer_cut_interpolated_densities + zero_padded_shorter_cut_interpolated_densities))
+    imbalances_1 = np.where(
+        np.logical_and(included_position_midpoints_1 > position_range_2_lower, included_position_midpoints_1 < position_range_2_upper), 
+        -1.0 * imbalance_interpolant_function(included_position_midpoints_1), 
+        -1.0
+    )
+
+    imbalances_2 = np.where(
+        np.logical_and(included_position_midpoints_2 > position_range_1_lower, included_position_midpoints_2 < position_range_1_upper), 
+        imbalance_interpolant_function(included_position_midpoints_2), 
+        1.0
+    )
+
     return_list_1 = [] 
     return_list_2 = [] 
 
     return_list_1.append(compressibility_interpolated_pressures_1)
     return_list_2.append(compressibility_interpolated_pressures_2)
 
+    if return_imbalances:
+        return_list_1.append(imbalances_1) 
+        return_list_2.append(imbalances_2)
+
     return_list_1.append(included_compressibilities_1) 
     return_list_2.append(included_compressibilities_2) 
 
     if return_errors:
-        return_list_1.append(included_errors_1) 
-        return_list_2.append(included_errors_2) 
+        return_list_1.append(included_errors_1)
+        return_list_2.append(included_errors_2)
     
-    if return_imbalances:
-        return (*return_list_1, *return_list_2, imbalances)
-    else:
-        return (*return_list_1, *return_list_2)
-    
+    return (*return_list_1, *return_list_2)
 
 def get_balanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, 
                                                   first_stored_density_name = None, second_stored_density_name = None, 
