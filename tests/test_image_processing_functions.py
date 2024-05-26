@@ -48,6 +48,72 @@ def test_get_pixel_variance():
     assert np.isclose(average_variance, EXPECTED_VARIANCE)
 
 
+def test_norm_box_helper():
+    without_atoms_array = np.ones((100, 100))
+    ROI = [25, 25, 75, 75]
+    roi_xmin, roi_ymin, roi_xmax, roi_ymax = ROI
+    norm_box_exclusive = [10, 10, 20, 20] 
+    norm_box_inclusive = [10, 10, 90, 90]
+    with_atoms_array = 0.7 * np.ones((100, 100))
+    with_atoms_array[30:70, 30:70] = 0.5
+    dark_image_array = np.zeros((100, 100))
+    image_stack = np.stack((with_atoms_array, without_atoms_array, dark_image_array))
+
+    correction_factor_no_norm = image_processing_functions._norm_box_helper(image_stack) 
+    assert correction_factor_no_norm == 1.0
+
+    norm_box_correction_factor_exclusive_no_ROI = image_processing_functions._norm_box_helper(image_stack, 
+                                                                norm_box_coordinates = norm_box_exclusive)
+    norm_box_correction_factor_exclusive_with_ROI = image_processing_functions._norm_box_helper(image_stack, 
+                                                                norm_box_coordinates = norm_box_exclusive, 
+                                                                roi_coordinates = ROI)
+    
+
+    EXPECTED_CORRECTION_FACTOR = 0.7
+    
+    assert np.isclose(norm_box_correction_factor_exclusive_no_ROI, EXPECTED_CORRECTION_FACTOR)
+    assert np.isclose(norm_box_correction_factor_exclusive_with_ROI, EXPECTED_CORRECTION_FACTOR)
+
+    norm_box_correction_factor_inclusive_with_ROI = image_processing_functions._norm_box_helper(image_stack, 
+                                                                        norm_box_coordinates = norm_box_inclusive, 
+                                                                        roi_coordinates = ROI)
+    
+    assert np.isclose(norm_box_correction_factor_inclusive_with_ROI, EXPECTED_CORRECTION_FACTOR)
+    
+    norm_box_correction_factor_inclusive_no_ROI = image_processing_functions._norm_box_helper(image_stack, 
+                                                                        norm_box_coordinates = norm_box_inclusive, 
+                                                                        roi_coordinates = None)
+    assert not np.isclose(norm_box_correction_factor_inclusive_no_ROI, EXPECTED_CORRECTION_FACTOR)
+
+    y_min_values = np.arange(0, 90)
+    x_min_values = np.arange(0, 90) 
+    counter = 0
+    for y_min_value in y_min_values:
+        for x_min_value in x_min_values:
+            y_max_value = y_min_value + 5
+            x_max_value = x_min_value + 5
+            current_norm_coordinates = [x_min_value, y_min_value, x_max_value, y_max_value]
+            contained_within_ROI = (
+                y_min_value >= roi_ymin and
+                y_max_value <= roi_ymax and 
+                x_min_value >= roi_xmin and 
+                x_max_value <= roi_xmax
+            )
+            if not contained_within_ROI:
+                current_correction_factor = image_processing_functions._norm_box_helper(image_stack, 
+                                                                                        norm_box_coordinates = current_norm_coordinates, 
+                                                                                        roi_coordinates = ROI)
+                assert np.isclose(current_correction_factor, EXPECTED_CORRECTION_FACTOR)
+            else:
+                try:
+                    current_correction_factor = image_processing_functions._norm_box_helper(image_stack, 
+                                                                                        norm_box_coordinates = current_norm_coordinates, 
+                                                                                        roi_coordinates = ROI)
+                except RuntimeError as e:
+                    pass
+                else:
+                    raise RuntimeError
+
 
 def test_subcrop():
     overall_image_array = np.arange(25).reshape((5, 5))
