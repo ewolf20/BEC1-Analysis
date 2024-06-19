@@ -51,7 +51,7 @@ to normalize the image_with_atoms and the image_without_atoms to have the same c
 
 Note: ROI and norm_box use coordinates in the form [x_min, y_min, x_max, y_max]"""
 def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, rebin_pixel_num = None, clean_strategy = "default_clipped"):
-    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates)
+    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates, roi_coordinates=ROI)
     dark_subtracted_image_with_atoms, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI, rebin_pixel_num = rebin_pixel_num)
     absorption_image = dark_subtracted_image_with_atoms / (dark_subtracted_image_without_atoms * with_without_light_ratio)
     absorption_image = _clean_absorption_image(absorption_image, strategy = clean_strategy)
@@ -63,7 +63,7 @@ def get_absorption_image(image_stack, ROI = None, norm_box_coordinates = None, r
 Returns dark-subtracted, norm-box-adjusted counts in the without atoms image, suitable for use as a marker of saturation intensity."""
 
 def get_without_atoms_counts(image_stack, ROI = None, norm_box_coordinates = None, rebin_pixel_num = None):
-    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates)
+    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates = norm_box_coordinates, roi_coordinates=ROI)
     _, dark_subtracted_image_without_atoms = _roi_crop_helper(image_stack, ROI = ROI, rebin_pixel_num = rebin_pixel_num)
     norm_adjusted_dark_subtracted_image_without_atoms = dark_subtracted_image_without_atoms * with_without_light_ratio
     return norm_adjusted_dark_subtracted_image_without_atoms
@@ -98,17 +98,61 @@ def safe_subtract(x, y, minimum_cast = np.byte):
 Helper function for finding the multiplier for the without_atoms image to compensate for light intensity shifts.
 """
 
-def _norm_box_helper(image_stack, norm_box_coordinates = None):
+def _norm_box_helper(image_stack, norm_box_coordinates = None, roi_coordinates = None):
     image_with_atoms = image_stack[0] 
     image_without_atoms = image_stack[1] 
     image_dark = image_stack[2]
-    if(norm_box_coordinates):
+    if not norm_box_coordinates is None:
         norm_x_min, norm_y_min, norm_x_max, norm_y_max = norm_box_coordinates
         norm_with_atoms = image_with_atoms[norm_y_min:norm_y_max, norm_x_min:norm_x_max]
         norm_without_atoms = image_without_atoms[norm_y_min:norm_y_max, norm_x_min:norm_x_max] 
         norm_dark = image_dark[norm_y_min:norm_y_max, norm_x_min:norm_x_max]
-        with_atoms_light_sum = np.sum(safe_subtract(norm_with_atoms, norm_dark).astype(float))
-        without_atoms_light_sum = np.sum(safe_subtract(norm_without_atoms, norm_dark).astype(float))
+        with_atoms_dark_subtracted = safe_subtract(norm_with_atoms, norm_dark, minimum_cast = float)
+        without_atoms_dark_subtracted = safe_subtract(norm_without_atoms, norm_dark, minimum_cast = float)
+        if not roi_coordinates is None:
+            norm_y_width = norm_y_max - norm_y_min 
+            norm_x_width = norm_x_max - norm_x_min
+
+            norm_y_indices, norm_x_indices = np.indices((norm_y_width, norm_x_width))
+
+            flattened_norm_x_indices = norm_x_indices.flatten()
+            flattened_norm_y_indices = norm_y_indices.flatten()
+
+            flattened_with_atoms_ds = with_atoms_dark_subtracted.flatten()
+            flattened_without_atoms_ds = without_atoms_dark_subtracted.flatten()
+
+            roi_x_min, roi_y_min, roi_x_max, roi_y_max = roi_coordinates 
+
+            norm_referenced_roi_xmin = roi_x_min - norm_x_min 
+            norm_referenced_roi_xmax = roi_x_max - norm_x_min
+            norm_referenced_roi_ymin = roi_y_min - norm_y_min 
+            norm_referenced_roi_ymax = roi_y_max - norm_y_min
+
+            norm_and_roi_overlapped_flattened = (
+                (flattened_norm_x_indices >= norm_referenced_roi_xmin) &
+                (flattened_norm_x_indices < norm_referenced_roi_xmax) &
+                (flattened_norm_y_indices >= norm_referenced_roi_ymin) &
+                (flattened_norm_y_indices < norm_referenced_roi_ymax)
+            )
+
+            if np.all(norm_and_roi_overlapped_flattened):
+                raise RuntimeError("Norm box is fully contained in ROI")
+
+            with_atoms_light_sum = np.sum(np.where(
+                norm_and_roi_overlapped_flattened, 
+                np.zeros(flattened_with_atoms_ds.size), 
+                flattened_with_atoms_ds
+            ))
+
+            without_atoms_light_sum = np.sum(np.where(
+                norm_and_roi_overlapped_flattened, 
+                np.zeros(flattened_without_atoms_ds.size),
+                flattened_without_atoms_ds
+            ))
+
+        else:
+            with_atoms_light_sum = np.sum(with_atoms_dark_subtracted) 
+            without_atoms_light_sum = np.sum(without_atoms_dark_subtracted)
         with_without_light_ratio = with_atoms_light_sum / without_atoms_light_sum
         return with_without_light_ratio
     else:
@@ -262,7 +306,7 @@ def get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, o
 def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning, linewidth, on_resonance_cross_section,
                                                 saturation_counts, ROI = None, norm_box_coordinates = None):
     beer_lambert_term = ((1 + np.square(2 * detuning / linewidth)) / on_resonance_cross_section ) * od_image
-    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates=norm_box_coordinates)
+    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates=norm_box_coordinates, roi_coordinates=ROI)
     with_atoms_dark_subtracted, without_atoms_dark_subtracted = _roi_crop_helper(image_stack, ROI = ROI)
     without_atoms_dark_subtracted = without_atoms_dark_subtracted * with_without_light_ratio
     saturation_term = (1.0 / on_resonance_cross_section) * (without_atoms_dark_subtracted - with_atoms_dark_subtracted) / saturation_counts
