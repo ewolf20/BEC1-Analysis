@@ -306,7 +306,7 @@ def get_atom_density_from_od_image_beer_lambert(od_image, detuning, linewidth, o
 def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning, linewidth, on_resonance_cross_section,
                                                 saturation_counts, ROI = None, norm_box_coordinates = None):
     beer_lambert_term = ((1 + np.square(2 * detuning / linewidth)) / on_resonance_cross_section ) * od_image
-    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates=norm_box_coordinates, ROI=ROI)
+    with_without_light_ratio = _norm_box_helper(image_stack, norm_box_coordinates=norm_box_coordinates, roi_coordinates=ROI)
     with_atoms_dark_subtracted, without_atoms_dark_subtracted = _roi_crop_helper(image_stack, ROI = ROI)
     without_atoms_dark_subtracted = without_atoms_dark_subtracted * with_without_light_ratio
     saturation_term = (1.0 / on_resonance_cross_section) * (without_atoms_dark_subtracted - with_atoms_dark_subtracted) / saturation_counts

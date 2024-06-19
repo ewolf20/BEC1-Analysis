@@ -45,11 +45,11 @@ RR_THERMAL_WIDTH = 64
 
 DEFAULT_ABSORPTION_IMAGE_ROI = [171, 171, 342, 342]
 DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (171, 171)
-EXPANDED_ABSORPTION_IMAGE_ROI = [30, 30, 482, 482]
+EXPANDED_ABSORPTION_IMAGE_ROI = [50, 50, 462, 462]
 DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI = [193, 193, 320, 320]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [50, 50, 140, 140]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (90, 90)
-EXPANDED_ABSORPTION_IMAGE_NORM_BOX = [10, 10, 20, 20]
+EXPANDED_ABSORPTION_IMAGE_NORM_BOX = [30, 30, 35, 35]
 
 
 
@@ -1724,7 +1724,8 @@ def create_dummy_measurement_folder(image_stack, run_param_values, experiment_pa
     if not os.path.exists(dummy_measurement_folder_pathname):
         os.mkdir(dummy_measurement_folder_pathname)
     else:
-        raise RuntimeError("Dummy folder already exists")
+        shutil.rmtree(dummy_measurement_folder_pathname) 
+        os.mkdir(dummy_measurement_folder_pathname)
     #Create fake images
     DUMMY_RUN_ID = 1
     run_names = measurement.MEASUREMENT_IMAGE_NAME_DICT[measurement_type]
