@@ -152,10 +152,15 @@ def test_get_absolute_pressures():
     expected_pressures = np.array([np.trapz(sample_densities_1d[i:], x = sample_potentials[i:]) for i in range(len(sample_densities_1d))])
     extracted_pressures = science_functions.get_absolute_pressures(sample_potentials, sample_densities_1d)
     assert np.allclose(extracted_pressures, expected_pressures)
+    sample_densities_superfluous_dim = np.expand_dims(sample_densities_1d, 0)
+    expected_pressures_superfluous_dim = np.expand_dims(expected_pressures, 0)
+    extracted_pressures_superfluous_dim = science_functions.get_absolute_pressures(sample_potentials, sample_densities_superfluous_dim)
+    assert np.allclose(expected_pressures_superfluous_dim, extracted_pressures_superfluous_dim)
     sample_densities_2d = np.expand_dims(sample_densities_1d, 0) * np.arange(4).reshape((4, 1))
     expected_pressures_2d = np.expand_dims(expected_pressures, 0) * np.arange(4).reshape((4, 1)) 
     extracted_pressures_2d = science_functions.get_absolute_pressures(sample_potentials, sample_densities_2d) 
     assert np.allclose(extracted_pressures_2d, expected_pressures_2d)
+
 
 def test_get_li6_br_energy_MHz():
     sample_field_G = 690
