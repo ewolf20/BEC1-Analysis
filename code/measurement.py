@@ -115,21 +115,21 @@ class Measurement():
     run_combine_function: function with signature run_combine_function([run_1, run_2, ... run_n]) -> combined_run; provides ``instructions'' 
     for combining runs. No output checking is performed - any object that ducktypes as a run is acceptable.
 
-    Same kwargs as self.filter_run_dict, with the same behavior. 
+    Same kwargs as self.filter_runs_dict, with the same behavior. 
     """
     def combine_runs(self, run_hash_function, run_combine_function, ignore_badshots = True, run_filter = None, ignore_errors = False):
-        filtered_run_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, 
+        filtered_runs_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, 
                                                  ignore_errors = ignore_errors)
-        hashes_set =  {run_hash_function(filtered_run_dict[key]) for key in filtered_run_dict}
+        hashes_set =  {run_hash_function(filtered_runs_dict[key]) for key in filtered_runs_dict}
         averaged_run_list = [] 
         for current_hash in hashes_set:
-            hash_matching_run_list = [filtered_run_dict[key] for key in filtered_run_dict if run_hash_function(filtered_run_dict[key]) == current_hash]
+            hash_matching_run_list = [filtered_runs_dict[key] for key in filtered_runs_dict if run_hash_function(filtered_runs_dict[key]) == current_hash]
             averaged_run = run_combine_function(hash_matching_run_list)
             averaged_run_list.append(averaged_run) 
-        averaged_run_dict = {i:run for i, run in enumerate(averaged_run_list)}
+        averaged_runs_dict = {i:run for i, run in enumerate(averaged_run_list)}
         if self.pre_combine_runs_dict is None:
             self.pre_combine_runs_dict = self.runs_dict 
-        self.runs_dict = averaged_run_dict
+        self.runs_dict = averaged_runs_dict
 
 
     """Restore the measurement to its state before combine_runs.
@@ -507,7 +507,7 @@ class Measurement():
     
     Numpyfy: If True, returned object is a numpy array of the queried values. Otherwise, a list is returned."""
     def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None, numpyfy = True):
-        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
+        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
         value_name_is_tuple = isinstance(value_name, tuple)
         value_names_tuple = Measurement._condition_string_tuple(value_name)
         combined_values_list = []
@@ -528,7 +528,7 @@ class Measurement():
 
 
     def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None, numpyfy = True):
-        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
+        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=value_name)
         value_name_is_tuple = isinstance(value_name, tuple)
         value_names_tuple = Measurement._condition_string_tuple(value_name)
@@ -551,7 +551,7 @@ class Measurement():
     some runs have errors in the analysis."""
     def get_parameter_analysis_value_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
                                                     run_filter = None, numpyfy = True):
-        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
+        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=analysis_value_name)
         parameter_value_names_tuple = Measurement._condition_string_tuple(parameter_name)
         analysis_value_names_tuple = Measurement._condition_string_tuple(analysis_value_name)
@@ -640,7 +640,7 @@ class Measurement():
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
         run_id_to_analyze_list = []
-        filtered_dict = self.filter_run_dict(ignore_badshots=ignore_badshots, run_filter = run_filter)
+        filtered_dict = self.filter_runs_dict(ignore_badshots=ignore_badshots, run_filter = run_filter)
         for run_id in filtered_dict:
             current_run = filtered_dict[run_id]
             if(not overwrite_existing):
@@ -786,7 +786,7 @@ class Measurement():
                             run.analysis_results[err_name] has an error. If None and ignore_errors is true, exclude runs with an error 
                             for any value of analysis_results.
     """
-    def filter_run_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
+    def filter_runs_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
         filtered_dict = {}
         conditioned_run_filter = Measurement._condition_run_filter(run_filter)
         conditioned_global_run_filter = Measurement._condition_run_filter(self.global_run_filter)

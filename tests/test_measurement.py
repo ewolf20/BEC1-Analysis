@@ -472,6 +472,73 @@ class TestMeasurement:
         assert max(outlier_filtered_multiple_values_bar) == max_bar
 
 
+    @staticmethod 
+    def test_filter_runs_dict():
+        my_measurement = TestMeasurement.initialize_measurement()
+        FakeRun = namedtuple("FakeRun", ["parameters", "analysis_results", "is_badshot"])
+        def make_fake_run(value):
+            parameters_dict = {"value":value} 
+            analysis_results_dict = {"value":value, "double_value":2 * value} 
+            is_badshot = False 
+            return FakeRun(parameters = parameters_dict, analysis_results = analysis_results_dict, is_badshot = is_badshot)
+        my_measurement.runs_dict = {i:make_fake_run(i) for i in range(100)}
+
+        BADSHOT_INDEX = 41
+        VALUE_ERROR_INDEX = 37
+        DOUBLE_VALUE_ERROR_INDEX = 11
+        RUN_FILTER_INDEX = 17
+        GLOBAL_RUN_FILTER_INDEX = 56
+
+
+        my_measurement.runs_dict[BADSHOT_INDEX] = my_measurement.runs_dict[BADSHOT_INDEX]._replace(is_badshot = True)
+        my_measurement.runs_dict[VALUE_ERROR_INDEX].analysis_results["value"] = Measurement.ANALYSIS_ERROR_INDICATOR_STRING
+        my_measurement.runs_dict[DOUBLE_VALUE_ERROR_INDEX].analysis_results["double_value"] = Measurement.ANALYSIS_ERROR_INDICATOR_STRING
+
+        def test_filter(my_measurement, my_run):
+            return not my_run.parameters["value"] == RUN_FILTER_INDEX
+        def test_global_filter(my_measurement, my_run):
+            return not my_run.parameters["value"] == GLOBAL_RUN_FILTER_INDEX
+
+
+        #Test badshot filtering
+        filtered_runs_dict_badshots = my_measurement.filter_runs_dict(ignore_badshots = True)
+        assert len(filtered_runs_dict_badshots) == 99 
+        assert not BADSHOT_INDEX in [filtered_runs_dict_badshots[key].analysis_results["value"] for key in filtered_runs_dict_badshots]
+
+        #Test error filtering with specified name
+        filtered_runs_dict_named_error = my_measurement.filter_runs_dict(ignore_badshots = False, ignore_errors = True, 
+                                                                analysis_value_err_check_name = "value")
+        assert len(filtered_runs_dict_named_error) == 99 
+        assert not VALUE_ERROR_INDEX in [filtered_runs_dict_named_error[key].analysis_results["value"] for key in filtered_runs_dict_named_error]
+
+
+        #Test error filtering on all indices 
+        filtered_runs_dict_any_error = my_measurement.filter_runs_dict(ignore_badshots = False, ignore_errors = True, 
+                                                                analysis_value_err_check_name = None)
+        assert len(filtered_runs_dict_any_error) == 98
+        assert not VALUE_ERROR_INDEX in [filtered_runs_dict_any_error[key].analysis_results["value"] for key in filtered_runs_dict_any_error]
+        assert not DOUBLE_VALUE_ERROR_INDEX in [filtered_runs_dict_any_error[key].analysis_results["value"] for key in filtered_runs_dict_any_error]
+
+        #Test run filtering
+        filtered_runs_dict_run_filter = my_measurement.filter_runs_dict(ignore_badshots = False, ignore_errors = False, 
+                                                                        run_filter = test_filter)
+        assert len(filtered_runs_dict_run_filter) == 99
+        assert not RUN_FILTER_INDEX in [filtered_runs_dict_run_filter[key].analysis_results["value"] for key in filtered_runs_dict_run_filter]
+
+        #Test global run filtering
+        my_measurement.set_global_run_filter(test_global_filter)
+        filtered_runs_dict_global_filter = my_measurement.filter_runs_dict(ignore_badshots = False, ignore_errors = False, run_filter = None)
+        assert len(filtered_runs_dict_global_filter) == 99
+        assert not GLOBAL_RUN_FILTER_INDEX in [filtered_runs_dict_global_filter[key].analysis_results["value"] for key in filtered_runs_dict_global_filter]
+
+
+        #All filters at once 
+        exclusion_index_list = [BADSHOT_INDEX, VALUE_ERROR_INDEX, DOUBLE_VALUE_ERROR_INDEX, RUN_FILTER_INDEX, GLOBAL_RUN_FILTER_INDEX]
+        filtered_runs_dict_all = my_measurement.filter_runs_dict(ignore_badshots = True, ignore_errors = True, run_filter = test_filter)
+        assert len(filtered_runs_dict_all) == 95 
+        for exclusion_index in exclusion_index_list:
+            assert not exclusion_index in [filtered_runs_dict_all[key].analysis_results["value"] for key in filtered_runs_dict_all]
+
 
 
     #Does not test the interactive box setting.
