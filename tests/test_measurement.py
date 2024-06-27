@@ -1,4 +1,4 @@
-import copy
+from collections import namedtuple
 import hashlib
 import os 
 import sys 
@@ -65,6 +65,54 @@ class TestMeasurement:
         my_measurement.undo_experiment_parameter_overrides() 
         assert len(my_measurement.experiment_parameters) == 1
         assert my_measurement.experiment_parameters["foo"] == 1
+
+
+    @staticmethod
+    def test_combine_runs():
+        my_measurement = TestMeasurement.initialize_measurement() 
+        FakeRun = namedtuple("FakeRun", ("val", "is_badshot"))
+        def make_fake_run(val, is_badshot = False):
+            return FakeRun(val = val, is_badshot = is_badshot)
+        my_measurement.runs_dict = {1:make_fake_run("Oh"), 2:make_fake_run("hi"),
+                             3:make_fake_run("there"), 4:make_fake_run("neighbor")}
+        pre_combine_dict = my_measurement.runs_dict
+
+        def trivial_run_hash_function(my_run):
+            return 0
+        
+        def run_combine_function(my_run_list):
+            my_val_list = [run.val for run in my_run_list]
+            overall_string = ' '.join(my_val_list)
+            return make_fake_run(overall_string)
+
+        my_measurement.combine_runs(trivial_run_hash_function, run_combine_function)
+        assert len(my_measurement.runs_dict) == 1
+        assert my_measurement.pre_combine_runs_dict == pre_combine_dict
+        assert my_measurement.runs_dict[0].val == "Oh hi there neighbor"
+
+        my_measurement.undo_combine_runs()
+
+        #Test combination 
+        def parity_run_hash_function(my_run):
+            return len(my_run.val) % 2
+        
+        my_measurement.combine_runs(parity_run_hash_function, run_combine_function)
+        assert len(my_measurement.runs_dict) == 2
+        vals_list = [my_measurement.runs_dict[key].val for key in my_measurement.runs_dict]
+        assert "Oh hi neighbor" in vals_list 
+        assert "there" in vals_list
+
+
+    @staticmethod 
+    def test_undo_combine_runs():
+        my_measurement = TestMeasurement.initialize_measurement()
+        post_dict = {1:"foo", 2:"bar"}
+        pre_dict = {3:"hi"}
+        my_measurement.runs_dict = post_dict
+        my_measurement.pre_combine_runs_dict = pre_dict
+        my_measurement.undo_combine_runs()
+        assert my_measurement.pre_combine_runs_dict is None
+        assert my_measurement.runs_dict == pre_dict        
 
 
     @staticmethod
