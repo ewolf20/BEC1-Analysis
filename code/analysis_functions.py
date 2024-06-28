@@ -1,3 +1,4 @@
+import json
 import os
 
 import matplotlib.pyplot as plt
@@ -6,6 +7,7 @@ from scipy.integrate import trapezoid
 from scipy import ndimage
 
 from . import data_fitting_functions, image_processing_functions, science_functions
+from .measurement import Run
 
 
 #RAW IMAGES (Convenience functions for getting the raw pixel data from shots, cropped within an ROI)
@@ -931,6 +933,53 @@ def get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True)
                                                                             lithium_linewidth_Hz, lithium_top_geo_adjusted_res_cross_section_m, 
                                                                             saturation_multiplier = camera_saturation_fudge)
     return saturation_counts
+
+#RUN COMBINING FUNCTIONS
+
+#List of parameters which are always unique per run, or specifically reserved for iteration tracking
+EXCLUDED_RUN_PARAMETERS_LIST = ["id", "runtime", "IterationNum", "Iteration", "IterationCount"] 
+
+
+"""Return a hash of run experiment parameters. 
+
+Run hash function for use in measurement.combine_runs. Return a hash of the dictionary my_run.parameters, where values which either guaranteed 
+to be unique per run (id, runtime) or are specifically reserved as dummy variables (Iteration) are excluded. """
+def identical_parameters_run_hash_function(my_run):
+    run_parameters_sans_exclusions = {key:my_run.parameters[key] for key in my_run.parameters if not key in EXCLUDED_RUN_PARAMETERS_LIST}
+    return hash(json.dumps(run_parameters_sans_exclusions))
+
+def all_equal_run_hash_function(my_run):
+    return 0
+
+
+"""Function factory for run_averaging. 
+
+Returns a run combining function for use in measurement.combine_runs. Given a string or tuple of strings result_names and an averaging function 
+result_average_function, apply result_average_function to the list [run_1.analysis_results[result_name_1], run_2.analysis_results[result_name_1], ...]
+and then store the result in the analysis_results of the returned run. Any names not specifically provided are excluded."""
+def average_results_identical_runs_run_combine_function_factory(result_names, result_average_function):
+    if not isinstance(result_names, tuple):
+        result_names = (result_names,)
+    def run_combine_function(run_list):
+        first_run = run_list[0]
+        first_run_non_unique_parameters = {key:first_run.parameters[key] for key in first_run.parameters if not key in EXCLUDED_RUN_PARAMETERS_LIST}
+        combined_string_run_ids = ",".join([str(run.parameters["id"]) for run in run_list])
+        combined_run_parameters = first_run_non_unique_parameters
+        combined_run_parameters["id"] = combined_string_run_ids
+        combined_analysis_results = {}
+        for result_name in result_names:
+            averaged_result = result_average_function([run.analysis_results[result_name] for run in run_list])
+            combined_analysis_results[result_name] = averaged_result
+        combined_run = Run(combined_string_run_ids, None, combined_run_parameters, analysis_results = combined_analysis_results, 
+                           connected_mode = False)
+        return combined_run
+    return run_combine_function
+
+#Convenience function for most common use case
+average_densities_13_run_combine_function = average_results_identical_runs_run_combine_function_factory(
+                                        ("densities_1", "densities_3"),
+                                         lambda x: np.average(x, axis = 0))
+
 
 #UTILITY, NOT INTENDED FOR EXTERNAL CALLING
 def _get_resonance_frequency_from_state_index(my_measurement, state_index):

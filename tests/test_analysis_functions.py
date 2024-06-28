@@ -1,4 +1,4 @@
-import hashlib
+from collections import namedtuple
 import json
 import os 
 import sys 
@@ -1576,6 +1576,61 @@ def test_get_saturation_counts_top():
         assert np.isclose(expected_saturation_counts_fudged, saturation_counts_fudged)
     finally:
         shutil.rmtree(measurement_pathname)
+
+
+
+def test_identical_parameters_run_hash_function():
+    def create_fake_run(value):
+        parameters_dict = {"id":value, "runtime":"00:00:00", "mod":value % 2, "foo":"bar"}
+        return measurement.Run(value, None, parameters_dict, connected_mode = False)
+    hash_even = analysis_functions.identical_parameters_run_hash_function(create_fake_run(0)) 
+    hash_odd = analysis_functions.identical_parameters_run_hash_function(create_fake_run(1))
+    for i in range(10):
+        fake_run = create_fake_run(i)
+        run_hash = analysis_functions.identical_parameters_run_hash_function(fake_run)
+        if i % 2 == 0:
+            matching_hash = hash_even 
+            other_hash = hash_odd
+        else:
+            matching_hash = hash_odd 
+            other_hash = hash_even
+        assert run_hash == matching_hash 
+        assert run_hash != other_hash
+
+
+def test_arbitrary_function_identical_runs_run_combine_function_factory():
+    def create_fake_run(value):
+        parameters_dict = {"id":value, "foo":1}
+        analysis_dict = {"val":value, "double_val":2 * value}
+        return measurement.Run(value, None, parameters_dict, analysis_results = analysis_dict, connected_mode = False)
+    run_list = [create_fake_run(i) for i in range(10)]
+    run_combine_function_val = analysis_functions.average_results_identical_runs_run_combine_function_factory("val", np.average)
+    returned_run = run_combine_function_val(run_list)
+    expected_id_string = ",".join([str(i) for i in range(10)])
+    assert returned_run.parameters["id"] == expected_id_string
+    assert returned_run.parameters["foo"] == 1
+    assert returned_run.analysis_results["val"] == np.average(range(10)) 
+    assert not "double_val" in returned_run.analysis_results
+
+    run_combine_function_both = analysis_functions.average_results_identical_runs_run_combine_function_factory(("val", "double_val"), np.average)
+    returned_run = run_combine_function_both(run_list)
+    assert returned_run.parameters["id"] == expected_id_string 
+    assert returned_run.parameters["foo"] == 1 
+    assert returned_run.analysis_results["val"] == np.average(range(10)) 
+    assert returned_run.analysis_results["double_val"] == 2 * np.average(range(10))
+
+
+def test_average_densities_13_run_combine_function():
+    def create_fake_run(value):
+        parameters_dict = {"id":value}
+        analysis_dict = {"densities_1":value * np.arange(100).reshape((10, 10)), "densities_3":-value * np.arange(100).reshape((10, 10))}
+        return measurement.Run(value, None, parameters_dict, analysis_results = analysis_dict, connected_mode = False)
+    run_list = [create_fake_run(i) for i in range(2)]
+    expected_densities_1 = 0.5 * np.arange(100).reshape((10, 10))
+    expected_densities_3 = -0.5 * np.arange(100).reshape((10, 10))
+    returned_run = analysis_functions.average_densities_13_run_combine_function(run_list)
+    assert np.allclose(returned_run.analysis_results["densities_1"], expected_densities_1) 
+    assert np.allclose(returned_run.analysis_results["densities_3"], expected_densities_3)
 
 
 def create_measurement(type_name, image_stack = None, run_param_values= None, experiment_param_values = None, ROI = None, norm_box = None):
