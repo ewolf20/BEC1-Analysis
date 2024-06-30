@@ -73,6 +73,7 @@ class Measurement():
         self.measurement_analysis_results = {}
         self.global_run_filter = global_run_filter
         self.runs_dict = {}
+        self.pre_combine_runs_dict = None
         self.connected_mode = connected_mode
         #Specific to connected mode
         if connected_mode:
@@ -99,6 +100,46 @@ class Measurement():
     def set_global_run_filter(self, run_filter):
         self.global_run_filter = run_filter
 
+
+
+    """Combine multiple runs into ``virtual'' runs.
+    
+    Given a function run_hash_function, combine all of the runs with identical hashes using run_combine_function to produce a reduced 
+    list of ``virtual'' runs. Primarily for integrating multi-shot averaging into the individual shot framework of analyze_runs.
+    
+    Parameters:
+    
+    run_hash_function: function with signature run_hash_function(my_run) -> hash_value. Hash value can be any primitive type. Runs 
+        with identical hashes are combined together. 
+
+    run_combine_function: function with signature run_combine_function([run_1, run_2, ... run_n]) -> combined_run; provides ``instructions'' 
+    for combining runs. No output checking is performed - any object that ducktypes as a run is acceptable.
+
+    Same kwargs as self.filter_runs_dict, with the same behavior. 
+    """
+    def combine_runs(self, run_hash_function, run_combine_function, ignore_badshots = True, run_filter = None, ignore_errors = False):
+        filtered_runs_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, 
+                                                 ignore_errors = ignore_errors)
+        hashes_set =  {run_hash_function(filtered_runs_dict[key]) for key in filtered_runs_dict}
+        averaged_run_list = [] 
+        for current_hash in hashes_set:
+            hash_matching_run_list = [filtered_runs_dict[key] for key in filtered_runs_dict if run_hash_function(filtered_runs_dict[key]) == current_hash]
+            averaged_run = run_combine_function(hash_matching_run_list)
+            averaged_run_list.append(averaged_run) 
+        averaged_runs_dict = {i:run for i, run in enumerate(averaged_run_list)}
+        if self.pre_combine_runs_dict is None:
+            self.pre_combine_runs_dict = self.runs_dict 
+        self.runs_dict = averaged_runs_dict
+
+
+    """Restore the measurement to its state before combine_runs.
+    
+    Remark: If combine_runs has been used iteratively, the measurement is restored to its ORIGINAL state, i.e. the state before any 
+    calls of combine_runs."""
+    def undo_combine_runs(self):
+        if not self.pre_combine_runs_dict is None:
+            self.runs_dict = self.pre_combine_runs_dict
+            self.pre_combine_runs_dict = None
 
     def _get_run_ids_and_parameters_from_measurement_folder(self):
         path_to_dump_file_in_measurement_folder = os.path.join(self.measurement_directory_path, Measurement.MEASUREMENT_FOLDER_RUN_PARAMS_FILENAME)
@@ -191,7 +232,11 @@ class Measurement():
     NOTE: This method only stores JSON serializable data, and e.g. does not restore saved live analysis functions, global run filters, or badshot functions.
     These must be manually re-initialized if needed."""
 
-    def dump_measurement(self, dump_foldername = None):
+    def dump_measurement(self, dump_foldername = None, revert_experiment_parameter_overrides = True, revert_combine_runs = True):
+        if revert_experiment_parameter_overrides:
+            self.undo_experiment_parameter_overrides()
+        if revert_combine_runs:
+            self.undo_combine_runs()
         if dump_foldername is None:
             dump_foldername = Measurement.DEFAULT_DUMP_FOLDER_NAME
         if not os.path.exists(dump_foldername):
@@ -206,8 +251,6 @@ class Measurement():
             json.dump(analysis_dump_dict, analysis_dump_file)
         #Default assumption is that parameters values will be vanilla JSON serializable.
         parameters_dump_pathname = os.path.join(dump_foldername, Measurement.PARAMETERS_DUMPFILE_NAME)
-        #Experiment parameter overrides are not saved
-        self.undo_experiment_parameter_overrides()
         with open(parameters_dump_pathname, 'w') as parameters_dump_file:
             parameters_dump_dict = {} 
             parameters_dump_dict["Measurement"] = self.measurement_parameters 
@@ -464,7 +507,7 @@ class Measurement():
     
     Numpyfy: If True, returned object is a numpy array of the queried values. Otherwise, a list is returned."""
     def get_parameter_value_from_runs(self, value_name, ignore_badshots = True, run_filter = None, numpyfy = True):
-        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
+        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter)
         value_name_is_tuple = isinstance(value_name, tuple)
         value_names_tuple = Measurement._condition_string_tuple(value_name)
         combined_values_list = []
@@ -485,7 +528,7 @@ class Measurement():
 
 
     def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None, numpyfy = True):
-        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
+        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=value_name)
         value_name_is_tuple = isinstance(value_name, tuple)
         value_names_tuple = Measurement._condition_string_tuple(value_name)
@@ -508,7 +551,7 @@ class Measurement():
     some runs have errors in the analysis."""
     def get_parameter_analysis_value_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
                                                     run_filter = None, numpyfy = True):
-        filtered_dict = self.filter_run_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
+        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
                                                 analysis_value_err_check_name=analysis_value_name)
         parameter_value_names_tuple = Measurement._condition_string_tuple(parameter_name)
         analysis_value_names_tuple = Measurement._condition_string_tuple(analysis_value_name)
@@ -597,7 +640,7 @@ class Measurement():
         if not results_in_tuple_form:
             result_varnames = (result_varnames,)
         run_id_to_analyze_list = []
-        filtered_dict = self.filter_run_dict(ignore_badshots=ignore_badshots, run_filter = run_filter)
+        filtered_dict = self.filter_runs_dict(ignore_badshots=ignore_badshots, run_filter = run_filter)
         for run_id in filtered_dict:
             current_run = filtered_dict[run_id]
             if(not overwrite_existing):
@@ -732,7 +775,18 @@ class Measurement():
             current_run.parameters["badshot"] = current_run.is_badshot
 
 
-    def filter_run_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
+    """Filter self.runs_dict to return only runs fitting specified conditions. 
+    
+    Parameters:
+    
+    ignore_badshots: If True, exclude runs which have run.parameters['is_badshot'] == True
+    run_filter: A function func(my_measurement, my_run); if not None, return only those runs for which the function returns true
+    ignore_errors: If True, exclude runs which include errors in their analysis_results attributes 
+    analysis_value_err_check_name: Str or tuple of strings. If ignore_errors is true, exclude those runs for which 
+                            run.analysis_results[err_name] has an error. If None and ignore_errors is true, exclude runs with an error 
+                            for any value of analysis_results.
+    """
+    def filter_runs_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
         filtered_dict = {}
         conditioned_run_filter = Measurement._condition_run_filter(run_filter)
         conditioned_global_run_filter = Measurement._condition_run_filter(self.global_run_filter)
@@ -745,11 +799,18 @@ class Measurement():
             if ignore_badshots and current_run.is_badshot:
                 filter_run = True 
             if not filter_run and ignore_errors:
-                for err_check_name in conditioned_analysis_err_check_name_tuple:
-                    analysis_result = current_run.analysis_results[err_check_name]
-                    if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
-                        filter_run = True
-                        break
+                if not analysis_value_err_check_name is None:
+                    for err_check_name in conditioned_analysis_err_check_name_tuple:
+                        analysis_result = current_run.analysis_results[err_check_name]
+                        if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
+                            filter_run = True
+                            break
+                else:
+                    for key in current_run.analysis_results:
+                        analysis_result = current_run.analysis_results[key]
+                        if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
+                            filter_run = True
+                            break
             if filter_run or not conditioned_overall_run_filter(self, current_run):
                 filter_run = True 
             if not filter_run:
