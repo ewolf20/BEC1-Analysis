@@ -804,7 +804,7 @@ def get_balanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = 
         return (*fit_popt,) 
     
 
-def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, majority_autocut_upper_buffer = 40,
+def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, majority_autocut_upper_buffer = 50,
                                                   first_stored_density_name = None, second_stored_density_name = None, 
                                                   imaging_mode = "polrot", fit_prefactor = False, return_errors = False,
                                                   show_plots = False, save_plots = False, save_pathname = ".",
@@ -824,7 +824,7 @@ def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut 
         majority_densities = densities_2
         majority_potentials = potentials_2
         minority_potentials = potentials_1
-        minority_densities = densities_2
+        minority_densities = densities_1
 
     #If the autocutting hasn't been done yet, it MUST be done on the minority species on the right hand side
     if not autocut:
@@ -844,6 +844,22 @@ def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut 
 
     if show_plots or save_plots:
         run_id = my_run.parameters["id"]
+        plt.plot(majority_potentials, majority_densities, label = "Majority")
+        plt.plot(minority_potentials, minority_densities, label = "Minority")
+        plt.vlines(min(clipped_majority_potentials), min(majority_densities), max(majority_densities), 
+                   color = "black", linestyles = "dashed")
+        plt.legend()
+        plt.xlabel("Potential (Hz)")
+        plt.ylabel("Atom Density $\left(\mu m^{-1}\\right)$")
+        if save_plots:
+            figure_save_name = "{0}_Imbalanced_Squish_Densities.png".format(str(run_id))
+            full_save_path = os.path.join(save_pathname, figure_save_name)
+            plt.savefig(full_save_path, bbox_inches = "tight")
+        if show_plots:
+            plt.show()
+        else:
+            plt.cla()
+        #Then plot majority fitting 
         plt.plot(clipped_majority_potentials, clipped_majority_densities, label = "Data")
         if not fit_prefactor:
             mu, T = fit_popt 
@@ -870,7 +886,7 @@ def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut 
         plt.ylabel("Density $\left(\mu m^{-3}\\right)$")
         plt.suptitle("Ideal Fermi Density Fitting, Run ID = {0:d}".format(run_id))
         if save_plots:
-            figure_name = "{0:d}_B_Squish_Fit.png".format(run_id)
+            figure_name = "{0}_Imbalanced_Squish_Fit.png".format(str(run_id))
             full_save_name = os.path.join(save_pathname, figure_name)
             plt.savefig(full_save_name, bbox_inches = "tight")
         if show_plots:
