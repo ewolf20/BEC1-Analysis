@@ -525,8 +525,9 @@ def _compressibility_helper(positions_1, potentials_1, densities_1, positions_2,
 
 def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
                                                   first_stored_density_name = None, second_stored_density_name = None, 
-                                                  imaging_mode = "polrot", return_positions = False, return_potentials = True, 
-                                                    **get_density_kwargs):
+                                                  imaging_mode = "polrot", return_positions = False, return_potentials = True,
+                                                  majority_autocut_upper_buffer = 0,**get_density_kwargs):
+    
     densities_first, densities_second = get_hybrid_trap_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
                                         first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
                                         imaging_mode = imaging_mode, return_positions = False, return_potentials = False, 
@@ -545,15 +546,17 @@ def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autoc
     gradient_potential = center_referenced_positions_um * gradient_Hz_um 
     overall_potential = gradient_potential + harmonic_potential
     if autocut:
+        _, upper_cut_index_1 = science_functions.hybrid_trap_autocut(densities_first)
+        _, upper_cut_index_2 = science_functions.hybrid_trap_autocut(densities_second)
         #Lower cut is done at majority cloud max density, upper cut as for the hybrid trap 
         if np.sum(densities_first) > np.sum(densities_second):
             majority_densities = densities_first 
+            upper_cut_index_1 += majority_autocut_upper_buffer
         else:
             majority_densities = densities_second 
+            upper_cut_index_2 += majority_autocut_upper_buffer
         LOWER_CUT_BUFFER = 5
         lower_cut_index = np.argmax(majority_densities) + LOWER_CUT_BUFFER
-        _, upper_cut_index_1 = science_functions.hybrid_trap_autocut(densities_first)
-        _, upper_cut_index_2 = science_functions.hybrid_trap_autocut(densities_second)
         densities_first = densities_first[lower_cut_index:upper_cut_index_1] 
         densities_second = densities_second[lower_cut_index:upper_cut_index_2] 
         potentials_first = overall_potential[lower_cut_index:upper_cut_index_1] 
@@ -801,7 +804,7 @@ def get_balanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = 
         return (*fit_popt,) 
     
 
-def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, 
+def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut = True, majority_autocut_upper_buffer = 40,
                                                   first_stored_density_name = None, second_stored_density_name = None, 
                                                   imaging_mode = "polrot", fit_prefactor = False, return_errors = False,
                                                   show_plots = False, save_plots = False, save_pathname = ".",
@@ -809,11 +812,13 @@ def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut 
     potentials_1, densities_1, potentials_2, densities_2 = get_axial_squish_densities_along_harmonic_axis(
         my_measurement, my_run, autocut = autocut, first_stored_density_name = first_stored_density_name, 
         second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, 
-        return_positions = False, return_potentials = True, **get_density_kwargs)
+        return_positions = False, return_potentials = True, majority_autocut_upper_buffer=majority_autocut_upper_buffer,
+        **get_density_kwargs)
+    
     if np.sum(densities_1) > np.sum(densities_2):
-        majority_densities = densities_1 
-        majority_potentials = potentials_1 
-        minority_potentials = potentials_2 
+        majority_densities = densities_1
+        majority_potentials = potentials_1
+        minority_potentials = potentials_2
         minority_densities = densities_2
     else:
         majority_densities = densities_2
@@ -835,22 +840,31 @@ def get_imbalanced_axial_squish_fitted_mu_and_T(my_measurement, my_run, autocut 
     else:
         fit_results = data_fitting_functions.fit_li6_ideal_fermi_density(clipped_majority_potentials, clipped_majority_densities)
     fit_popt, fit_pcov = fit_results 
+    fit_sigmas = np.sqrt(np.diag(fit_pcov))
 
     if show_plots or save_plots:
         run_id = my_run.parameters["id"]
         plt.plot(clipped_majority_potentials, clipped_majority_densities, label = "Data")
         if not fit_prefactor:
             mu, T = fit_popt 
+            mu_err, T_err = fit_sigmas
             mu_kHz = mu / 1000 
+            mu_err_kHz = mu_err / 1000
             T_kHz = T / 1000
+            T_err_kHz = T_err / 1000
             plt.plot(clipped_majority_potentials, data_fitting_functions.li6_ideal_fermi_density(clipped_majority_potentials, *fit_popt), 
-                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz".format(mu_kHz, T_kHz))
+                label = "Fit, $\mu$ = {0:.1f} +- {1:.1f} kHz, $T$ = {2:.1f} +- {3:.1f} kHz".format(mu_kHz, mu_err_kHz, T_kHz, T_err_kHz))
         else:
             mu, T, prefactor = fit_popt 
+            mu_err, T_err, prefactor_err = fit_sigmas
             mu_kHz = mu / 1000 
             T_kHz = T / 1000
+            mu_err_kHz = mu_err / 1000 
+            T_err_kHz = T_err / 1000
+
             plt.plot(clipped_majority_potentials, data_fitting_functions.li6_ideal_fermi_density_with_prefactor(clipped_majority_potentials, *fit_popt), 
-                label = "Fit, $\mu$ = {0:.1f} kHz, $T$ = {1:.1f} kHz, Prefactor = {2:.2f}".format(mu_kHz, T_kHz, prefactor))
+                label = "Fit, $\mu$ = {0:.1f} +- {1:.1f} kHz, $T$ = {2:.1f} +- {3:.2f} kHz, Prefactor = {4:.3f} +- {5:.3f}".format(
+                    mu_kHz, mu_err_kHz, T_kHz, T_err_kHz, prefactor, prefactor_err))
         plt.legend()
         plt.xlabel("Potential (Hz)") 
         plt.ylabel("Density $\left(\mu m^{-3}\\right)$")
