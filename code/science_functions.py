@@ -84,22 +84,24 @@ def hybrid_trap_autocut(three_d_density_trap_profile_um, mode = "statistics", cu
         window_indices = np.where(window_indices > data_length - 1, 2 * (data_length - 1) - window_indices, window_indices)
         data_window_array = three_d_density_trap_profile_um[window_indices]
         data_indices_array = np.arange(len(three_d_density_trap_profile_um))[window_indices]
-        data_window_is_nonzero_array = statistics_functions.linear_center_location_test(data_indices_array, data_window_array, cut_value, axis = -1)
+        data_window_is_nonzero_array = statistics_functions.linear_center_location_test(data_indices_array, data_window_array, cut_value, axis = -1, 
+                                                                                        confidence_level = 0.95)
     elif(mode == "savgol"):
         filtered_data = savgol_filter(three_d_density_trap_profile_um, AUTOCUT_WINDOW, AUTOCUT_SAVGOL_ORDER)
         data_window_is_nonzero_array = filtered_data > 0.0
     else:
         raise RuntimeError("Unsupported mode for hybrid trap autocut")
-    data_window_is_nonzero_first_half = data_window_is_nonzero_array[:middle_index] 
-    data_window_is_nonzero_second_half = data_window_is_nonzero_array[middle_index:] 
-    first_half_is_zero_indices, = (~data_window_is_nonzero_first_half).nonzero()
+    data_window_split_index = np.argmax(three_d_density_trap_profile_um)
+    data_window_is_nonzero_first_half = data_window_is_nonzero_array[:data_window_split_index] 
+    data_window_is_nonzero_second_half = data_window_is_nonzero_array[data_window_split_index:] 
+    first_half_is_zero_indices = (~data_window_is_nonzero_first_half).nonzero()[0]
     if(len(first_half_is_zero_indices) > 0):
         last_first_half_zero_index = first_half_is_zero_indices[-1]
     else:
         last_first_half_zero_index = -1
     second_half_is_zero_indices = (~data_window_is_nonzero_second_half).nonzero()[0]
     if(len(second_half_is_zero_indices) > 0):
-        first_second_half_zero_index = second_half_is_zero_indices[0] + middle_index
+        first_second_half_zero_index = second_half_is_zero_indices[0] + data_window_split_index
     else:
         first_second_half_zero_index = data_length
     start_index = last_first_half_zero_index + 1 

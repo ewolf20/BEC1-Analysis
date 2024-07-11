@@ -95,6 +95,7 @@ def test_linear_center_location_test():
     ADDED_SLOPE = 5.00
     random_normals_plus_slope = random_normals + ADDED_SLOPE * x_values
     assert statistics_functions.linear_center_location_test(x_values, random_normals_plus_slope, -0.25, confidence_level = 0.975) 
+    assert not statistics_functions.linear_center_location_test(x_values, random_normals_plus_slope, -0.25, confidence_level = 0.999)
     assert statistics_functions.linear_center_location_test(x_values, random_normals_plus_slope, -0.5, confidence_level = 0.999)
     assert not statistics_functions.linear_center_location_test(x_values, random_normals_plus_slope, 0.1, confidence_level = 0.95)
 
