@@ -50,6 +50,7 @@ DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI = [193, 193, 320, 320]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [50, 50, 140, 140]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (90, 90)
 EXPANDED_ABSORPTION_IMAGE_NORM_BOX = [30, 30, 35, 35]
+HYBRID_AVOID_ZERO_ROI = [100, 200, 420, 320]
 
 
 
@@ -1265,6 +1266,116 @@ def test_get_axial_squish_absolute_pressures():
     finally:
         shutil.rmtree(measurement_pathname)
 
+def test_get_axial_squish_normalized_pressures():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "axial_trap_frequency_hz":E_DUMMY,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "hybrid_trap_center_pix_polrot":255,
+        "axial_gradient_Hz_per_um_V":SQRT_5_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0,
+        "Axial_Squish_Imaging_Grad_V":SQRT_7_DUMMY
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image_norm_pressure()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = HYBRID_AVOID_ZERO_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        my_measurement.analyze_runs(analysis_functions.get_axial_squish_densities_along_harmonic_axis, 
+                        ("ax_densities_1", "ax_densities_3"), fun_kwargs = {
+                            "return_positions":False,
+                            "return_potentials":False,
+                            "autocut":True,
+                            "first_stored_density_name":"densities_1", 
+                            "second_stored_density_name":"densities_3"
+                        })
+        my_measurement.analyze_runs(analysis_functions.get_axial_squish_absolute_pressures, 
+                                    ("potentials_1", "abs_pressure_1", "potentials_3", "abs_pressure_3"), fun_kwargs = {
+                                        "autocut":True,
+                                        "first_stored_density_name":"densities_1",
+                                        "second_stored_density_name":"densities_3"
+                                    })
+        expected_potentials_1, abs_pressure_1, expected_potentials_3, abs_pressure_3 = my_measurement.get_analysis_value_from_runs(
+            ("potentials_1", "abs_pressure_1", "potentials_3", "abs_pressure_3")
+        )
+
+        expected_potentials_1 = expected_potentials_1.flatten()
+        expected_potentials_3 = expected_potentials_3.flatten()
+        abs_pressure_1 = abs_pressure_1.flatten()
+        abs_pressure_3 = abs_pressure_3.flatten()
+
+        axial_densities_1, axial_densities_3 = my_measurement.get_analysis_value_from_runs(
+            ("ax_densities_1", "ax_densities_3")
+        )
+
+        axial_densities_1 = axial_densities_1.flatten()
+        axial_densities_3 = axial_densities_3.flatten()
+
+        pressure_denominator_1 = science_functions.get_ideal_fermi_pressure_hz_um_from_density(axial_densities_1 * 1e18)
+        pressure_denominator_3 = science_functions.get_ideal_fermi_pressure_hz_um_from_density(axial_densities_3 * 1e18)
+        expected_norm_pressure_1 = abs_pressure_1 / pressure_denominator_1
+        expected_norm_pressure_3 = abs_pressure_3 / pressure_denominator_3
+        #First test with the additional normalized pressure cut turned off
+        potential_1, norm_pressure_1, potential_3, norm_pressure_3 = analysis_functions.get_axial_squish_normalized_pressures(
+            my_measurement, my_run, return_positions = False, return_potentials = True, autocut = True,
+            first_stored_density_name = "densities_1", second_stored_density_name = "densities_3",
+            normalized_pressure_cut = False
+        )
+
+        potential_1 = potential_1.flatten() 
+        potential_3 = potential_3.flatten() 
+        norm_pressure_1 = norm_pressure_1.flatten() 
+        norm_pressure_3 = norm_pressure_3.flatten()
+
+        assert np.allclose(potential_1, expected_potentials_1)
+        assert np.allclose(potential_3, expected_potentials_3)
+        assert np.allclose(expected_norm_pressure_1, norm_pressure_1)
+        assert np.allclose(expected_norm_pressure_3, norm_pressure_3)
+        #Now try autocutting... 
+
+        norm_pressure_autocut_point = 0.1 
+
+        potential_1_cut, norm_pressure_1_cut, potential_3_cut, norm_pressure_3_cut = analysis_functions.get_axial_squish_normalized_pressures(
+            my_measurement, my_run, return_positions = False, return_potentials = True, autocut = True, 
+            first_stored_density_name = "densities_1", second_stored_density_name = "densities_3",
+            normalized_pressure_cut = True, normalized_pressure_relative_cut_point = norm_pressure_autocut_point)
+        
+        potential_1_cut = potential_1_cut.flatten()
+        potential_3_cut = potential_3_cut.flatten()
+        norm_pressure_1_cut = norm_pressure_1_cut.flatten()
+        norm_pressure_3_cut = norm_pressure_3_cut.flatten()
+
+        included_indices_1 = axial_densities_1 > (np.max(axial_densities_1) * norm_pressure_autocut_point)
+        included_indices_3 = axial_densities_3 > (np.max(axial_densities_3) * norm_pressure_autocut_point)
+
+        expected_potentials_1_autocut = expected_potentials_1[included_indices_1] 
+        expected_potentials_3_autocut = expected_potentials_3[included_indices_3]
+        expected_norm_pressure_1_autocut = expected_norm_pressure_1[included_indices_1] 
+        expected_norm_pressure_3_autocut = expected_norm_pressure_3[included_indices_3]
+
+        assert np.allclose(potential_1_cut, expected_potentials_1_autocut)
+        assert np.allclose(potential_3_cut, expected_potentials_3_autocut)
+        assert np.allclose(norm_pressure_1_cut, expected_norm_pressure_1_autocut)
+        assert np.allclose(norm_pressure_3_cut, expected_norm_pressure_3_autocut)
+
+    finally:
+        shutil.rmtree(measurement_pathname)
 
 def test_get_balanced_axial_squish_fitted_mu_and_T():
     _mu_and_T_fit_test_helper(analysis_functions.get_balanced_axial_squish_fitted_mu_and_T, 
@@ -1792,6 +1903,27 @@ def get_hybrid_sample_absorption_image(crop_to_roi = False):
     else:
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         return hybrid_sample_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+    
+def get_hybrid_sample_absorption_image_norm_pressure(crop_to_roi = False):
+    center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+    def unit_lorentzian(index, center, radius):
+        return 1.0 / (1 + np.square(index - center) / np.square(radius))
+    hybrid_sample_absorption_image = np.where(
+        np.logical_and(
+            np.abs(y_indices - center_y_index) < box_radius,
+            np.abs(x_indices - center_x_index) < box_radius
+        ), 
+        np.exp(-unit_lorentzian(y_indices, center_y_index, box_radius / 3.0)),
+        1.0
+    )
+    if not crop_to_roi:
+        return hybrid_sample_absorption_image 
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return hybrid_sample_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+
     
 def get_rr_condensate_sample_absorption_image(crop_to_roi = False):
     center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
