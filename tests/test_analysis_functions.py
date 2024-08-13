@@ -1377,6 +1377,83 @@ def test_get_axial_squish_normalized_pressures():
     finally:
         shutil.rmtree(measurement_pathname)
 
+
+def test_get_axial_squish_compressibilities():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "axial_trap_frequency_hz":E_DUMMY,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "hybrid_trap_center_pix_polrot":255,
+        "axial_gradient_Hz_per_um_V":SQRT_5_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0,
+        "Axial_Squish_Imaging_Grad_V":SQRT_7_DUMMY
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image_norm_pressure()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = HYBRID_AVOID_ZERO_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        my_measurement.analyze_runs(analysis_functions.get_axial_squish_densities_along_harmonic_axis, 
+                        ("potentials_1", "ax_densities_1", "potentials_3", "ax_densities_3"), fun_kwargs = {
+                            "return_positions":False,
+                            "return_potentials":True,
+                            "autocut":False,
+                            "first_stored_density_name":"densities_1", 
+                            "second_stored_density_name":"densities_3"
+                        })
+        potentials_1, potentials_3, ax_densities_1, ax_densities_3 = my_measurement.get_analysis_value_from_runs(
+            ("potentials_1", "potentials_3", "ax_densities_1", "ax_densities_3")
+        )
+
+        potentials_1 = potentials_1[0] 
+        ax_densities_1 = ax_densities_1[0] 
+        potentials_3 = potentials_3[0] 
+        ax_densities_3 = ax_densities_3[0]
+
+        COMPRESSIBILITY_WINDOW_SIZE = 19
+        compressibility_index_breakpoints = np.arange(0, len(potentials_1), COMPRESSIBILITY_WINDOW_SIZE)
+        expected_compressibilities_1, expected_errors_1 = science_functions.get_hybrid_trap_compressibilities_window_fit(
+            potentials_1, ax_densities_1, compressibility_index_breakpoints, return_errors = True)
+        expected_compressibilities_3, expected_errors_3 = science_functions.get_hybrid_trap_compressibilities_window_fit(
+            potentials_3, ax_densities_3, compressibility_index_breakpoints, return_errors = True)
+        
+
+        expected_potentials_1 = 0.5 * (potentials_1[compressibility_index_breakpoints][:-1] + potentials_1[compressibility_index_breakpoints - 1][1:])
+        expected_potentials_3 = 0.5 * (potentials_3[compressibility_index_breakpoints][:-1] + potentials_3[compressibility_index_breakpoints - 1][1:])
+
+        (extracted_potentials_1, extracted_compressibilities_1, extracted_errors_1, 
+        extracted_potentials_3, extracted_compressibilities_3, extracted_errors_3) = analysis_functions.get_axial_squish_compressibilities(
+            my_measurement, my_run, first_stored_density_name = "densities_1", second_stored_density_name = "densities_3", 
+            return_errors = True, return_potentials = True, window_size = COMPRESSIBILITY_WINDOW_SIZE
+        )
+        
+        assert np.allclose(extracted_potentials_1, expected_potentials_1)
+        assert np.allclose(extracted_potentials_3, expected_potentials_3) 
+        assert np.allclose(extracted_compressibilities_1, expected_compressibilities_1)
+        assert np.allclose(extracted_compressibilities_3, expected_compressibilities_3)
+        assert np.allclose(extracted_errors_1, expected_errors_1)
+        assert np.allclose(extracted_errors_3, expected_errors_3)
+
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
 def test_get_balanced_axial_squish_fitted_mu_and_T():
     _mu_and_T_fit_test_helper(analysis_functions.get_balanced_axial_squish_fitted_mu_and_T, 
                               data_fitting_functions.fit_li6_balanced_density, 
