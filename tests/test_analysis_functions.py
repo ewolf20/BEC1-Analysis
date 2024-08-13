@@ -1442,7 +1442,7 @@ def test_get_axial_squish_compressibilities():
             my_measurement, my_run, first_stored_density_name = "densities_1", second_stored_density_name = "densities_3", 
             return_errors = True, return_potentials = True, window_size = COMPRESSIBILITY_WINDOW_SIZE
         )
-        
+
         assert np.allclose(extracted_potentials_1, expected_potentials_1)
         assert np.allclose(extracted_potentials_3, expected_potentials_3) 
         assert np.allclose(extracted_compressibilities_1, expected_compressibilities_1)
@@ -1452,6 +1452,108 @@ def test_get_axial_squish_compressibilities():
 
     finally:
         shutil.rmtree(measurement_pathname)
+
+
+def test_get_axial_squish_compressibilities_vs_pressure():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":100,
+        "axicon_tilt_deg":0.0,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "axial_trap_frequency_hz":E_DUMMY,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "hybrid_trap_center_pix_polrot":255,
+        "axial_gradient_Hz_per_um_V":SQRT_5_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0,
+        "Axial_Squish_Imaging_Grad_V":SQRT_7_DUMMY
+    }
+    hybrid_sample_image = get_hybrid_sample_absorption_image_norm_pressure()
+    hybrid_sample_image_stack = generate_image_stack_from_absorption(hybrid_sample_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = hybrid_sample_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = HYBRID_AVOID_ZERO_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
+        for autocut_setting in [True, False]:
+            my_measurement.analyze_runs(analysis_functions.get_axial_squish_densities_along_harmonic_axis, 
+                            ("potentials_1", "ax_densities_1", "potentials_3", "ax_densities_3"), fun_kwargs = {
+                                "return_positions":False,
+                                "return_potentials":True,
+                                "autocut":False,
+                                "first_stored_density_name":"densities_1", 
+                                "second_stored_density_name":"densities_3"
+                            })    
+            my_measurement.analyze_runs(analysis_functions.get_axial_squish_normalized_pressures, ("norm_pressures_1", "norm_pressures_3"), 
+                                fun_kwargs = {
+                                    "first_stored_density_name":"densities_1", 
+                                    "second_stored_density_name":"densities_3", 
+                                    "autocut":autocut_setting,
+                                    "normalized_pressure_cut":autocut_setting, 
+                                    "return_positions":False, 
+                                    "return_potentials":False})
+            COMPRESSIBILITES_WINDOW_SIZE = 21 
+            my_measurement.analyze_runs(analysis_functions.get_axial_squish_compressibilities, ("compressibilities_1", "compressibilities_3"), 
+                                        fun_kwargs = {
+                                            "first_stored_density_name":"densities_1", 
+                                            "second_stored_density_name":"densities_3", 
+                                            "autocut":autocut_setting, 
+                                            "window_size":COMPRESSIBILITES_WINDOW_SIZE, 
+                                            "return_potentials":False})
+            
+            ax_densities_1, ax_densities_3 = my_measurement.get_analysis_value_from_runs(("ax_densities_1", "ax_densities_3"))
+            ax_densities_1 = ax_densities_1[0] 
+            ax_densities_3 = ax_densities_3[0]
+            imbalances = (ax_densities_3 - ax_densities_1) / (ax_densities_3 + ax_densities_1)
+
+            norm_pressures_1, norm_pressures_3 = my_measurement.get_analysis_value_from_runs(("norm_pressures_1", "norm_pressures_3"))
+            norm_pressures_1 = norm_pressures_1[0] 
+            norm_pressures_3 = norm_pressures_3[0]
+
+            expected_breakpoint_indices = np.arange(0, len(norm_pressures_1), COMPRESSIBILITES_WINDOW_SIZE)
+            expected_midpoint_indices = np.round(0.5 * (expected_breakpoint_indices[1:] + expected_breakpoint_indices[:-1])).astype(int)
+            expected_norm_pressures_1 = norm_pressures_1[expected_midpoint_indices] 
+            expected_norm_pressures_3 = norm_pressures_3[expected_midpoint_indices]
+
+            expected_imbalances = imbalances[expected_midpoint_indices] 
+
+            expected_compressibilities_1, expected_compressibilities_3 = my_measurement.get_analysis_value_from_runs(
+                ("compressibilities_1", "compressibilities_3"))
+            
+            expected_compressibilities_1 = expected_compressibilities_1[0] 
+            expected_compressibilities_3 = expected_compressibilities_3[0] 
+
+            (extracted_norm_pressures_1, extracted_imbalances_1, extracted_compressibilities_1,
+            extracted_norm_pressures_3, extracted_imbalances_3, extracted_compressibilities_3) = analysis_functions.get_axial_squish_compressibilities_vs_pressure(
+                my_measurement, my_run, 
+                first_stored_density_name = "densities_1", 
+                second_stored_density_name = "densities_3", 
+                autocut = autocut_setting, normalized_pressure_cut = autocut_setting, 
+                return_imbalances = True)
+            
+            #High rtol because actual method involves smoothing and interpolation - just need to check it's close
+            assert np.allclose(expected_imbalances, extracted_imbalances_3)
+            assert np.allclose(expected_imbalances, -1.0 * extracted_imbalances_1) 
+            assert np.allclose(extracted_norm_pressures_1, expected_norm_pressures_1, rtol = 1e-1) 
+            assert np.allclose(extracted_norm_pressures_3, expected_norm_pressures_3, rtol = 1e-1) 
+            assert np.allclose(expected_compressibilities_1, extracted_compressibilities_1, rtol = 1e-1)
+            assert np.allclose(expected_compressibilities_3, extracted_compressibilities_3, rtol = 1e-1)
+
+        #Test that autocutting works properly... for now just take the intersection of both
+
+    finally:
+        shutil.rmtree(measurement_pathname)
+
 
 
 def test_get_balanced_axial_squish_fitted_mu_and_T():
