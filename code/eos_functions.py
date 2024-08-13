@@ -396,6 +396,12 @@ def balanced_eos_virial_f_twice_deriv(betamu):
 _balanced_density_T_over_TF_vs_betamu_func = None
 #Function for calculating the density of a balanced unitary Fermi gas vs. betamu and kBT. 
 #As for the ideal gas, requires the species to be specified
+
+#NOTE: Temp band-aid fix for balanced density fitting
+ku_experimental_values_dict = loading_functions.load_unitary_EOS()
+ku_maximum_betamu = ku_experimental_values_dict["betamu"][0] 
+ku_maximum_betamu_mu = ku_experimental_values_dict["mu_over_EF"][0]
+
 def balanced_density_um(betamu, kBT_Hz, species = "6Li"):
     if species == "6Li":
         mass_kg = LI_6_MASS_KG
@@ -404,10 +410,13 @@ def balanced_density_um(betamu, kBT_Hz, species = "6Li"):
     global _balanced_density_T_over_TF_vs_betamu_func
     if _balanced_density_T_over_TF_vs_betamu_func is None:
         _balanced_density_T_over_TF_vs_betamu_func =  get_balanced_eos_functions("T_over_TF")
+
+    T_over_TF_values = np.where(betamu <= ku_maximum_betamu, _balanced_density_T_over_TF_vs_betamu_func(betamu), ku_maximum_betamu_mu / betamu)
+    # T_over_TF_values = _balanced_density_T_over_TF_vs_betamu_func(betamu)
     kBT_J = kBT_Hz * H_MKS
     thermal_de_broglie_m = thermal_de_broglie_mks(kBT_J, mass_kg)
     thermal_de_broglie_um = thermal_de_broglie_m * 1e6
-    return np.power(thermal_de_broglie_um, -3.0) * 4.0 / (3 * np.sqrt(np.pi)) * np.power(_balanced_density_T_over_TF_vs_betamu_func(betamu), -1.5)
+    return np.power(thermal_de_broglie_um, -3.0) * 4.0 / (3 * np.sqrt(np.pi)) * np.power(T_over_TF_values, -1.5)
 
 
 

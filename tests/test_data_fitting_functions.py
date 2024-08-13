@@ -402,7 +402,7 @@ def test_fit_li6_balanced_density():
     noisy_densities = noise_free_densities * (1.0 + 0.05 * normal_randoms) 
     fit_results = data_fitting_functions.fit_li6_balanced_density(potential_values, noisy_densities)
     popt, pcov = fit_results
-    EXPECTED_POPT = np.array([797.4867, 196.17915])
+    EXPECTED_POPT = np.array([798.2285, 202.1856])
     assert np.all(np.isclose(popt, EXPECTED_POPT))
     POTENTIAL_OFFSET = 3141
     offset_potential_values = potential_values + POTENTIAL_OFFSET
@@ -424,7 +424,7 @@ def test_fit_li6_balanced_density_with_prefactor():
     noisy_densities = noise_free_densities * (1.0 + 0.01 * normal_randoms) 
     fit_results = data_fitting_functions.fit_li6_balanced_density_with_prefactor(potential_values, noisy_densities)
     popt, pcov = fit_results
-    EXPECTED_POPT = np.array([1001.1053, 251.1914, 1.4951678])
+    EXPECTED_POPT = np.array([1001.573632,  250.070182, 1.493098])
     assert np.all(np.isclose(popt, EXPECTED_POPT))
     POTENTIAL_OFFSET = 3141
     offset_potential_values = potential_values + POTENTIAL_OFFSET
