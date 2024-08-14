@@ -381,6 +381,26 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
     assert(np.abs((center_snippet_average_3d_density - max_value) / center_snippet_average_3d_density < 1e-1))
 
 
+def test_inverse_abel():
+    SAMPLE_IMAGE_SHAPE = (501, 501)
+    SAMPLE_IMAGE_CENTER_X = 250
+    SAMPLE_IMAGE_CENTER_Y = 250
+    SAMPLE_IMAGE_Y_SIGMA = 62.8
+    SAMPLE_IMAGE_X_SIGMA = 23.7
+    sample_image_y_indices, sample_image_x_indices = np.indices(SAMPLE_IMAGE_SHAPE)
+
+    sample_image = np.exp(
+        -np.square(sample_image_y_indices - SAMPLE_IMAGE_CENTER_Y) / (2 * np.square(SAMPLE_IMAGE_Y_SIGMA)) - 
+        np.square(sample_image_x_indices - SAMPLE_IMAGE_CENTER_X) / (2 * np.square(SAMPLE_IMAGE_X_SIGMA)))
+
+    inverse_abel = image_processing_functions.inverse_abel(sample_image)
+
+    #For a 2D gaussian the expectation is just a gaussian divided by a constant
+    expected_inverse_abel = sample_image / np.sqrt(2 * np.pi * np.square(SAMPLE_IMAGE_X_SIGMA))
+
+    assert np.allclose(inverse_abel, expected_inverse_abel, rtol = 3e-3)
+
+
 def test_get_hybrid_cross_section_um():
     SAMPLE_SIDE_ANGLE_DEG = 45
     SAMPLE_SIDE_ASPECT_RATIO = 2 

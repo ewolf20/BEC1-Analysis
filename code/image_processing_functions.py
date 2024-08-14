@@ -4,6 +4,7 @@ from numba import jit
 import numpy as np
 from scipy.optimize import fsolve
 from scipy import ndimage
+import abel
 
 from . import data_fitting_functions
 
@@ -532,6 +533,27 @@ def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axi
     refitted_harmonic_axis_positions_um = harmonic_axis_positions_um - center
     return (refitted_harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
 
+
+
+"""Inverse Abel transform of a profile. 
+
+Given a (potentially multi-dimensional) profile, compute the inverse Abel transform along the specified axis, 
+leaving others untouched. profile is assumed to be well-conditioned - see parameters. 
+
+This method is a thin wrapper around the PyAbel package - 
+
+For basic notes, see e.g. https://en.wikipedia.org/wiki/Abel_transform. For implementation details, 
+see https://pyabel.readthedocs.io/en/latest/readme_link.html
+
+Parameters:
+
+profile: A 1D or 2D numpy array. If the image is 2D, the symmetry axis of the image is taken to be along the 0th 
+axis (the "z-axis"), so that this axis is preserved while the other (the "y" axis, by convention of the Abel transform, 
+but in our convention the "x"-axis) is integrated over for the transform.
+
+"""
+def inverse_abel(profile, method = "three_point", origin = 'none'):
+    return abel.Transform(profile, direction = "inverse", method = method, origin = origin).transform
 
 """
 Convenience function for getting the actual areal cross section of the tilted oval of the hybrid trap.
