@@ -381,6 +381,26 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
     assert(np.abs((center_snippet_average_3d_density - max_value) / center_snippet_average_3d_density < 1e-1))
 
 
+def test_get_image_principal_rotation_angle():
+    SAMPLE_IMAGE_SHAPE = (501, 501)
+    SAMPLE_IMAGE_CENTER_X = 250
+    SAMPLE_IMAGE_CENTER_Y = 250
+    SAMPLE_IMAGE_Y_SIGMA = 62.8
+    SAMPLE_IMAGE_X_SIGMA = 23.7
+    sample_image_y_indices, sample_image_x_indices = np.indices(SAMPLE_IMAGE_SHAPE)
+
+    sample_image = np.exp(
+        -np.square(sample_image_y_indices - SAMPLE_IMAGE_CENTER_Y) / (2 * np.square(SAMPLE_IMAGE_Y_SIGMA)) - 
+        np.square(sample_image_x_indices - SAMPLE_IMAGE_CENTER_X) / (2 * np.square(SAMPLE_IMAGE_X_SIGMA)))
+    
+    ROTATION_ANGLE_DEG = 30
+
+    sample_image_rotated = scipy.ndimage.rotate(sample_image, ROTATION_ANGLE_DEG)
+
+
+    rotation_angle = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated) 
+    assert np.isclose(rotation_angle, -ROTATION_ANGLE_DEG)
+
 def test_inverse_abel():
     SAMPLE_IMAGE_SHAPE = (501, 501)
     SAMPLE_IMAGE_CENTER_X = 250

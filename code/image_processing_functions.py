@@ -1,10 +1,11 @@
 import os 
+import warnings
 
+import abel
 from numba import jit
 import numpy as np
 from scipy.optimize import fsolve
 from scipy import ndimage
-import abel
 
 from . import data_fitting_functions
 
@@ -532,6 +533,56 @@ def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axi
     amp, center, gamma, offset = popt
     refitted_harmonic_axis_positions_um = harmonic_axis_positions_um - center
     return (refitted_harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
+
+
+
+"""
+Given an image, return an angle to rotate it into the xy plane.
+
+Given a 2D numpy array image, determine the principal axes of the image and return an angle to rotate the image so that these 
+lie along x and y, respectively. The technique is to compute the correlation matrix
+C_ij = <x_i x_j>
+and compute the appropriate rotation angle to make this diagonal. 
+
+Parameters: 
+    image: A 2D numpy array. 
+    return_com: Boolean, default false. If true, the function returns both the COM of the image as well as the appropriate rotation angle.
+    
+Returns: 
+    angle: The angle, in degrees, by which to rotate the image, under the sign convention of scipy.ndimage.rotate.
+    If return_com is true: (angle, com_tuple), with com_tuple = (x_com, y_com)
+"""
+
+def get_image_principal_rotation_angle(image, return_com = False):
+    image_y_indices, image_x_indices = np.indices(image.shape)
+    image_sum = np.sum(image)
+    image_y_com = np.sum(image_y_indices * image) / image_sum
+    image_x_com = np.sum(image_x_indices * image) / image_sum
+
+    image_y_indices_offset = image_y_indices - image_y_com 
+    image_x_indices_offset = image_x_indices - image_x_com
+    image_weights = image / image_sum 
+
+    flattened_image_y_indices_offset = image_y_indices_offset.flatten()
+    flattened_image_x_indices_offset = image_x_indices_offset.flatten() 
+    flattened_image_weights = image_weights.flatten()
+
+    covariance_matrix = np.cov(np.stack((flattened_image_x_indices_offset, flattened_image_y_indices_offset)), aweights= flattened_image_weights)
+
+    sigma_x_squared = covariance_matrix[0][0]
+    sigma_y_squared = covariance_matrix[1][1] 
+    off_diag = covariance_matrix[1][0]
+
+    sigma_diff = sigma_y_squared - sigma_x_squared 
+
+    rotation_angle_rad = -0.5 * np.arctan(2 * off_diag / sigma_diff)
+    rotation_angle_deg = rotation_angle_rad * 180 / np.pi
+
+    if not return_com:
+        return rotation_angle_deg
+    else:
+        return (rotation_angle_deg, (image_x_com, image_y_com))
+
 
 
 
