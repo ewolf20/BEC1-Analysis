@@ -393,19 +393,27 @@ def test_get_image_principal_rotation_angle():
         -np.square(sample_image_y_indices - SAMPLE_IMAGE_CENTER_Y) / (2 * np.square(SAMPLE_IMAGE_Y_SIGMA)) - 
         np.square(sample_image_x_indices - SAMPLE_IMAGE_CENTER_X) / (2 * np.square(SAMPLE_IMAGE_X_SIGMA)))
     
+
     ROTATION_ANGLE_DEG = 30
 
     sample_image_rotated = scipy.ndimage.rotate(sample_image, ROTATION_ANGLE_DEG, reshape = False)
 
-    rotation_angle = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated) 
-    assert np.isclose(rotation_angle, -ROTATION_ANGLE_DEG)
+    extracted_rotation_angle = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated) 
+    assert np.isclose(extracted_rotation_angle, -ROTATION_ANGLE_DEG)
 
     #Now check that returning the COM works... 
     _, (x_com, y_com) = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated, return_com = True)
 
     assert np.isclose(x_com, SAMPLE_IMAGE_CENTER_X) 
     assert np.isclose(y_com, SAMPLE_IMAGE_CENTER_Y)
-    assert np.isclose(rotation_angle, -ROTATION_ANGLE_DEG)
+    assert np.isclose(extracted_rotation_angle, -ROTATION_ANGLE_DEG)
+
+    #Finally, check over a whole range, just in case... 
+    rotation_angle_range = np.linspace(0, 45, 10, endpoint = False)
+    for rotation_angle in rotation_angle_range:
+        sample_image_rotated = scipy.ndimage.rotate(sample_image, rotation_angle, reshape = False)
+        extracted_rotation_angle = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated) 
+        assert np.isclose(extracted_rotation_angle, -rotation_angle, rtol = 1e-4)
 
 def test_inverse_abel():
     SAMPLE_IMAGE_SHAPE = (501, 501)
