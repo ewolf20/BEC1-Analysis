@@ -798,6 +798,12 @@ class Measurement():
             filter_run = False
             if ignore_badshots and current_run.is_badshot:
                 filter_run = True 
+            #Filter the run if conditioned_overall_run_filter returns false or errors out
+            try:
+                if filter_run or not conditioned_overall_run_filter(self, current_run):
+                    filter_run = True 
+            except Exception:
+                filter_run = True
             if not filter_run and ignore_errors:
                 if not analysis_value_err_check_name is None:
                     for err_check_name in conditioned_analysis_err_check_name_tuple:
@@ -811,8 +817,6 @@ class Measurement():
                         if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
                             filter_run = True
                             break
-            if filter_run or not conditioned_overall_run_filter(self, current_run):
-                filter_run = True 
             if not filter_run:
                 filtered_dict[run_id] = current_run
         return filtered_dict 
