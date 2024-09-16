@@ -561,17 +561,15 @@ def get_image_principal_rotation_angle(image, return_com = False):
 
     image_y_indices_offset = image_y_indices - image_y_com 
     image_x_indices_offset = image_x_indices - image_x_com
-    image_weights = image / image_sum 
+    image_weights = image / image_sum
 
     flattened_image_y_indices_offset = image_y_indices_offset.flatten()
     flattened_image_x_indices_offset = image_x_indices_offset.flatten() 
     flattened_image_weights = image_weights.flatten()
 
-    covariance_matrix = np.cov(np.stack((flattened_image_x_indices_offset, flattened_image_y_indices_offset)), aweights= flattened_image_weights)
-
-    sigma_x_squared = covariance_matrix[0][0]
-    sigma_y_squared = covariance_matrix[1][1] 
-    off_diag = covariance_matrix[1][0]
+    sigma_x_squared = np.sum(np.square(flattened_image_x_indices_offset) * flattened_image_weights)
+    sigma_y_squared = np.sum(np.square(flattened_image_y_indices_offset) * flattened_image_weights)
+    off_diag = np.sum(flattened_image_x_indices_offset * flattened_image_y_indices_offset * flattened_image_weights)
 
     sigma_diff = sigma_y_squared - sigma_x_squared 
 
