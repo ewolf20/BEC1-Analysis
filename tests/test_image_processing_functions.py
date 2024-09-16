@@ -415,6 +415,24 @@ def test_get_image_principal_rotation_angle():
         extracted_rotation_angle = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated) 
         assert np.isclose(extracted_rotation_angle, -rotation_angle, rtol = 1e-4)
 
+
+def test_get_image_coms():
+    SAMPLE_IMAGE_SHAPE = (501, 501) 
+    SAMPLE_IMAGE_CENTER_X = 142
+    SAMPLE_IMAGE_CENTER_Y = 267 
+    SAMPLE_GAUSSIAN_WIDTH = 25
+
+    sample_image_y_indices, sample_image_x_indices = np.indices(SAMPLE_IMAGE_SHAPE) 
+    sample_image_values = data_fitting_functions.two_dimensional_gaussian(
+        sample_image_x_indices, sample_image_y_indices, 1.0, SAMPLE_IMAGE_CENTER_X, SAMPLE_IMAGE_CENTER_Y, 
+        SAMPLE_GAUSSIAN_WIDTH, SAMPLE_GAUSSIAN_WIDTH, 0.0
+    )
+
+    extracted_ycom, extracted_xcom = image_processing_functions.get_image_coms(sample_image_values)
+    assert np.isclose(extracted_ycom, SAMPLE_IMAGE_CENTER_Y) 
+    assert np.isclose(extracted_xcom, SAMPLE_IMAGE_CENTER_X)
+
+
 def test_inverse_abel():
     SAMPLE_IMAGE_SHAPE = (501, 501)
     SAMPLE_IMAGE_CENTER_X = 250

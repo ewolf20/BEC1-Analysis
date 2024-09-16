@@ -325,25 +325,11 @@ def get_y_integrated_atom_densities_top_double(my_measurement, my_run, first_sto
 
 def get_xy_atom_density_pixel_coms_top_double(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                         imaging_mode = "polrot", **get_density_kwargs):
-    x_int_density_1, x_int_density_2 = get_x_integrated_atom_densities_top_double(
-        my_measurement, my_run, first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
-        imaging_mode = imaging_mode, **get_density_kwargs
-    )
-    y_int_density_1, y_int_density_2 = get_y_integrated_atom_densities_top_double(
-        my_measurement, my_run, first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
-        imaging_mode = imaging_mode, **get_density_kwargs
-    )
-
-    y_size = len(x_int_density_1)
-    y_pixel_positions = np.arange(y_size) 
-    y_com_1 = np.sum(x_int_density_1 * y_pixel_positions) / np.sum(x_int_density_1)
-    y_com_2 = np.sum(x_int_density_2 * y_pixel_positions) / np.sum(x_int_density_2)
-
-    x_size = len(y_int_density_1)
-    x_pixel_positions = np.arange(x_size) 
-    x_com_1 = np.sum(y_int_density_1 * x_pixel_positions) / np.sum(y_int_density_1)
-    x_com_2 = np.sum(y_int_density_2 * x_pixel_positions) / np.sum(y_int_density_2)
-
+    
+    density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
+                                                      imaging_mode, **get_density_kwargs)
+    y_com_1, x_com_1 = image_processing_functions.get_image_coms(density_1)
+    y_com_2, x_com_2 = image_processing_functions.get_image_coms(density_2)
     return (x_com_1, y_com_1, x_com_2, y_com_2)
 
 #ATOM COUNTS

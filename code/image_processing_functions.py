@@ -580,8 +580,33 @@ def get_image_principal_rotation_angle(image, return_com = False):
         return rotation_angle_deg
     else:
         return (rotation_angle_deg, (image_x_com, image_y_com))
+    
 
+"""Given an image, return its center of mass. 
 
+Given an n-dimensional numpy array image, return a length-n tuple coms representing the 
+center of mass along each axis of the image.
+
+Parameters:
+
+image: An n-dimensional ndarray of pixel values, representing a density map. No check 
+is performed that all values are positive.
+
+Returns:
+
+coms: A length-n array representing the center of mass along each axis, in the order of the 
+original image. Units are pixels: rounding the COM gives the nearest index along that axis 
+to the center of mass position."""
+
+def get_image_coms(image):
+    normalized_image_weights = image / np.sum(image)
+    reshaped_normalized_image_weights = np.expand_dims(normalized_image_weights, axis = 0)
+    image_indices = np.indices(image.shape)
+    axes_array = np.arange(len(image.shape)) + 1 
+    axes_tuple = tuple(axes_array)
+    weighted_image_indices = reshaped_normalized_image_weights * image_indices
+    coms = np.sum(weighted_image_indices, axis = axes_tuple)
+    return coms
 
 
 """Inverse Abel transform of a profile. 
