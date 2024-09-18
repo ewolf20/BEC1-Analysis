@@ -218,7 +218,6 @@ def bin_and_average_data(data_to_bin, bin_dimensions, omitted_axes = None):
         reshape_dimension_list.append(bin_dimension)
     #The reshape dimension list must be extended to include the omitted dimensions
     reshape_dimension_list.extend(omitted_data_dimensions)
-    print(reshape_dimension_list)
     slice_tuple = tuple(slice_list)
     reshape_dimension_tuple = tuple(reshape_dimension_list)
     truncated_data = moved_axis_array[slice_tuple] 
@@ -545,31 +544,20 @@ C_ij = <x_i x_j>
 and compute the appropriate rotation angle to make this diagonal. 
 
 Parameters: 
-    image: A 2D numpy array. 
+    image: A 2D numpy array. If greater than 2D, all but the last two axes will be broadcast over.
     return_com: Boolean, default false. If true, the function returns both the COM of the image as well as the appropriate rotation angle.
     
 Returns: 
     angle: The angle, in degrees, by which to rotate the image, under the sign convention of scipy.ndimage.rotate.
-    If return_com is true: (angle, com_tuple), with com_tuple = (x_com, y_com)
+    If return_com is true: (angle, coms), with coms = [x_com, y_com] and the same broadcasting convention. 
 """
 
 def get_image_principal_rotation_angle(image, return_com = False):
-    image_y_indices, image_x_indices = np.indices(image.shape)
-    image_sum = np.sum(image)
-    image_y_com = np.sum(image_y_indices * image) / image_sum
-    image_x_com = np.sum(image_x_indices * image) / image_sum
+    image_pixel_covariance = get_image_pixel_covariance(image)
 
-    image_y_indices_offset = image_y_indices - image_y_com 
-    image_x_indices_offset = image_x_indices - image_x_com
-    image_weights = image / image_sum
-
-    flattened_image_y_indices_offset = image_y_indices_offset.flatten()
-    flattened_image_x_indices_offset = image_x_indices_offset.flatten() 
-    flattened_image_weights = image_weights.flatten()
-
-    sigma_x_squared = np.sum(np.square(flattened_image_x_indices_offset) * flattened_image_weights)
-    sigma_y_squared = np.sum(np.square(flattened_image_y_indices_offset) * flattened_image_weights)
-    off_diag = np.sum(flattened_image_x_indices_offset * flattened_image_y_indices_offset * flattened_image_weights)
+    sigma_y_squared = image_pixel_covariance[0][0]
+    sigma_x_squared = image_pixel_covariance[1][1]
+    off_diag = image_pixel_covariance[0][1]
 
     sigma_diff = sigma_y_squared - sigma_x_squared 
 
@@ -579,34 +567,163 @@ def get_image_principal_rotation_angle(image, return_com = False):
     if not return_com:
         return rotation_angle_deg
     else:
-        return (rotation_angle_deg, (image_x_com, image_y_com))
+        image_coms = get_image_coms(image)
+        return (rotation_angle_deg, image_coms)
     
+
+"""Supersample an ndarray image. 
+
+Given an n-dimensional ndarray, return a version which has been supersampled by an integer factor 
+along specified axes. 
+
+Parameters:
+
+image: The input ndarray. Assumed to be of numeric type - ragged arrays aren't supported. 
+
+scale_factor: (int or tuple of ints) The multiple by which to supersample. A factor of 2, 
+for instance, doubles the number of pixels along a given axis. If an int is given, the same 
+supersampling is done along each of the included axes (see below). If a tuple is passed, 
+the specified factor is applied to each of the included axes, in order.
+
+included_axes: (int or tuple of ints) If specified, supersampling is done over only
+     the specified axes of the input array. If None, all axes are sampled. 
+"""
+
+def supersample_image(image, scale_factor, included_axes = None):
+    if included_axes is None:
+        included_axes = tuple(range(len(image.shape)))
+    if isinstance(scale_factor, int):
+        scale_factors = scale_factor * np.ones(len(included_axes)) 
+    else:
+        scale_factors = scale_factor
+    if not len(scale_factors) == len(included_axes):
+        raise ValueError("scale_factor and included_axes must have the same length.")
+    rescaled_array = image 
+    for specific_axis, specific_factor in zip(included_axes, scale_factors):
+        rescaled_array = np.repeat(rescaled_array, specific_factor, specific_axis)
+    return rescaled_array
+
+
+
 
 """Given an image, return its center of mass. 
 
-Given an n-dimensional numpy array image, return a length-n tuple coms representing the 
-center of mass along each axis of the image.
+Given an two-dimensional numpy array image, return a tuple coms representing the 
+center of mass along the x- and y-axis of the image. 
 
 Parameters:
 
 image: An n-dimensional ndarray of pixel values, representing a density map. No check 
-is performed that all values are positive.
+is performed that all values are positive. If more than two-dimensional, all axes besides 
+the last two are broadcast over.
 
 Returns:
 
-coms: A length-n array representing the center of mass along each axis, in the order of the 
-original image. Units are pixels: rounding the COM gives the nearest index along that axis 
-to the center of mass position."""
+coms: An array [y_com, x_com] Units are pixels: rounding the COM gives the nearest index along that axis 
+to the center of mass position. If extra axes are present in image, the array [y_com, x_com] is along the 
+first axis of the result."""
 
 def get_image_coms(image):
-    normalized_image_weights = image / np.sum(image)
+    normalized_image_weights = image / np.sum(image, axis = (-2, -1), keepdims = True)
     reshaped_normalized_image_weights = np.expand_dims(normalized_image_weights, axis = 0)
-    image_indices = np.indices(image.shape)
-    axes_array = np.arange(len(image.shape)) + 1 
-    axes_tuple = tuple(axes_array)
-    weighted_image_indices = reshaped_normalized_image_weights * image_indices
-    coms = np.sum(weighted_image_indices, axis = axes_tuple)
+    #Only the y and x indices are averaged over
+    image_indices_yx = np.indices(image.shape)[-2:]
+    integration_axes = (-2, -1)
+    weighted_image_indices_yx = reshaped_normalized_image_weights * image_indices_yx
+    coms = np.sum(weighted_image_indices_yx, axis = integration_axes)
     return coms
+
+
+"""Given a 2d image, return the pixel covariance matrix. 
+
+Given a 2d numpy array image, compute the covariance of the pixel coordinates x and y taken over 
+the (normalized) density distribution given by the image. In other words, compute 
+
+C_{ij} = 
+    [<(y - y_0)^2>          <(x - x_0)(y - y_0)> 
+     <(x - x_0)(y - y_0)>    <(x - x_0)^2>      ]
+
+where the expectation value is taken over the density profile of the image, and of course 
+the xy are offset to the COM. 
+
+Parameters:
+
+image: A numpy ndarray. Broadcast behavior is as in get_image_coms.
+
+Returns: A numpy array C_ij as described above. If additional axes are present, 
+C_ij is along the first two axes of the returned array."""
+
+def get_image_pixel_covariance(image):
+    normalized_image_weights = image / np.sum(image, axis = (-2, -1), keepdims = True)
+    reshaped_normalized_image_weights = np.expand_dims(normalized_image_weights, axis = (0, 1))
+    image_com_yx = get_image_coms(image)
+    image_com_yx_expanded = np.expand_dims(image_com_yx, axis = (-2, -1))
+    image_indices_yx = np.indices(image.shape)[-2:]
+    offset_image_indices_yx = image_indices_yx - image_com_yx_expanded
+    unweighted_image_index_products = np.expand_dims(offset_image_indices_yx, axis = 0) * np.expand_dims(offset_image_indices_yx, axis = 1)
+    weighted_image_index_products = reshaped_normalized_image_weights * unweighted_image_index_products
+    cov = np.sum(weighted_image_index_products, axis = (-2, -1))
+    return cov
+
+
+"""Convolve an image with a gaussian filter. 
+
+Given an input ndarray image, convolve the image with a Gaussian filter along the specified axes. A thin wrapper 
+around convolution with scipy.ndimage.convolve; see documentation at 
+
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.convolve.html
+
+Note that one default of the 
+
+Parameters:
+
+image: An n-dimensional numpy array. 
+
+sigma: (float or tuple of floats) The Gaussian width, in pixels, to use for the convolution kernel. If a single float,
+the same value is used for each axis. If a tuple, the specified width is used for each dimension.
+
+window_dims: (int or tuple of int) The dimensions of the convolution along the included axes. If not specified, the window 
+width defaults to 6x sigma (+- 3 sigma), as a compromise between runtime and fidelity. If any 
+dimension is even, it is rounded up to the nearest odd value.
+
+included_axes: (int or tuple of int) The axes over which Gaussian convolution is performed. If None, every axis is included.
+Defaults to the final two axes of the image."""
+def convolve_gaussian(image, sigma, window_dims = None, included_axes = (-2, -1), mode = "constant", **convolve_kwargs):
+    if included_axes is None:
+        included_axes = tuple(range(len(image.shape)))
+    if isinstance(sigma, (int, float)):
+        sigma_values = sigma * np.ones(len(included_axes))
+    else:
+        sigma_values = np.array(sigma)
+
+    #Obtain excluded axes
+    ndims = len(image.shape)
+    axes_range = np.arange(ndims)
+    included_axes_array = np.array(included_axes) % ndims
+    excluded_axes = axes_range[~np.isin(axes_range, included_axes_array)]
+
+    #Construct window dimensions
+    WINDOW_SIGMA_MULTIPLIER = 6
+    image_shape_array = np.array(image.shape)
+    if window_dims is None:
+        window_dims = np.round(sigma_values * WINDOW_SIGMA_MULTIPLIER).astype(int)
+    else:
+        window_dims = np.array(window_dims)
+    window_dims = window_dims + (1 - window_dims % 2)
+
+
+    #Get gaussian values along included axes
+    bare_indices = np.indices(window_dims)
+    bare_indices_shuffled = np.moveaxis(bare_indices, 0, -1)
+    centered_indices_shuffled = bare_indices_shuffled - (window_dims - 1) / 2
+
+    def multidimensional_gaussian(indices_shuffled, sigmas):
+        return np.exp(-1.0 * np.sum(np.square(indices_shuffled / sigmas) / 2.0, axis = -1))
+    
+    gaussian_values = multidimensional_gaussian(centered_indices_shuffled, sigma_values)
+    normalized_gaussian_values = gaussian_values / np.sum(gaussian_values) 
+    normalized_gaussian_values_extended = np.expand_dims(normalized_gaussian_values, axis = tuple(excluded_axes))
+    return ndimage.convolve(image, normalized_gaussian_values_extended, mode = mode, **convolve_kwargs)
 
 
 """Inverse Abel transform of a profile. 
@@ -625,9 +742,12 @@ profile: A 1D or 2D numpy array. If the image is 2D, the symmetry axis of the im
 axis (the "z-axis"), so that this axis is preserved while the other (the "y" axis, by convention of the Abel transform, 
 but in our convention the "x"-axis) is integrated over for the transform.
 
+Kwargs as documented on https://pyabel.readthedocs.io/en/latest/abel.html
+(Defaults are appropriate for basic use)
+
 """
-def inverse_abel(profile, method = "three_point", origin = 'none'):
-    return abel.Transform(profile, direction = "inverse", method = method, origin = origin).transform
+def inverse_abel(profile, **kwargs):
+    return abel.Transform(profile, **kwargs).transform
 
 """
 Convenience function for getting the actual areal cross section of the tilted oval of the hybrid trap.
