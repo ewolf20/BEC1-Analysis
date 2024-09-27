@@ -51,6 +51,7 @@ DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [50, 50, 140, 140]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (90, 90)
 EXPANDED_ABSORPTION_IMAGE_NORM_BOX = [30, 30, 35, 35]
 HYBRID_AVOID_ZERO_ROI = [100, 200, 420, 320]
+DENSITY_COM_OFFSET = 5
 
 
 
@@ -613,6 +614,60 @@ def test_get_atom_densities_box_autocut():
         assert autocut_density_fixed_width == ENFORCED_AUTOCUT_FIXED_WIDTH
     finally:
         shutil.rmtree(measurement_pathname)
+
+
+def test_get_atom_densities_COM_centered():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0,
+        "hf_lock_setpoint":0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0, 
+        "top_um_per_pixel":E_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    no_stored_density_kwargs = {
+        "imaging_mode":"abs"
+    }
+    offset_box_image = get_offset_box_absorption_image()
+    offset_box_image_stack = generate_image_stack_from_absorption(offset_box_image)
+    roi_cropped_offset_box_image = get_offset_box_absorption_image(crop_to_roi = True)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = offset_box_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #First test cropping 
+        cropped_density_1, cropped_density_2 = analysis_functions.get_atom_densities_COM_centered(my_measurement, my_run, crop_not_pad = True,
+                                                                                                  imaging_mode = "abs")
+        cropped_density_ycom, cropped_density_xcom = image_processing_functions.get_image_coms(cropped_density_2)
+        cropped_density_y_length = cropped_density_2.shape[0]
+        cropped_density_x_length = cropped_density_2.shape[1]
+        assert roi_cropped_offset_box_image.shape[0] == cropped_density_y_length + 2 * DENSITY_COM_OFFSET 
+        assert roi_cropped_offset_box_image.shape[1] == cropped_density_x_length + 2 * DENSITY_COM_OFFSET
+        cropped_density_y_center = (cropped_density_y_length - 1) / 2 
+        cropped_density_x_center = (cropped_density_x_length - 1) / 2 
+        assert np.isclose(cropped_density_x_center, cropped_density_xcom)
+        assert np.isclose(cropped_density_y_center, cropped_density_ycom)
+        #Now test padding 
+        padded_density_1, padded_density_2 = analysis_functions.get_atom_densities_COM_centered(my_measurement, my_run, crop_not_pad = False, 
+                                                                                               imaging_mode = "abs")
+        padded_density_ycom, padded_density_xcom = image_processing_functions.get_image_coms(padded_density_2)
+        padded_density_y_length = padded_density_2.shape[0]
+        padded_density_x_length = padded_density_2.shape[1]
+        assert roi_cropped_offset_box_image.shape[0] == padded_density_y_length - 2 * DENSITY_COM_OFFSET
+        assert roi_cropped_offset_box_image.shape[1] == padded_density_x_length - 2 * DENSITY_COM_OFFSET
+        padded_density_y_center = (padded_density_y_length - 1) / 2 
+        padded_density_x_center = (padded_density_x_length - 1) / 2
+        assert np.isclose(padded_density_y_center, padded_density_ycom) 
+        assert np.isclose(padded_density_x_center, padded_density_xcom)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
 
 def _get_integrated_densities_test_helper(function_to_use, integration_axis):
     hf_atom_density_experiment_param_values = {
@@ -2049,6 +2104,24 @@ def generate_default_image_density_pattern(crop_to_roi = False, density_value = 
 
 def get_box_autocut_absorption_image(crop_to_roi = False):
     center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+    box_autocut_absorption_image = np.where(
+        np.logical_and(
+            np.abs(y_indices - center_y_index) < box_radius,
+            np.abs(x_indices - center_x_index) < box_radius
+        ), 
+        np.exp(-np.sqrt(1 - np.square((x_indices - center_x_index) / box_radius))),
+        1.0
+    )
+    if not crop_to_roi:
+        return box_autocut_absorption_image 
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return box_autocut_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+    
+def get_offset_box_absorption_image(crop_to_roi = False):
+    center_y_index, center_x_index = np.array(DEFAULT_ABS_SQUARE_CENTER_INDICES) + np.array([DENSITY_COM_OFFSET, -DENSITY_COM_OFFSET])
     y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
     box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
     box_autocut_absorption_image = np.where(

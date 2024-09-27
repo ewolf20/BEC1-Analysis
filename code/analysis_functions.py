@@ -303,6 +303,53 @@ def get_atom_densities_box_autocut(my_measurement, my_run, vert_crop_point = 0.5
     density_2_cropped = density_2[y_min:y_max, x_min:x_max]
     return (density_1_cropped, density_2_cropped)
 
+def get_atom_densities_COM_centered(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
+                                    imaging_mode = "polrot", density_to_use = 2, crop_not_pad = True, **get_density_kwargs):
+    density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
+                                                    imaging_mode, **get_density_kwargs)
+    if density_to_use == 1:
+        com_density = density_1
+    elif density_to_use == 2:
+        com_density = density_2
+    else:
+        raise ValueError("Density_to_use must be 1 or 2.")
+    y_com, x_com = image_processing_functions.get_image_coms(com_density)
+    original_x_center = (com_density.shape[1] - 1) / 2
+    original_y_center = (com_density.shape[0] - 1) / 2
+    x_com_center_difference = x_com - original_x_center
+    y_com_center_difference = y_com - original_y_center
+    return _com_center_helper(crop_not_pad, density_1, density_2, x_com_center_difference, y_com_center_difference)
+
+def _com_center_helper(crop_not_pad, density_1, density_2, x_com_center_difference, y_com_center_difference):
+    #if crop_not_pad is true, then shift the pixel center by cropping the image 
+    center_x_pix_shift = int(np.rint(2 * x_com_center_difference))
+    center_y_pix_shift = int(np.rint(2 * y_com_center_difference))
+    if crop_not_pad:
+        if center_y_pix_shift >= 0:
+            y_cropped_density_1 = density_1[center_y_pix_shift:]
+            y_cropped_density_2 = density_2[center_y_pix_shift:]
+        else:
+            y_cropped_density_1 = density_1[:center_y_pix_shift] 
+            y_cropped_density_2 = density_2[:center_y_pix_shift]
+        if center_x_pix_shift >= 0:
+            returned_density_1 = y_cropped_density_1[:, center_x_pix_shift:] 
+            returned_density_2 = y_cropped_density_2[:, center_x_pix_shift:]
+        else:
+            returned_density_1 = y_cropped_density_1[:, :center_x_pix_shift] 
+            returned_density_2 = y_cropped_density_2[:, :center_x_pix_shift]
+    else:
+        if center_y_pix_shift >= 0:
+            y_pad_tuple = (0, center_y_pix_shift) 
+        else:
+            y_pad_tuple = (-center_y_pix_shift, 0)
+        if center_x_pix_shift >= 0:
+            x_pad_tuple = (0, center_x_pix_shift)
+        else:
+            x_pad_tuple = (-center_x_pix_shift, 0)
+        returned_density_1 = np.pad(density_1, (y_pad_tuple, x_pad_tuple))
+        returned_density_2 = np.pad(density_2, (y_pad_tuple, x_pad_tuple))
+    return (returned_density_1, returned_density_2)
+
 
 def get_x_integrated_atom_densities_top_double(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                     imaging_mode = "polrot", **get_density_kwargs):
@@ -507,6 +554,9 @@ def _compressibility_helper(positions_1, potentials_1, densities_1, positions_2,
         compressibility_2 = compressibility_result_2 
         return_list_2.append(compressibility_2)
     return (*return_list_1, *return_list_2)    
+
+
+#AXIAL SQUISH
 
 
 def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autocut = False, 
@@ -1064,7 +1114,15 @@ def get_rr_condensate_fractions_box(my_measurement, my_run, first_stored_density
     return (rr_fraction_first, rr_fraction_second)
 
 
-#UTILITY, POSSIBLY FOR EXTERNAL CALLING
+
+#GENERAL UTILITY RUN ANALYSIS FUNCTIONS
+
+
+
+
+
+
+#UTILITY NON-RUN ANALYSIS FUNCTIONS, POSSIBLY FOR EXTERNAL CALLING
 
 def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, horiz_crop_point = 0.00, widths_free = False):
     if not widths_free:
@@ -1077,6 +1135,9 @@ def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, hori
         box_crop = data_fitting_functions.crop_box(atom_density_to_fit,
                             vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point)
     return box_crop
+
+
+
 
 
 """
@@ -1120,6 +1181,12 @@ def get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True)
                                                                             lithium_linewidth_Hz, lithium_top_geo_adjusted_res_cross_section_m, 
                                                                             saturation_multiplier = camera_saturation_fudge)
     return saturation_counts
+
+
+
+
+
+
 
 #RUN COMBINING FUNCTIONS
 
@@ -1166,6 +1233,14 @@ def average_results_identical_runs_run_combine_function_factory(result_names, re
 average_densities_13_run_combine_function = average_results_identical_runs_run_combine_function_factory(
                                         ("densities_1", "densities_3"),
                                          lambda x: np.average(x, axis = 0))
+
+
+
+
+
+
+
+
 
 
 #UTILITY, NOT INTENDED FOR EXTERNAL CALLING
