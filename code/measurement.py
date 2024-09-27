@@ -527,9 +527,9 @@ class Measurement():
         
 
 
-    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_errors = True, run_filter = None, numpyfy = True):
-        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
-                                                analysis_value_err_check_name=value_name)
+    def get_analysis_value_from_runs(self, value_name, ignore_badshots = True, ignore_absent = False, ignore_errors = True, run_filter = None, numpyfy = True):
+        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_absent = ignore_absent,
+                                             ignore_errors = ignore_errors, analysis_value_check_name=value_name)
         value_name_is_tuple = isinstance(value_name, tuple)
         value_names_tuple = Measurement._condition_string_tuple(value_name)
         combined_values_list = []
@@ -549,10 +549,10 @@ class Measurement():
     
     """Convenience function which returns a pair of parameter values and analysis results. Convenient for plotting, and also convenient where 
     some runs have errors in the analysis."""
-    def get_parameter_analysis_value_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_errors = True, 
-                                                    run_filter = None, numpyfy = True):
-        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_errors = ignore_errors, 
-                                                analysis_value_err_check_name=analysis_value_name)
+    def get_parameter_analysis_value_pair_from_runs(self, parameter_name, analysis_value_name, ignore_badshots = True, ignore_absent = False,
+                                                 ignore_errors = True, run_filter = None, numpyfy = True):
+        filtered_dict = self.filter_runs_dict(ignore_badshots = ignore_badshots, run_filter = run_filter, ignore_absent = ignore_absent, 
+                                              ignore_errors = ignore_errors, analysis_value_check_name=analysis_value_name)
         parameter_value_names_tuple = Measurement._condition_string_tuple(parameter_name)
         analysis_value_names_tuple = Measurement._condition_string_tuple(analysis_value_name)
         combined_param_values_list = [[] for x in range(len(parameter_value_names_tuple))]
@@ -782,43 +782,54 @@ class Measurement():
     ignore_badshots: If True, exclude runs which have run.parameters['is_badshot'] == True
     run_filter: A function func(my_measurement, my_run); if not None, return only those runs for which the function returns true
     ignore_errors: If True, exclude runs which include errors in their analysis_results attributes 
-    analysis_value_err_check_name: Str or tuple of strings. If ignore_errors is true, exclude those runs for which 
-                            run.analysis_results[err_name] has an error. If None and ignore_errors is true, exclude runs with an error 
-                            for any value of analysis_results.
+    ignore_absent: If True, exclude runs which do not include certain analysis values.
+    analysis_value_check_name: Str or tuple of strings (valname_1, valname_2, ...). If not None and ignore_errors or ignore_absent 
+        is true, exclude respectively those runs for which run.analysis_results[valname_i] == Measurement.ANALYSIS_ERROR_INDICATOR_STRING 
+        or those runs for which not valname_i in run.analysis_results. If None, any run which has an error in any of its analysis results is excluded.
     """
-    def filter_runs_dict(self, ignore_badshots = True, run_filter = None, ignore_errors = False, analysis_value_err_check_name = None):
+    def filter_runs_dict(self, ignore_badshots = True, run_filter = None, ignore_absent = False,
+                        ignore_errors = False, analysis_value_check_name = None):
         filtered_dict = {}
         conditioned_run_filter = Measurement._condition_run_filter(run_filter)
         conditioned_global_run_filter = Measurement._condition_run_filter(self.global_run_filter)
         conditioned_overall_run_filter = Measurement._condition_run_filter((conditioned_run_filter, conditioned_global_run_filter))
-        if ignore_errors:
-            conditioned_analysis_err_check_name_tuple = Measurement._condition_string_tuple(analysis_value_err_check_name)
+        conditioned_analysis_check_tuple = Measurement._condition_string_tuple(analysis_value_check_name)
         for run_id in self.runs_dict:
             current_run = self.runs_dict[run_id]
-            filter_run = False
             if ignore_badshots and current_run.is_badshot:
-                filter_run = True 
+                continue
             #Filter the run if conditioned_overall_run_filter returns false or errors out
             try:
-                if filter_run or not conditioned_overall_run_filter(self, current_run):
-                    filter_run = True 
+                if not conditioned_overall_run_filter(self, current_run):
+                    continue
             except Exception:
-                filter_run = True
-            if not filter_run and ignore_errors:
-                if not analysis_value_err_check_name is None:
-                    for err_check_name in conditioned_analysis_err_check_name_tuple:
-                        analysis_result = current_run.analysis_results[err_check_name]
-                        if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
-                            filter_run = True
+                continue
+            if not analysis_value_check_name is None:
+                broken = False
+                for val_check_name in conditioned_analysis_check_tuple:
+                    try:
+                        analysis_result = current_run.analysis_results[val_check_name]
+                    except KeyError as e:
+                        if ignore_absent:
+                            broken = True 
                             break
-                else:
-                    for key in current_run.analysis_results:
-                        analysis_result = current_run.analysis_results[key]
-                        if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
-                            filter_run = True
-                            break
-            if not filter_run:
-                filtered_dict[run_id] = current_run
+                        else:
+                            raise e
+                    if ignore_errors and isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
+                        broken = True
+                        break
+                if broken:
+                    continue
+            elif ignore_errors:
+                broken = False
+                for key in current_run.analysis_results:
+                    analysis_result = current_run.analysis_results[key]
+                    if isinstance(analysis_result, str) and analysis_result == Measurement.ANALYSIS_ERROR_INDICATOR_STRING:
+                        broken = True
+                        break
+                if broken:
+                    continue
+            filtered_dict[run_id] = current_run
         return filtered_dict 
 
 

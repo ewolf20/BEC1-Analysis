@@ -488,6 +488,7 @@ class TestMeasurement:
         DOUBLE_VALUE_ERROR_INDEX = 11
         RUN_FILTER_INDEX = 17
         GLOBAL_RUN_FILTER_INDEX = 56
+        MISSING_VALUE_INDEX = 62
 
 
         my_measurement.runs_dict[BADSHOT_INDEX] = my_measurement.runs_dict[BADSHOT_INDEX]._replace(is_badshot = True)
@@ -507,14 +508,14 @@ class TestMeasurement:
 
         #Test error filtering with specified name
         filtered_runs_dict_named_error = my_measurement.filter_runs_dict(ignore_badshots = False, ignore_errors = True, 
-                                                                analysis_value_err_check_name = "value")
+                                                                analysis_value_check_name = "value")
         assert len(filtered_runs_dict_named_error) == 99 
         assert not VALUE_ERROR_INDEX in [filtered_runs_dict_named_error[key].analysis_results["value"] for key in filtered_runs_dict_named_error]
 
 
         #Test error filtering on all indices 
         filtered_runs_dict_any_error = my_measurement.filter_runs_dict(ignore_badshots = False, ignore_errors = True, 
-                                                                analysis_value_err_check_name = None)
+                                                                analysis_value_check_name = None)
         assert len(filtered_runs_dict_any_error) == 98
         assert not VALUE_ERROR_INDEX in [filtered_runs_dict_any_error[key].analysis_results["value"] for key in filtered_runs_dict_any_error]
         assert not DOUBLE_VALUE_ERROR_INDEX in [filtered_runs_dict_any_error[key].analysis_results["value"] for key in filtered_runs_dict_any_error]
@@ -539,6 +540,13 @@ class TestMeasurement:
         for exclusion_index in exclusion_index_list:
             assert not exclusion_index in [filtered_runs_dict_all[key].analysis_results["value"] for key in filtered_runs_dict_all]
 
+        #Test filtering missing values
+        my_measurement.set_global_run_filter(None)
+        my_measurement.runs_dict[MISSING_VALUE_INDEX].analysis_results.pop("value")
+        filtered_runs_dict_absent = my_measurement.filter_runs_dict(ignore_badshots = False, ignore_errors = False, run_filter = None, 
+                                                                     analysis_value_check_name = "value", ignore_absent = True)
+        assert len(filtered_runs_dict_absent) == 99 
+        assert not MISSING_VALUE_INDEX in [filtered_runs_dict_absent[key].analysis_results["value"] for key in filtered_runs_dict_absent]
 
 
     #Does not test the interactive box setting.
