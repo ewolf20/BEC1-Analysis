@@ -1159,16 +1159,18 @@ def get_rr_condensate_fractions_box(my_measurement, my_run, first_stored_density
 
 
 
-#GENERAL UTILITY RUN ANALYSIS FUNCTIONS
+#MISC DENSITY MANIPULATION
 
 """
 Normalize densities to uniform shape. 
 
 Given an arbitrary variable name stored_density_name which for each run corresponds to an ndarray, 
-crop or pad these potentially different-sized ndarrays into a uniform shape."""
+crop or pad these potentially different-sized ndarrays into a uniform shape.
+
+WARNING: As currently written, function silently adds a variable '{0}_uniform_reshape_dimensions'.'format(stored_density_name) to
+my_measurement.measurement_analysis_results. May need to change this behavior if it's detrimental in the wild."""
 def get_uniform_reshaped_densities(my_measurement, my_run, stored_density_name = None, crop_not_pad = True, crop_or_pad_position = "sym"):
-    if stored_density_name is None:
-        raise ValueError("Stored density name must be specified")
+    stored_density = _load_mandatory_stored_density(my_measurement, my_run, stored_density_name)
     stored_density_reshape_dimensions_name = stored_density_name + "_uniform_reshape_dimensions"
     if not stored_density_reshape_dimensions_name in my_measurement.measurement_analysis_results:
         reshape_dimensions = get_uniform_density_reshape_dimensions(my_measurement, stored_density_name, crop_not_pad)
@@ -1176,7 +1178,6 @@ def get_uniform_reshaped_densities(my_measurement, my_run, stored_density_name =
     else:
         reshape_dimensions = my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name]
     reshape_dimensions_array = reshape_dimensions
-    stored_density = my_run.analysis_results[stored_density_name]
     reshaped_density = _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_pad, crop_or_pad_position)
     return reshaped_density
 
@@ -1216,6 +1217,13 @@ def _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_
         overall_pad_tuple = tuple(pad_tuples_list)
         print(overall_pad_tuple)
         return np.pad(stored_density, overall_pad_tuple)
+    
+
+def get_stored_density_rotation_angle(my_measurement, my_run, stored_density_name = None, mode = "variance"):
+    stored_density = _load_mandatory_stored_density(my_measurement, my_run, stored_density_name)
+    if mode == "variance":
+        extracted_angle = image_processing_functions.get_image_principal_rotation_angle(stored_density)
+    pass
 
 
 
@@ -1471,5 +1479,11 @@ def _load_density_side_li_lf(my_measurement, my_run, stored_density_name):
     else:
         atom_density = my_run.analysis_results[stored_density_name]
     return atom_density
+
+def _load_mandatory_stored_density(my_measurement, my_run, stored_density_name):
+    if stored_density_name is None:
+        raise ValueError("The stored density name must be specified")
+    else:
+        return my_run.analysis_results[stored_density_name]
 
 
