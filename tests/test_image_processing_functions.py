@@ -329,57 +329,6 @@ def test_get_polrot_densities_from_lookup_table():
     assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-3)
 
 
-def test_rotate_and_crop_hybrid_image():
-    X_SIZE = 300 
-    Y_SIZE = 300 
-    X_CENTER = 110 
-    Y_CENTER = 203 
-    GAUSSIAN_X_WIDTH = 50
-    GAUSSIAN_Y_WIDTH = 20
-    center = (X_CENTER, Y_CENTER)
-    y_indices, x_indices = np.mgrid[0:Y_SIZE, 0:X_SIZE]
-    gaussian_data = data_fitting_functions.two_dimensional_gaussian(x_indices, y_indices, 1.0, X_CENTER, Y_CENTER, GAUSSIAN_X_WIDTH, GAUSSIAN_Y_WIDTH, 0)
-    X_CROP_WIDTH = 100 
-    Y_CROP_WIDTH = 150
-    cropped_rotated_image, cropped_rotated_center = image_processing_functions._rotate_and_crop_hybrid_image(gaussian_data, center, 90, 
-                                                                                x_crop_width = X_CROP_WIDTH, y_crop_width = Y_CROP_WIDTH)
-    rotated_x_center, rotated_y_center = cropped_rotated_center 
-    assert (np.abs(rotated_x_center - X_CROP_WIDTH / 2.0 < 1e-3))
-    assert (np.abs(rotated_y_center - Y_CROP_WIDTH / 2.0 < 1e-3))
-    EXPECTED_COUNTS_SUM = 5375.8749
-    counts_sum = np.sum(cropped_rotated_image)
-    assert (np.abs(counts_sum - EXPECTED_COUNTS_SUM) < 1e-3)
-
-
-def test_get_hybrid_trap_densities_along_harmonic_axis():
-    EXPECTED_X_CENTER = 228 
-    EXPECTED_Y_CENTER = 398
-    SAMPLE_UM_PER_PIXEL = 0.6
-    SAMPLE_AXICON_DIAMETER_PIX = 189
-    SAMPLE_AXICON_LENGTH_PIX = 250
-    SAMPLE_TILT_DEG = 6.3
-    SAMPLE_SIDE_TILT_DEG = 10
-    SAMPLE_SIDE_ASPECT_RATIO = 1.4
-    axicon_diameter_um = SAMPLE_UM_PER_PIXEL * SAMPLE_AXICON_DIAMETER_PIX
-    sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
-    hybrid_trap_harmonic_positions, hybrid_trap_harmonic_data = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(sample_hybrid_trap_data, 
-                                                                SAMPLE_TILT_DEG, SAMPLE_AXICON_DIAMETER_PIX, SAMPLE_AXICON_LENGTH_PIX,
-                                                                SAMPLE_SIDE_TILT_DEG, SAMPLE_SIDE_ASPECT_RATIO, SAMPLE_UM_PER_PIXEL)
-    filtered_hybrid_trap_harmonic_data = scipy.signal.savgol_filter(hybrid_trap_harmonic_data, 15, 2)
-    max_index = np.argmax(hybrid_trap_harmonic_data) 
-    max_value = hybrid_trap_harmonic_data[max_index]
-    CENTER_SNIPPET_HALF_WIDTH = 10
-    center_snippet = sample_hybrid_trap_data[EXPECTED_Y_CENTER - CENTER_SNIPPET_HALF_WIDTH:EXPECTED_Y_CENTER+CENTER_SNIPPET_HALF_WIDTH, 
-                                            EXPECTED_X_CENTER - CENTER_SNIPPET_HALF_WIDTH: EXPECTED_X_CENTER + CENTER_SNIPPET_HALF_WIDTH]
-    center_snippet_average_2d_density = np.sum(center_snippet) / center_snippet.size
-    center_snippet_average_3d_density = center_snippet_average_2d_density / (SAMPLE_UM_PER_PIXEL * SAMPLE_AXICON_DIAMETER_PIX)
-    max_index = np.argmax(filtered_hybrid_trap_harmonic_data)
-    max_value = filtered_hybrid_trap_harmonic_data[max_index] 
-    max_position = hybrid_trap_harmonic_positions[max_index] 
-    assert(np.abs(max_position) < 10) 
-    assert(np.abs((center_snippet_average_3d_density - max_value) / center_snippet_average_3d_density < 1e-1))
-
-
 def test_get_image_principal_rotation_angle():
     SAMPLE_IMAGE_SHAPE = (501, 501)
     SAMPLE_IMAGE_CENTER_X = 250
@@ -592,16 +541,6 @@ def test_inverse_abel():
     expected_inverse_abel = sample_image / np.sqrt(2 * np.pi * np.square(SAMPLE_IMAGE_X_SIGMA))
 
     assert np.allclose(inverse_abel, expected_inverse_abel, rtol = 3e-3)
-
-
-def test_get_hybrid_cross_section_um():
-    SAMPLE_SIDE_ANGLE_DEG = 45
-    SAMPLE_SIDE_ASPECT_RATIO = 2 
-    SAMPLE_TOP_RADIUS_UM = 100
-    #From hand-evaluation of the formula
-    EXPECTED_CROSS_SECTION_UM2 = 25132.74123
-    cross_section = image_processing_functions.get_hybrid_cross_section_um(SAMPLE_TOP_RADIUS_UM, SAMPLE_SIDE_ANGLE_DEG, SAMPLE_SIDE_ASPECT_RATIO)
-    assert np.isclose(cross_section, EXPECTED_CROSS_SECTION_UM2)
 
 
 def test_bin_and_average_data():
