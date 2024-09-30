@@ -1117,8 +1117,61 @@ def get_rr_condensate_fractions_box(my_measurement, my_run, first_stored_density
 
 #GENERAL UTILITY RUN ANALYSIS FUNCTIONS
 
+"""
+Normalize densities to uniform shape. 
+
+Given an arbitrary variable name stored_density_name which for each run corresponds to an ndarray, 
+crop or pad these potentially different-sized ndarrays into a uniform shape."""
+def get_uniform_reshaped_densities(my_measurement, my_run, stored_density_name = None, crop_not_pad = True, crop_or_pad_position = "sym"):
+    if stored_density_name is None:
+        raise ValueError("Stored density name must be specified")
+    stored_density_reshape_dimensions_name = stored_density_name + "_uniform_reshape_dimensions"
+    if not stored_density_reshape_dimensions_name in my_measurement.measurement_analysis_results:
+        reshape_dimensions = get_uniform_density_reshape_dimensions(my_measurement, stored_density_name, crop_not_pad)
+        my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name] = reshape_dimensions
+    else:
+        reshape_dimensions = my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name]
+    reshape_dimensions_array = reshape_dimensions
+    stored_density = my_run.analysis_results[stored_density_name]
+    reshaped_density = _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_pad, crop_or_pad_position)
+    return reshaped_density
 
 
+def _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_pad, crop_or_pad_position):
+    density_shape_array = np.array(stored_density.shape) 
+    if crop_not_pad:
+        amounts_to_resize = density_shape_array - reshape_dimensions_array
+    else:
+        amounts_to_resize = reshape_dimensions_array - density_shape_array 
+
+    if crop_or_pad_position == "sym":
+        lower_increments = amounts_to_resize // 2 
+        upper_increments = amounts_to_resize - lower_increments  
+    elif crop_or_pad_position == "lower":
+        lower_increments = amounts_to_resize
+        upper_increments = np.zeros(amounts_to_resize.shape).astype(int)
+    elif crop_or_pad_position == "upper":
+        lower_increments = np.zeros(amounts_to_resize.shape).astype(int)
+        upper_increments = amounts_to_resize
+    else:
+        raise ValueError("Supported values for crop_or_pad_position are 'sym', 'lower', 'upper'")
+    
+    if crop_not_pad:
+        slice_list = [] 
+        for lower_increment, upper_increment, density_length in zip(lower_increments, upper_increments, density_shape_array):
+            lower_slice_val = lower_increment
+            upper_slice_val = density_length - upper_increment
+            slice_list.append(slice(lower_slice_val, upper_slice_val))
+        slice_tuple = tuple(slice_list)
+        return stored_density[slice_tuple]
+    else:
+        pad_tuples_list = []
+        for lower_increment, upper_increment in zip(lower_increments, upper_increments):
+            pad_tuple = (lower_increment, upper_increment)
+            pad_tuples_list.append(pad_tuple)
+        overall_pad_tuple = tuple(pad_tuples_list)
+        print(overall_pad_tuple)
+        return np.pad(stored_density, overall_pad_tuple)
 
 
 
@@ -1137,7 +1190,14 @@ def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, hori
     return box_crop
 
 
-
+def get_uniform_density_reshape_dimensions(my_measurement, stored_density_name, crop_not_pad):
+    stored_densities = my_measurement.get_analysis_value_from_runs(stored_density_name, ignore_absent = True, ignore_errors = True, numpyfy = False)
+    stored_density_dimensions_list = [stored_density.shape for stored_density in stored_densities]
+    stored_density_dimensions_array = np.array(stored_density_dimensions_list)
+    if crop_not_pad:
+        return tuple(np.min(stored_density_dimensions_array, axis = 0))
+    else:
+        return tuple(np.max(stored_density_dimensions_array, axis = 0))
 
 
 """

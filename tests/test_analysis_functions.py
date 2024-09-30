@@ -1939,6 +1939,96 @@ def test_get_rr_condensate_fractions_box():
     finally:
         shutil.rmtree(measurement_pathname)
 
+
+def test_get_uniform_reshaped_densities():
+    try:
+        measurement_pathname, my_measurement, _ = create_measurement("top_double")
+        def create_fake_run(value):
+            parameters_dict = {"id":value}
+            num_points = (value + 1) * (value + 2)
+            analysis_dict = {"foo":np.arange(num_points).reshape((value + 1, value + 2))}
+            return measurement.Run(value, None, parameters_dict, analysis_results = analysis_dict, connected_mode = False)
+        NUM_RUNS = 5
+        for i in range(NUM_RUNS):
+            my_measurement.runs_dict[i] = create_fake_run(i)
+        ARB_RUN_VALUE = 2
+        arb_run = my_measurement.runs_dict[ARB_RUN_VALUE] 
+
+        arb_run_original_array = np.arange((ARB_RUN_VALUE + 1) * (ARB_RUN_VALUE + 2)).reshape((ARB_RUN_VALUE + 1, ARB_RUN_VALUE + 2))
+        expected_increment = ARB_RUN_VALUE
+        expected_lower_increment_sym = expected_increment // 2
+        expected_upper_increment_sym = expected_increment - expected_lower_increment_sym
+
+        EXPECTED_CROPPED_SHAPE = (1, 2)
+
+        cropped_arb_density_sym = analysis_functions.get_uniform_reshaped_densities(my_measurement, arb_run, 
+                                                        stored_density_name = "foo", crop_not_pad = True, crop_or_pad_position = "sym")
+        expected_sym_crop = arb_run_original_array[expected_lower_increment_sym:expected_lower_increment_sym + EXPECTED_CROPPED_SHAPE[0], 
+                                                   expected_lower_increment_sym:expected_lower_increment_sym + EXPECTED_CROPPED_SHAPE[1]]
+        assert np.all(cropped_arb_density_sym == expected_sym_crop)
+
+        cropped_arb_density_lower = analysis_functions.get_uniform_reshaped_densities(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = True, crop_or_pad_position = "lower")
+        expected_lower_crop = arb_run_original_array[expected_increment:, expected_increment:] 
+        assert np.all(cropped_arb_density_lower == expected_lower_crop)
+
+        cropped_arb_density_upper = analysis_functions.get_uniform_reshaped_densities(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = True, crop_or_pad_position = "upper")
+        expected_upper_crop = arb_run_original_array[:-expected_increment, :-expected_increment] 
+        assert np.all(cropped_arb_density_upper == expected_upper_crop)
+
+        my_measurement.measurement_analysis_results.pop("foo_uniform_reshape_dimensions")
+
+        padded_arb_density_sym = analysis_functions.get_uniform_reshaped_densities(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = False, 
+                                                                            crop_or_pad_position = "sym")
+        expected_sym_padded = np.pad(arb_run_original_array, ((expected_lower_increment_sym, expected_upper_increment_sym), 
+                                                            (expected_lower_increment_sym, expected_upper_increment_sym)))
+        
+
+        print(padded_arb_density_sym) 
+        print(expected_sym_padded)
+        assert np.all(padded_arb_density_sym == expected_sym_padded)
+
+        padded_arb_density_lower = analysis_functions.get_uniform_reshaped_densities(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = False, 
+                                                                            crop_or_pad_position = "lower")
+        expected_lower_padded = np.pad(arb_run_original_array, ((expected_increment, 0), 
+                                                            (expected_increment, 0)))
+        assert np.all(padded_arb_density_lower == expected_lower_padded)
+
+        padded_arb_density_upper = analysis_functions.get_uniform_reshaped_densities(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = False, 
+                                                                            crop_or_pad_position = "upper")
+        expected_upper_padded = np.pad(arb_run_original_array, ((0, expected_increment), 
+                                                                (0, expected_increment)))
+        assert np.all(padded_arb_density_upper == expected_upper_padded)
+        
+
+
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+def test_get_uniform_density_reshape_dimensions():
+    try:
+        measurement_pathname, my_measurement, _ = create_measurement("top_double")
+        def create_fake_run(value):
+            parameters_dict = {"id":value}
+            analysis_dict = {"foo":np.ones((value + 1, value + 2))}
+            return measurement.Run(value, None, parameters_dict, analysis_results = analysis_dict, connected_mode = False)
+        NUM_RUNS = 4
+        for i in range(NUM_RUNS):
+            my_measurement.runs_dict[i] = create_fake_run(i) 
+        #Manually remove a density to ensure correct ignoring
+        my_measurement.runs_dict[2].analysis_results.pop("foo")
+        cropped_dimensions = analysis_functions.get_uniform_density_reshape_dimensions(my_measurement, "foo", True)
+        assert cropped_dimensions == (1, 2)
+        padded_dimensions = analysis_functions.get_uniform_density_reshape_dimensions(my_measurement, "foo", False)
+        assert padded_dimensions == (NUM_RUNS, NUM_RUNS + 1)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
 def test_get_saturation_counts_top():
     experiment_param_values = {
         "li_top_sigma_multiplier":L33T_DUMMY,
