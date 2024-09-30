@@ -303,7 +303,7 @@ def get_atom_densities_box_autocut(my_measurement, my_run, vert_crop_point = 0.5
     density_2_cropped = density_2[y_min:y_max, x_min:x_max]
     return (density_1_cropped, density_2_cropped)
 
-def get_atom_densities_COM_centered(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
+def get_top_atom_densities_COM_centered(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                     imaging_mode = "polrot", density_to_use = 2, crop_not_pad = True, **get_density_kwargs):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                     imaging_mode, **get_density_kwargs)
@@ -1169,7 +1169,7 @@ crop or pad these potentially different-sized ndarrays into a uniform shape.
 
 WARNING: As currently written, function silently adds a variable '{0}_uniform_reshape_dimensions'.'format(stored_density_name) to
 my_measurement.measurement_analysis_results. May need to change this behavior if it's detrimental in the wild."""
-def get_uniform_reshaped_densities(my_measurement, my_run, stored_density_name = None, crop_not_pad = True, crop_or_pad_position = "sym"):
+def get_uniform_reshaped_density(my_measurement, my_run, stored_density_name = None, crop_not_pad = True, crop_or_pad_position = "sym"):
     stored_density = _load_mandatory_stored_density(my_measurement, my_run, stored_density_name)
     stored_density_reshape_dimensions_name = stored_density_name + "_uniform_reshape_dimensions"
     if not stored_density_reshape_dimensions_name in my_measurement.measurement_analysis_results:
@@ -1177,6 +1177,7 @@ def get_uniform_reshaped_densities(my_measurement, my_run, stored_density_name =
         my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name] = reshape_dimensions
     else:
         reshape_dimensions = my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name]
+    print(reshape_dimensions)
     reshape_dimensions_array = reshape_dimensions
     reshaped_density = _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_pad, crop_or_pad_position)
     return reshaped_density
@@ -1223,8 +1224,9 @@ def get_stored_density_rotation_angle(my_measurement, my_run, stored_density_nam
     stored_density = _load_mandatory_stored_density(my_measurement, my_run, stored_density_name)
     if mode == "variance":
         extracted_angle = image_processing_functions.get_image_principal_rotation_angle(stored_density)
-    pass
-
+    else:
+        raise ValueError("Supported extraction methods are: 'variance'")
+    
 
 
 #UTILITY NON-RUN ANALYSIS FUNCTIONS, POSSIBLY FOR EXTERNAL CALLING
@@ -1246,10 +1248,11 @@ def get_uniform_density_reshape_dimensions(my_measurement, stored_density_name, 
     stored_densities = my_measurement.get_analysis_value_from_runs(stored_density_name, ignore_absent = True, ignore_errors = True, numpyfy = False)
     stored_density_dimensions_list = [stored_density.shape for stored_density in stored_densities]
     stored_density_dimensions_array = np.array(stored_density_dimensions_list)
+    #NOTE: Weird syntax below is deliberate, to avoid a known issue where JSON can't serialize np.int64
     if crop_not_pad:
-        return tuple(np.min(stored_density_dimensions_array, axis = 0))
+        return tuple([int(a) for a in np.min(stored_density_dimensions_array, axis = 0)])
     else:
-        return tuple(np.max(stored_density_dimensions_array, axis = 0))
+        return tuple([int(a) for a in np.max(stored_density_dimensions_array, axis = 0)])
 
 
 """
