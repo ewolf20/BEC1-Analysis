@@ -1172,11 +1172,13 @@ my_measurement.measurement_analysis_results. May need to change this behavior if
 def get_uniform_reshaped_density(my_measurement, my_run, stored_density_name = None, crop_not_pad = True, crop_or_pad_position = "sym"):
     stored_density = _load_mandatory_stored_density(my_measurement, my_run, stored_density_name)
     stored_density_reshape_dimensions_name = stored_density_name + "_uniform_reshape_dimensions"
-    if not stored_density_reshape_dimensions_name in my_measurement.measurement_analysis_results:
+    if stored_density_reshape_dimensions_name in my_measurement.measurement_analysis_results:
+        reshape_dimensions = my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name]
+    elif stored_density_reshape_dimensions_name in my_measurement.temp_values:
+        reshape_dimensions = my_measurement.temp_values[stored_density_reshape_dimensions_name]
+    else:
         reshape_dimensions = get_uniform_density_reshape_dimensions(my_measurement, stored_density_name, crop_not_pad)
         my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name] = reshape_dimensions
-    else:
-        reshape_dimensions = my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name]
     reshape_dimensions_array = reshape_dimensions
     reshaped_density = _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_pad, crop_or_pad_position)
     return reshaped_density

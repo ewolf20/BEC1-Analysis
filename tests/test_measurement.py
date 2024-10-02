@@ -347,6 +347,10 @@ class TestMeasurement:
             raise RuntimeError("Intended error for measurement analysis testing.")
         def analysis_func_kwargs(my_measurement, my_run, input = ""):
             return input
+        def analysis_func_mutate_temp_values(my_measurement, my_run):
+            if not "foo" in my_measurement.temp_values:
+                my_measurement.temp_values["foo"] = VALUE_1 
+            return VALUE_2
         #Test analyze_runs general functionality
         my_measurement.analyze_runs(analysis_func_1, (VALUE_NAME_TO_CHECK,))
         assert my_measurement.get_analysis_value_from_runs(VALUE_NAME_TO_CHECK) == VALUE_1_AS_LIST
@@ -376,7 +380,10 @@ class TestMeasurement:
             assert not "oof" in current_run.analysis_results
         my_measurement.analyze_runs(analysis_func_1_scalar, "oof", run_filter = lambda my_measurement, my_run: True)
         assert my_measurement.get_analysis_value_from_runs("oof") == [1]
-        #Test filtering with global 
+        #Test cleanup of my_measurement.temp_values
+        assert my_measurement.temp_values == {} 
+        my_measurement.analyze_runs(analysis_func_mutate_temp_values, "oof")
+        assert my_measurement.temp_values == {}
 
     @staticmethod
     def test_label_badshots_custom():

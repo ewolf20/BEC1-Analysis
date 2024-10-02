@@ -92,6 +92,8 @@ class Measurement():
                 self.experiment_parameters = experiment_parameters
             self.run_parameters_verbose = run_parameters_verbose
             self.is_live = is_live
+            #Designated workspace for 
+            self.temp_values = {}
             self._update_runs_dict()
 
     def set_badshot_function(self, badshot_function):
@@ -628,7 +630,12 @@ class Measurement():
     
     NOTE: Because the output of analysis_function can be arbitrary, it is the form of the argument result_varname that determines whether the 
     function is treated as having a return which is in single or tuple form. The former form is allowed for notational convenience, the latter 
-    to accommodate e.g. numerically demanding analyses that inherently return two different results of individual interest."""
+    to accommodate e.g. numerically demanding analyses that inherently return two different results of individual interest.
+    
+    NOTE: No checking or cleanup is made should analysis_function(my_measurement, my_run) modify either of my_measurement or my_run, with a single 
+    exception: after a complete invocation of analyze_runs, the attribute my_measurement.temp_values is set to an empty dict. This allows temporary 
+    storage of values which should persist between runs (e.g. calculation-intensive attributes which are common across runs) while not leaving behind 
+    "pollution" for future invocations."""
 
     ANALYSIS_ERROR_INDICATOR_STRING = "ERR"
 
@@ -677,6 +684,7 @@ class Measurement():
             for varname, result in zip(result_varnames, results):
                     if overwrite_existing or not varname in current_run.analysis_results:
                         current_run.analysis_results[varname] = result
+        self.temp_values = {}
 
 
     """
