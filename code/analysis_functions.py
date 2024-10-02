@@ -1177,14 +1177,13 @@ def get_uniform_reshaped_density(my_measurement, my_run, stored_density_name = N
         my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name] = reshape_dimensions
     else:
         reshape_dimensions = my_measurement.measurement_analysis_results[stored_density_reshape_dimensions_name]
-    print(reshape_dimensions)
     reshape_dimensions_array = reshape_dimensions
     reshaped_density = _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_pad, crop_or_pad_position)
     return reshaped_density
 
 
 def _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_pad, crop_or_pad_position):
-    density_shape_array = np.array(stored_density.shape) 
+    density_shape_array = np.array(stored_density.shape)
     if crop_not_pad:
         amounts_to_resize = density_shape_array - reshape_dimensions_array
     else:
@@ -1216,7 +1215,6 @@ def _reshape_crop_pad_helper(stored_density, reshape_dimensions_array, crop_not_
             pad_tuple = (lower_increment, upper_increment)
             pad_tuples_list.append(pad_tuple)
         overall_pad_tuple = tuple(pad_tuples_list)
-        print(overall_pad_tuple)
         return np.pad(stored_density, overall_pad_tuple)
     
 
@@ -1224,6 +1222,7 @@ def get_stored_density_rotation_angle(my_measurement, my_run, stored_density_nam
     stored_density = _load_mandatory_stored_density(my_measurement, my_run, stored_density_name)
     if mode == "variance":
         extracted_angle = image_processing_functions.get_image_principal_rotation_angle(stored_density)
+        return extracted_angle
     else:
         raise ValueError("Supported extraction methods are: 'variance'")
     
