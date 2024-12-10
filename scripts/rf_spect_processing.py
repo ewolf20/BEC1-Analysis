@@ -12,7 +12,7 @@ path_to_repo_folder = os.path.abspath(path_to_file + "/../../")
 sys.path.insert(0, path_to_repo_folder)
 
 from BEC1_Analysis.code.measurement import Measurement
-from BEC1_Analysis.code import analysis_functions, data_fitting_functions, loading_functions
+from BEC1_Analysis.code import analysis_functions, data_fitting_functions, loading_functions, science_functions
 
 ROI_COORDINATES = None
 NORM_BOX_COORDINATES = None 
@@ -32,7 +32,7 @@ def main():
 
 # main() version without command line input, compatible with portal
 def main_after_inputs(measurement_directory_path, resonance_key, center_guess_MHz = None, rabi_freq_guess = None):
-    my_measurement = setup_measurement(measurement_directory_path)
+    my_measurement = setup_measurement(measurement_directory_path, resonance_key)
     workfolder_pathname = my_measurement.initialize_workfolder(descriptor = "RF_Spect")
     rf_frequencies_array, counts_A_array, counts_B_array, tau_value = get_rf_frequencies_and_counts(my_measurement, resonance_key)
     save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key, 
@@ -41,7 +41,7 @@ def main_after_inputs(measurement_directory_path, resonance_key, center_guess_MH
 def save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_array, counts_B_array, tau_value, resonance_key, 
                             center_guess_MHz = None, rabi_freq_guess = None):
     counts_data_saving_path = os.path.join(workfolder_pathname, "RF_Spect_Counts.npy")
-    initial_final_key = resonance_key.split("_")[1] 
+    states_key, initial_final_key = resonance_key.split("_")
     if(initial_final_key == "AB"):
         initial_counts_array = counts_A_array 
         final_counts_array = counts_B_array 
@@ -66,17 +66,35 @@ def save_fit_and_plot_data(workfolder_pathname, rf_frequencies_array, counts_A_a
         outlier_indices = overall_indices[~np.isin(overall_indices, inlier_indices)]
         popt, pcov = fit_results
         center, rabi_freq = popt
+        center_MHz = center / 1000.0
         fit_plotting_frequencies = np.linspace(min(rf_frequencies_array), max(rf_frequencies_array), 100)
         plt.plot(rf_frequencies_array[inlier_indices], transfers[inlier_indices], 'x', label = "Data") 
         plt.plot(rf_frequencies_array[outlier_indices], transfers[outlier_indices], 'rd', label = "Outliers")
         plt.plot(fit_plotting_frequencies, data_fitting_functions.rf_spect_detuning_scan(fit_plotting_frequencies * 1000, tau_value, *popt)) 
-        plt.suptitle("RF Spectroscopy {0}: Center = {1:0.5e} MHz, Rabi Freq = {2:0.2e} kHz".format(resonance_key, center, rabi_freq))
+        plt.suptitle("RF Spectroscopy {0}: Center = {1:0.5e} MHz, Rabi Freq = {2:0.2e} kHz".format(resonance_key, center_MHz, rabi_freq))
         fit_report = data_fitting_functions.fit_report(data_fitting_functions.rf_spect_detuning_scan, fit_results, precision = 5)
     with open(os.path.join(workfolder_pathname, "RF_Spectroscopy_Fit_Report.txt"), 'w') as f:
         f.write("RF Spect: " + fit_report) 
     print("RF Spect: ")
     print(fit_report)
-    loading_functions.universal_clipboard_copy("RF Spect: \n" + fit_report)
+
+    if not "3" in states_key:
+        states_tuple = (1, 2) 
+    elif not "1" in states_key:
+        states_tuple = (2, 3) 
+    elif not "2" in states_key:
+        states_tuple = (3, 1) 
+    
+    calculated_field_G = science_functions.get_field_from_li6_resonance(center_MHz, states_tuple, initial_guess_gauss = 500)
+    
+
+
+    clipboard_copy_string = ""
+    clipboard_copy_string += "RF Spect:\n{0}\n".format(fit_report) 
+    clipboard_copy_string += "---------------\n"
+    clipboard_copy_string += "Calculated field: {0:.2f} G".format(calculated_field_G)
+
+    loading_functions.universal_clipboard_copy(clipboard_copy_string)
     plt.xlabel("RF Frequency (MHz)")
     plt.ylabel("Transfer")
     plt.legend()
@@ -153,11 +171,16 @@ def get_state_indices_from_resonance_key(resonance_key):
     return (image_A_state_index, image_B_state_index)
 
 
-def setup_measurement(measurement_directory_path):
+def setup_measurement(measurement_directory_path, resonance_key):
     print("Initializing")
+    _, imaging_key = resonance_key.split("_")
+    if imaging_key == "BA":
+        image_to_use = "TopB"
+    else:
+        image_to_use = "TopA"
     my_measurement = Measurement(measurement_directory_path, hold_images_in_memory = False, run_parameters_verbose = True, imaging_type = "top_double")
-    my_measurement.set_ROI(box_coordinates = ROI_COORDINATES)
-    my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES)
+    my_measurement.set_ROI(box_coordinates = ROI_COORDINATES, image_to_use = image_to_use)
+    my_measurement.set_norm_box(box_coordinates = NORM_BOX_COORDINATES, image_to_use = image_to_use)
     return my_measurement
 
 
