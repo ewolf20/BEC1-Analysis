@@ -1,12 +1,11 @@
 import os 
+import warnings
 
+import abel
 from numba import jit
 import numpy as np
 from scipy.optimize import fsolve
 from scipy import ndimage
-
-from . import data_fitting_functions
-
 
 
 """
@@ -216,7 +215,6 @@ def bin_and_average_data(data_to_bin, bin_dimensions, omitted_axes = None):
         reshape_dimension_list.append(bin_dimension)
     #The reshape dimension list must be extended to include the omitted dimensions
     reshape_dimension_list.extend(omitted_data_dimensions)
-    print(reshape_dimension_list)
     slice_tuple = tuple(slice_list)
     reshape_dimension_tuple = tuple(reshape_dimension_list)
     truncated_data = moved_axis_array[slice_tuple] 
@@ -508,69 +506,219 @@ def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, d
 
 
 
-def get_hybrid_trap_densities_along_harmonic_axis(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix,
-                                                axicon_side_angle_deg, side_aspect_ratio,
-                                                um_per_pixel, center = None, rotate_data = True):
-    if(center is None):
-        center = data_fitting_functions.hybrid_trap_center_finder(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix)
-    if(rotate_data and axicon_tilt_deg != 0.0):
-        image_to_use, new_center = _rotate_and_crop_hybrid_image(hybrid_trap_density_image, center, axicon_tilt_deg)
-        center = new_center 
-    else:
-        image_to_use = hybrid_trap_density_image
-    x_center, y_center = center
-    hybrid_trap_radius_um = um_per_pixel * axicon_diameter_pix / 2.0
-    hybrid_trap_cross_sectional_area_um = get_hybrid_cross_section_um(hybrid_trap_radius_um, axicon_side_angle_deg, side_aspect_ratio)
-    radial_axis_index = 1
-    hybrid_trap_radial_integrated_density = um_per_pixel * np.sum(image_to_use, axis = radial_axis_index)
-    hybrid_trap_3D_density_harmonic_axis = hybrid_trap_radial_integrated_density / hybrid_trap_cross_sectional_area_um 
-    harmonic_axis_positions_um = um_per_pixel * (np.arange(len(image_to_use)) - y_center)
-    #Fit lorentzian to the 1D-integrated data to improve center-finding fidelity
-    results = data_fitting_functions.fit_lorentzian_with_offset(harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
-    popt, pcov = results
-    amp, center, gamma, offset = popt
-    refitted_harmonic_axis_positions_um = harmonic_axis_positions_um - center
-    return (refitted_harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
+"""
+Given an image, return an angle to rotate it into the xy plane.
 
+Given a 2D numpy array image, determine the principal axes of the image and return an angle to rotate the image so that these 
+lie along x and y, respectively. The technique is to compute the correlation matrix
+C_ij = <x_i x_j>
+and compute the appropriate rotation angle to make this diagonal. 
+
+Parameters: 
+    image: A 2D numpy array. If greater than 2D, all but the last two axes will be broadcast over.
+    return_com: Boolean, default false. If true, the function returns both the COM of the image as well as the appropriate rotation angle.
+    
+Returns: 
+    angle: The angle, in degrees, by which to rotate the image, under the sign convention of scipy.ndimage.rotate.
+    If return_com is true: (angle, coms), with coms = [x_com, y_com] and the same broadcasting convention. 
+"""
+
+def get_image_principal_rotation_angle(image, return_com = False):
+    image_pixel_covariance = get_image_pixel_covariance(image)
+
+    sigma_y_squared = image_pixel_covariance[0][0]
+    sigma_x_squared = image_pixel_covariance[1][1]
+    off_diag = image_pixel_covariance[0][1]
+
+    sigma_diff = sigma_y_squared - sigma_x_squared 
+
+    rotation_angle_rad = -0.5 * np.arctan(2 * off_diag / sigma_diff)
+    rotation_angle_deg = rotation_angle_rad * 180 / np.pi
+
+    if not return_com:
+        return rotation_angle_deg
+    else:
+        image_coms = get_image_coms(image)
+        return (rotation_angle_deg, image_coms)
+    
+
+"""Supersample an ndarray image. 
+
+Given an n-dimensional ndarray, return a version which has been supersampled by an integer factor 
+along specified axes. 
+
+Parameters:
+
+image: The input ndarray. Assumed to be of numeric type - ragged arrays aren't supported. 
+
+scale_factor: (int or tuple of ints) The multiple by which to supersample. A factor of 2, 
+for instance, doubles the number of pixels along a given axis. If an int is given, the same 
+supersampling is done along each of the included axes (see below). If a tuple is passed, 
+the specified factor is applied to each of the included axes, in order.
+
+included_axes: (int or tuple of ints) If specified, supersampling is done over only
+     the specified axes of the input array. If None, all axes are sampled. 
+"""
+
+def supersample_image(image, scale_factor, included_axes = None):
+    if included_axes is None:
+        included_axes = tuple(range(len(image.shape)))
+    if isinstance(scale_factor, int):
+        scale_factors = scale_factor * np.ones(len(included_axes)) 
+    else:
+        scale_factors = scale_factor
+    if not len(scale_factors) == len(included_axes):
+        raise ValueError("scale_factor and included_axes must have the same length.")
+    rescaled_array = image 
+    for specific_axis, specific_factor in zip(included_axes, scale_factors):
+        rescaled_array = np.repeat(rescaled_array, specific_factor, specific_axis)
+    return rescaled_array
+
+
+
+
+"""Given an image, return its center of mass. 
+
+Given an two-dimensional numpy array image, return a tuple coms representing the 
+center of mass along the x- and y-axis of the image. 
+
+Parameters:
+
+image: An n-dimensional ndarray of pixel values, representing a density map. No check 
+is performed that all values are positive. If more than two-dimensional, all axes besides 
+the last two are broadcast over.
+
+Returns:
+
+coms: An array [y_com, x_com] Units are pixels: rounding the COM gives the nearest index along that axis 
+to the center of mass position. If extra axes are present in image, the array [y_com, x_com] is along the 
+first axis of the result."""
+
+def get_image_coms(image):
+    normalized_image_weights = image / np.sum(image, axis = (-2, -1), keepdims = True)
+    reshaped_normalized_image_weights = np.expand_dims(normalized_image_weights, axis = 0)
+    #Only the y and x indices are averaged over
+    image_indices_yx = np.indices(image.shape)[-2:]
+    integration_axes = (-2, -1)
+    weighted_image_indices_yx = reshaped_normalized_image_weights * image_indices_yx
+    coms = np.sum(weighted_image_indices_yx, axis = integration_axes)
+    return coms
+
+
+"""Given a 2d image, return the pixel covariance matrix. 
+
+Given a 2d numpy array image, compute the covariance of the pixel coordinates x and y taken over 
+the (normalized) density distribution given by the image. In other words, compute 
+
+C_{ij} = 
+    [<(y - y_0)^2>          <(x - x_0)(y - y_0)> 
+     <(x - x_0)(y - y_0)>    <(x - x_0)^2>      ]
+
+where the expectation value is taken over the density profile of the image, and of course 
+the xy are offset to the COM. 
+
+Parameters:
+
+image: A numpy ndarray. Broadcast behavior is as in get_image_coms.
+
+Returns: A numpy array C_ij as described above. If additional axes are present, 
+C_ij is along the first two axes of the returned array."""
+
+def get_image_pixel_covariance(image):
+    normalized_image_weights = image / np.sum(image, axis = (-2, -1), keepdims = True)
+    reshaped_normalized_image_weights = np.expand_dims(normalized_image_weights, axis = (0, 1))
+    image_com_yx = get_image_coms(image)
+    image_com_yx_expanded = np.expand_dims(image_com_yx, axis = (-2, -1))
+    image_indices_yx = np.indices(image.shape)[-2:]
+    offset_image_indices_yx = image_indices_yx - image_com_yx_expanded
+    unweighted_image_index_products = np.expand_dims(offset_image_indices_yx, axis = 0) * np.expand_dims(offset_image_indices_yx, axis = 1)
+    weighted_image_index_products = reshaped_normalized_image_weights * unweighted_image_index_products
+    cov = np.sum(weighted_image_index_products, axis = (-2, -1))
+    return cov
+
+
+"""Convolve an image with a gaussian filter. 
+
+Given an input ndarray image, convolve the image with a Gaussian filter along the specified axes. A thin wrapper 
+around convolution with scipy.ndimage.convolve; see documentation at 
+
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.convolve.html
+
+Note that one default of the 
+
+Parameters:
+
+image: An n-dimensional numpy array. 
+
+sigma: (float or tuple of floats) The Gaussian width, in pixels, to use for the convolution kernel. If a single float,
+the same value is used for each axis. If a tuple, the specified width is used for each dimension.
+
+window_dims: (int or tuple of int) The dimensions of the convolution along the included axes. If not specified, the window 
+width defaults to 6x sigma (+- 3 sigma), as a compromise between runtime and fidelity. If any 
+dimension is even, it is rounded up to the nearest odd value.
+
+included_axes: (int or tuple of int) The axes over which Gaussian convolution is performed. If None, every axis is included.
+Defaults to the final two axes of the image."""
+def convolve_gaussian(image, sigma, window_dims = None, included_axes = (-2, -1), mode = "constant", **convolve_kwargs):
+    if included_axes is None:
+        included_axes = tuple(range(len(image.shape)))
+    if isinstance(sigma, (int, float)):
+        sigma_values = sigma * np.ones(len(included_axes))
+    else:
+        sigma_values = np.array(sigma)
+
+    #Obtain excluded axes
+    ndims = len(image.shape)
+    axes_range = np.arange(ndims)
+    included_axes_array = np.array(included_axes) % ndims
+    excluded_axes = axes_range[~np.isin(axes_range, included_axes_array)]
+
+    #Construct window dimensions
+    WINDOW_SIGMA_MULTIPLIER = 6
+    image_shape_array = np.array(image.shape)
+    if window_dims is None:
+        window_dims = np.round(sigma_values * WINDOW_SIGMA_MULTIPLIER).astype(int)
+    else:
+        window_dims = np.array(window_dims)
+    window_dims = window_dims + (1 - window_dims % 2)
+
+
+    #Get gaussian values along included axes
+    bare_indices = np.indices(window_dims)
+    bare_indices_shuffled = np.moveaxis(bare_indices, 0, -1)
+    centered_indices_shuffled = bare_indices_shuffled - (window_dims - 1) / 2
+
+    def multidimensional_gaussian(indices_shuffled, sigmas):
+        return np.exp(-1.0 * np.sum(np.square(indices_shuffled / sigmas) / 2.0, axis = -1))
+    
+    gaussian_values = multidimensional_gaussian(centered_indices_shuffled, sigma_values)
+    normalized_gaussian_values = gaussian_values / np.sum(gaussian_values) 
+    normalized_gaussian_values_extended = np.expand_dims(normalized_gaussian_values, axis = tuple(excluded_axes))
+    return ndimage.convolve(image, normalized_gaussian_values_extended, mode = mode, **convolve_kwargs)
+
+
+"""Inverse Abel transform of a profile. 
+
+Given a (potentially multi-dimensional) profile, compute the inverse Abel transform along the specified axis, 
+leaving others untouched. profile is assumed to be well-conditioned - see parameters. 
+
+This method is a thin wrapper around the PyAbel package - 
+
+For basic notes, see e.g. https://en.wikipedia.org/wiki/Abel_transform. For implementation details, 
+see https://pyabel.readthedocs.io/en/latest/readme_link.html
+
+Parameters:
+
+profile: A 1D or 2D numpy array. If the image is 2D, the symmetry axis of the image is taken to be along the 0th 
+axis (the "z-axis"), so that this axis is preserved while the other (the "y" axis, by convention of the Abel transform, 
+but in our convention the "x"-axis) is integrated over for the transform.
+
+Kwargs as documented on https://pyabel.readthedocs.io/en/latest/abel.html
+(Defaults are appropriate for basic use)
 
 """
-Convenience function for getting the actual areal cross section of the tilted oval of the hybrid trap.
-Note that the tilt angle is the angle made by the semimajor axis of the oval to the plane that the top imaging can see."""
-def get_hybrid_cross_section_um(top_radius_um, side_angle_deg, side_aspect_ratio):
-    side_angle_rad = side_angle_deg * np.pi / 180 
-    theta = side_angle_rad
-    semiminor_to_semimajor_ratio = 1.0 / side_aspect_ratio
-    s = semiminor_to_semimajor_ratio
-    #Slightly nontrivial geometry formula
-    seen_radius_to_semimajor_ratio = np.cos(theta) * np.sqrt(1 + np.square(s * np.tan(theta)))
-    semimajor_radius_um = top_radius_um / seen_radius_to_semimajor_ratio
-    semiminor_radius_um = semiminor_to_semimajor_ratio * semimajor_radius_um 
-    cross_section_um = np.pi * semimajor_radius_um * semiminor_radius_um
-    return cross_section_um
-
-
-def _rotate_and_crop_hybrid_image(image, center, rotation_angle_deg, x_crop_width = np.inf, y_crop_width = np.inf):
-    x_center, y_center = center 
-    image_y_width, image_x_width = image.shape
-    image_x_center = (image_x_width - 1) / 2.0 
-    image_y_center = (image_y_width - 1) / 2.0 
-    x_center_diff = x_center - image_x_center 
-    y_center_diff = y_center - image_y_center
-    rotation_angle_rad = np.pi / 180 * rotation_angle_deg
-    rotated_x_center_diff = np.cos(rotation_angle_rad) * x_center_diff + np.sin(rotation_angle_rad) * y_center_diff
-    rotated_y_center_diff = np.cos(rotation_angle_rad) * y_center_diff - np.sin(rotation_angle_rad) * x_center_diff 
-    rotated_x_center = image_x_center + rotated_x_center_diff 
-    rotated_y_center = image_y_center + rotated_y_center_diff 
-    rotated_image = ndimage.rotate(image, rotation_angle_deg, reshape = False)
-    cropped_y_max = int(min(image_y_width, np.round(rotated_y_center + y_crop_width / 2.0)))
-    cropped_y_min = int(max(0, np.round(rotated_y_center - y_crop_width / 2)))
-    cropped_x_max = int(min(image_x_width, np.round(rotated_x_center + x_crop_width / 2.0)))
-    cropped_x_min = int(max(0, np.round(rotated_x_center - x_crop_width / 2.0)))
-    cropped_rotated_image = rotated_image[cropped_y_min:cropped_y_max, cropped_x_min:cropped_x_max] 
-    final_x_center = rotated_x_center - cropped_x_min
-    final_y_center = rotated_y_center - cropped_y_min
-    return (cropped_rotated_image, (final_x_center, final_y_center)) 
-
+def inverse_abel(profile, **kwargs):
+    return abel.Transform(profile, **kwargs).transform
 
 
 def get_saturation_counts_from_camera_parameters(pixel_length_at_atoms_m, imaging_time_s, camera_count_to_photon_factor, linewidth_Hz, 

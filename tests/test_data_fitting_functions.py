@@ -88,23 +88,22 @@ def test_fit_two_dimensional_gaussian():
     fit_report = data_fitting_functions.fit_report(data_fitting_functions.two_dimensional_gaussian, fit_results)
     popt, pcov = fit_results 
     amp, x_center, y_center, x_width, y_width, offset = popt 
-    assert np.abs(amp - GAUSSIAN_SIMULATED_AMP < 0.1) 
-    assert np.abs(x_center - GAUSSIAN_SIMULATED_X_CENTER < 1)
-    assert np.abs(y_center - GAUSSIAN_SIMULATED_Y_CENTER < 1)
-    assert np.abs(x_width - GAUSSIAN_SIMULATED_X_WIDTH < 1) 
-    assert np.abs(y_width - GAUSSIAN_SIMULATED_Y_WIDTH < 1)
-    assert np.abs(offset - GAUSSIAN_SIMULATED_OFFSET < 0.1)
+    assert np.isclose(amp, GAUSSIAN_SIMULATED_AMP, rtol = 1e-2)
+    assert np.isclose(x_center, GAUSSIAN_SIMULATED_X_CENTER, atol = 1)
+    assert np.isclose(y_center, GAUSSIAN_SIMULATED_Y_CENTER, atol = 1)
+    assert np.isclose(x_width, GAUSSIAN_SIMULATED_X_WIDTH, rtol = 1e-2) 
+    assert np.isclose(y_width, GAUSSIAN_SIMULATED_Y_WIDTH, rtol = 1e-2)
+    assert np.isclose(offset, GAUSSIAN_SIMULATED_OFFSET, rtol = 1e-2)
 
 
 def simulate_2D_gaussian_image():
-    y_coordinates = np.arange(GAUSSIAN_Y_PIXEL_NUM)
-    x_coordinates = np.arange(GAUSSIAN_X_PIXEL_NUM)
-    y_grid, x_grid = np.meshgrid(y_coordinates, x_coordinates)
-    simulated_noiseless_image = data_fitting_functions.two_dimensional_gaussian(x_grid, y_grid, GAUSSIAN_SIMULATED_AMP, GAUSSIAN_SIMULATED_X_CENTER, 
+    y_coordinates, x_coordinates = np.indices((GAUSSIAN_Y_PIXEL_NUM, GAUSSIAN_X_PIXEL_NUM))
+    simulated_noiseless_image = data_fitting_functions.two_dimensional_gaussian(x_coordinates, y_coordinates, GAUSSIAN_SIMULATED_AMP, GAUSSIAN_SIMULATED_X_CENTER, 
                                                         GAUSSIAN_SIMULATED_Y_CENTER, GAUSSIAN_SIMULATED_X_WIDTH, GAUSSIAN_SIMULATED_Y_WIDTH, 
                                                         GAUSSIAN_SIMULATED_OFFSET)
     NOISE_MAGNITUDE = 0.5
-    noisy_image = simulated_noiseless_image + np.random.normal(loc = 0.0, scale = NOISE_MAGNITUDE, size = simulated_noiseless_image.shape)
+    rng = np.random.default_rng(1337)
+    noisy_image = simulated_noiseless_image + rng.normal(loc = 0.0, scale = NOISE_MAGNITUDE, size = simulated_noiseless_image.shape)
     return noisy_image
 
 

@@ -6,7 +6,7 @@ from scipy.interpolate import interp1d
 from scipy.special import erf, erfinv
 from scipy.signal import argrelextrema
 
-from . import science_functions, statistics_functions, eos_functions
+from . import science_functions, statistics_functions, eos_functions, image_processing_functions
 
 def fit_lorentzian(x_vals, y_vals, errors = None, amp_guess = None, center_guess = None, gamma_guess = None,
                                     filter_outliers = False, report_inliers = False):
@@ -138,31 +138,32 @@ def _condition_peak_results(results):
 
 def fit_two_dimensional_gaussian(image_to_fit, center = None, amp = None, width_sigmas = None, offset = None, errors = None):
     image_indices_grid = np.indices(image_to_fit.shape)
-    flattened_image_indices = image_indices_grid.reshape((2, image_indices_grid[0].size)) 
+    flattened_image_indices = image_indices_grid.reshape((2, image_indices_grid[0].size))
+    flattened_y_indices, flattened_x_indices = flattened_image_indices
     flattened_image = image_to_fit.flatten()
     if(errors):
         errors = errors.flatten()
-    number_y_pixels = image_to_fit.shape[0] 
-    number_x_pixels = image_to_fit.shape[1] 
-    if((not amp) or (not offset)):
-        image_average = sum(sum(image_to_fit)) / image_to_fit.size 
+    image_average = np.average(image_to_fit)
+    guessed_positive = (
+        np.max(image_to_fit) - image_average > 
+        image_average - np.min(image_to_fit)
+    )
+    (calc_amp_guess, calc_x_center_guess, calc_y_center_guess, calc_sigma_x_guess, 
+     calc_sigma_y_guess, calc_offset_guess) = _2d_gaussian_guess_helper(image_to_fit)
     if(amp):
         amp_guess = amp 
     else:
-        if(np.amax(image_to_fit) - image_average > image_average - np.amin(image_to_fit)):
-            amp_guess = 1.0 
-        else:
-            amp_guess = -1.0 
+        amp_guess = calc_amp_guess
     if(center):
         x_center_guess, y_center_guess = center 
     else:
-        x_center_guess = number_x_pixels // 2 
-        y_center_guess = number_y_pixels // 2 
+        x_center_guess = calc_x_center_guess
+        y_center_guess = calc_y_center_guess
     if(width_sigmas):
         sigma_x_guess, sigma_y_guess = width_sigmas 
     else:
-        sigma_x_guess = number_x_pixels // 2 
-        sigma_y_guess = number_y_pixels // 2
+        sigma_x_guess = calc_sigma_x_guess 
+        sigma_y_guess = calc_sigma_y_guess
     if(offset):
         offset_guess = offset 
     else:
@@ -171,16 +172,50 @@ def fit_two_dimensional_gaussian(image_to_fit, center = None, amp = None, width_
     results = curve_fit(wrapped_two_dimensional_gaussian, flattened_image_indices, flattened_image, p0 = params, sigma = errors)
     return results
 
+
+def _2d_gaussian_guess_helper(image_to_fit):
+    image_average = np.average(image_to_fit)
+    flattened_y_indices, flattened_x_indices = np.indices(image_to_fit.shape).reshape((2, image_to_fit.size))
+    guessed_positive = (
+        np.max(image_to_fit) - image_average > 
+        image_average - np.min(image_to_fit)
+    )
+    if guessed_positive:
+        amp_guess = np.max(image_to_fit) - image_average
+    else:
+        amp_guess = np.min(image_to_fit) - image_average
+    #Possible presence of an offset complicates the center of mass, so use 
+    #the peak location instead
+    if guessed_positive:
+        peak_index_flattened = np.argmax(image_to_fit)
+    else:
+        peak_index_flattened = np.argmin(image_to_fit)
+    peak_y_index = flattened_y_indices[peak_index_flattened] 
+    peak_x_index = flattened_x_indices[peak_index_flattened]
+    y_center_guess = peak_y_index
+    x_center_guess = peak_x_index
+    #Likewise don't attempt a more sophisticated determination of the sigmas... 
+    sigma_x_guess = image_to_fit.shape[1] / 2 
+    sigma_y_guess = image_to_fit.shape[0] / 2
+    offset_guess = image_average
+    params = np.array([amp_guess, x_center_guess, y_center_guess, sigma_x_guess, sigma_y_guess, offset_guess])
+    return params
+
     
 
 def wrapped_two_dimensional_gaussian(coordinates, amp, x_center, y_center, sigma_x, sigma_y, offset):
-    x, y = coordinates 
+    y, x = coordinates 
     return two_dimensional_gaussian(x, y, amp, x_center, y_center, sigma_x, sigma_y, offset)
 
 
 def two_dimensional_gaussian(x, y, amp, x_center, y_center, sigma_x, sigma_y, offset):
     return amp * np.exp(-np.square(x - x_center) / (2 * np.square(sigma_x)) - np.square(y - y_center) / (2.0 * np.square(sigma_y))) + offset
-    
+
+
+def wrapped_two_dimensional_rotated_gaussian(coordinates, amp, x_center, y_center, sigma_x_prime, sigma_y_prime, tilt_angle, offset):
+    y, x = coordinates 
+    return two_dimensional_rotated_gaussian(x, y, amp, x_center, y_center, sigma_x_prime, sigma_y_prime, tilt_angle, offset)
+
 
 def two_dimensional_rotated_gaussian(x, y, amp, x_center, y_center, sigma_x_prime, sigma_y_prime, tilt_angle, offset):
     x_diff = x - x_center 

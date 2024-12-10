@@ -312,7 +312,6 @@ def test_generate_polrot_lookup_table():
                                                             num_samps = 100)
         generated_array = np.load("Polrot_Lookup_Table.npy") 
         stored_array = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Polrot_Lookup_Table_Small.npy")) 
-        print(generated_array - stored_array)
         assert np.all(np.isclose(generated_array, stored_array, rtol = 1e-3, atol = 1e-2))
     finally:
         os.remove("Polrot_Lookup_Table.npy") 
@@ -330,65 +329,218 @@ def test_get_polrot_densities_from_lookup_table():
     assert np.all(np.abs(saved_density_2 - reconstructed_density_2) < 1e-3)
 
 
-def test_rotate_and_crop_hybrid_image():
-    X_SIZE = 300 
-    Y_SIZE = 300 
-    X_CENTER = 110 
-    Y_CENTER = 203 
-    GAUSSIAN_X_WIDTH = 50
-    GAUSSIAN_Y_WIDTH = 20
-    center = (X_CENTER, Y_CENTER)
-    y_indices, x_indices = np.mgrid[0:Y_SIZE, 0:X_SIZE]
-    gaussian_data = data_fitting_functions.two_dimensional_gaussian(x_indices, y_indices, 1.0, X_CENTER, Y_CENTER, GAUSSIAN_X_WIDTH, GAUSSIAN_Y_WIDTH, 0)
-    X_CROP_WIDTH = 100 
-    Y_CROP_WIDTH = 150
-    cropped_rotated_image, cropped_rotated_center = image_processing_functions._rotate_and_crop_hybrid_image(gaussian_data, center, 90, 
-                                                                                x_crop_width = X_CROP_WIDTH, y_crop_width = Y_CROP_WIDTH)
-    rotated_x_center, rotated_y_center = cropped_rotated_center 
-    assert (np.abs(rotated_x_center - X_CROP_WIDTH / 2.0 < 1e-3))
-    assert (np.abs(rotated_y_center - Y_CROP_WIDTH / 2.0 < 1e-3))
-    EXPECTED_COUNTS_SUM = 5375.8749
-    counts_sum = np.sum(cropped_rotated_image)
-    assert (np.abs(counts_sum - EXPECTED_COUNTS_SUM) < 1e-3)
+def test_get_image_principal_rotation_angle():
+    SAMPLE_IMAGE_SHAPE = (501, 501)
+    SAMPLE_IMAGE_CENTER_X = 250
+    SAMPLE_IMAGE_CENTER_Y = 250
+    SAMPLE_IMAGE_Y_SIGMA = 62.8
+    SAMPLE_IMAGE_X_SIGMA = 23.7
+    sample_image_y_indices, sample_image_x_indices = np.indices(SAMPLE_IMAGE_SHAPE)
+
+    sample_image = np.exp(
+        -np.square(sample_image_y_indices - SAMPLE_IMAGE_CENTER_Y) / (2 * np.square(SAMPLE_IMAGE_Y_SIGMA)) - 
+        np.square(sample_image_x_indices - SAMPLE_IMAGE_CENTER_X) / (2 * np.square(SAMPLE_IMAGE_X_SIGMA)))
+    
+
+    ROTATION_ANGLE_DEG = 30
+
+    sample_image_rotated = scipy.ndimage.rotate(sample_image, ROTATION_ANGLE_DEG, reshape = False)
+
+    extracted_rotation_angle = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated) 
+    assert np.isclose(extracted_rotation_angle, -ROTATION_ANGLE_DEG)
+
+    #Now check that returning the COM works... 
+    _, (x_com, y_com) = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated, return_com = True)
+
+    assert np.isclose(x_com, SAMPLE_IMAGE_CENTER_X) 
+    assert np.isclose(y_com, SAMPLE_IMAGE_CENTER_Y)
+    assert np.isclose(extracted_rotation_angle, -ROTATION_ANGLE_DEG)
+
+    #Finally, check over a whole range, just in case... 
+    rotation_angle_range = np.linspace(0, 45, 10, endpoint = False)
+    for rotation_angle in rotation_angle_range:
+        sample_image_rotated_range = scipy.ndimage.rotate(sample_image, rotation_angle, reshape = False)
+        extracted_rotation_angle = image_processing_functions.get_image_principal_rotation_angle(sample_image_rotated_range) 
+        assert np.isclose(extracted_rotation_angle, -rotation_angle, rtol = 1e-4)
+
+    #Then one last check of broadcasting 
+    REPEATS = 3
+    rotated_image_stack_once = np.repeat(np.expand_dims(sample_image_rotated, axis = 0), REPEATS, axis = 0)
+    rotated_image_stack_twice = np.repeat(np.expand_dims(rotated_image_stack_once, axis = 0), REPEATS, axis = 0)
+    extracted_rotation_angle_stack = image_processing_functions.get_image_principal_rotation_angle(rotated_image_stack_twice) 
+
+    assert extracted_rotation_angle_stack.shape == (REPEATS, REPEATS)
+    assert np.allclose(extracted_rotation_angle_stack, -ROTATION_ANGLE_DEG)
 
 
-def test_get_hybrid_trap_densities_along_harmonic_axis():
-    EXPECTED_X_CENTER = 228 
-    EXPECTED_Y_CENTER = 398
-    SAMPLE_UM_PER_PIXEL = 0.6
-    SAMPLE_AXICON_DIAMETER_PIX = 189
-    SAMPLE_AXICON_LENGTH_PIX = 250
-    SAMPLE_TILT_DEG = 6.3
-    SAMPLE_SIDE_TILT_DEG = 10
-    SAMPLE_SIDE_ASPECT_RATIO = 1.4
-    axicon_diameter_um = SAMPLE_UM_PER_PIXEL * SAMPLE_AXICON_DIAMETER_PIX
-    sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
-    hybrid_trap_harmonic_positions, hybrid_trap_harmonic_data = image_processing_functions.get_hybrid_trap_densities_along_harmonic_axis(sample_hybrid_trap_data, 
-                                                                SAMPLE_TILT_DEG, SAMPLE_AXICON_DIAMETER_PIX, SAMPLE_AXICON_LENGTH_PIX,
-                                                                SAMPLE_SIDE_TILT_DEG, SAMPLE_SIDE_ASPECT_RATIO, SAMPLE_UM_PER_PIXEL)
-    filtered_hybrid_trap_harmonic_data = scipy.signal.savgol_filter(hybrid_trap_harmonic_data, 15, 2)
-    max_index = np.argmax(hybrid_trap_harmonic_data) 
-    max_value = hybrid_trap_harmonic_data[max_index]
-    CENTER_SNIPPET_HALF_WIDTH = 10
-    center_snippet = sample_hybrid_trap_data[EXPECTED_Y_CENTER - CENTER_SNIPPET_HALF_WIDTH:EXPECTED_Y_CENTER+CENTER_SNIPPET_HALF_WIDTH, 
-                                            EXPECTED_X_CENTER - CENTER_SNIPPET_HALF_WIDTH: EXPECTED_X_CENTER + CENTER_SNIPPET_HALF_WIDTH]
-    center_snippet_average_2d_density = np.sum(center_snippet) / center_snippet.size
-    center_snippet_average_3d_density = center_snippet_average_2d_density / (SAMPLE_UM_PER_PIXEL * SAMPLE_AXICON_DIAMETER_PIX)
-    max_index = np.argmax(filtered_hybrid_trap_harmonic_data)
-    max_value = filtered_hybrid_trap_harmonic_data[max_index] 
-    max_position = hybrid_trap_harmonic_positions[max_index] 
-    assert(np.abs(max_position) < 10) 
-    assert(np.abs((center_snippet_average_3d_density - max_value) / center_snippet_average_3d_density < 1e-1))
+def test_supersample_image():
+    BASE_IMAGE_SHAPE = (314, 278) 
+    base_image_y, base_image_x = np.indices(BASE_IMAGE_SHAPE) 
+    base_image = base_image_y + base_image_x
+    SUPERSAMPLE_SCALE_FACTOR = 2
+    #Basic test
+    supersample_image = image_processing_functions.supersample_image(base_image, SUPERSAMPLE_SCALE_FACTOR) 
+    assert supersample_image.shape[0] == SUPERSAMPLE_SCALE_FACTOR * base_image.shape[0]
+    assert supersample_image.shape[1] == SUPERSAMPLE_SCALE_FACTOR * base_image.shape[1]
+    assert np.all(supersample_image[::SUPERSAMPLE_SCALE_FACTOR, ::SUPERSAMPLE_SCALE_FACTOR] == base_image) 
+    assert np.all(supersample_image[1::SUPERSAMPLE_SCALE_FACTOR, ::SUPERSAMPLE_SCALE_FACTOR] == base_image)
+    assert np.all(supersample_image[::SUPERSAMPLE_SCALE_FACTOR, 1::SUPERSAMPLE_SCALE_FACTOR] == base_image)
+    assert np.all(supersample_image[1::SUPERSAMPLE_SCALE_FACTOR, 1::SUPERSAMPLE_SCALE_FACTOR] == base_image)
+    #Test with excluding one axis 
+    supersample_image_x_only = image_processing_functions.supersample_image(base_image, SUPERSAMPLE_SCALE_FACTOR, included_axes = (1,))
+    assert supersample_image_x_only.shape[0] == base_image.shape[0] 
+    assert supersample_image_x_only.shape[1] == SUPERSAMPLE_SCALE_FACTOR * base_image.shape[1]
+    assert np.all(supersample_image_x_only[:, ::SUPERSAMPLE_SCALE_FACTOR] == base_image)
+    assert np.all(supersample_image_x_only[:, 1::SUPERSAMPLE_SCALE_FACTOR] == base_image)
 
 
-def test_get_hybrid_cross_section_um():
-    SAMPLE_SIDE_ANGLE_DEG = 45
-    SAMPLE_SIDE_ASPECT_RATIO = 2 
-    SAMPLE_TOP_RADIUS_UM = 100
-    #From hand-evaluation of the formula
-    EXPECTED_CROSS_SECTION_UM2 = 25132.74123
-    cross_section = image_processing_functions.get_hybrid_cross_section_um(SAMPLE_TOP_RADIUS_UM, SAMPLE_SIDE_ANGLE_DEG, SAMPLE_SIDE_ASPECT_RATIO)
-    assert np.isclose(cross_section, EXPECTED_CROSS_SECTION_UM2)
+    #Test with different scale factors along each axis 
+    supersample_image_different_factors = image_processing_functions.supersample_image(
+        base_image, (SUPERSAMPLE_SCALE_FACTOR, SUPERSAMPLE_SCALE_FACTOR + 1)
+    )
+    assert supersample_image_different_factors.shape[0] == SUPERSAMPLE_SCALE_FACTOR * base_image.shape[0] 
+    assert supersample_image_different_factors.shape[1] == (SUPERSAMPLE_SCALE_FACTOR + 1) * base_image.shape[1]
+    assert np.all(supersample_image_different_factors[::SUPERSAMPLE_SCALE_FACTOR, ::(SUPERSAMPLE_SCALE_FACTOR + 1)] == base_image)
+
+
+def test_get_image_coms():
+    SAMPLE_IMAGE_SHAPE = (501, 501) 
+    SAMPLE_IMAGE_CENTER_X = 142
+    SAMPLE_IMAGE_CENTER_Y = 267 
+    SAMPLE_GAUSSIAN_WIDTH = 25
+
+    sample_image_y_indices, sample_image_x_indices = np.indices(SAMPLE_IMAGE_SHAPE) 
+    sample_image_values = data_fitting_functions.two_dimensional_gaussian(
+        sample_image_x_indices, sample_image_y_indices, 1.0, SAMPLE_IMAGE_CENTER_X, SAMPLE_IMAGE_CENTER_Y, 
+        SAMPLE_GAUSSIAN_WIDTH, SAMPLE_GAUSSIAN_WIDTH, 0.0
+    )
+
+    extracted_ycom, extracted_xcom = image_processing_functions.get_image_coms(sample_image_values)
+    assert np.isclose(extracted_ycom, SAMPLE_IMAGE_CENTER_Y) 
+    assert np.isclose(extracted_xcom, SAMPLE_IMAGE_CENTER_X)
+
+    #Now test with a stack of images to ensure correct broadcasting... 
+    REPEATS = 3
+    image_stack_once = np.repeat(np.expand_dims(sample_image_values, axis = 0), REPEATS, axis = 0)
+    image_stack = np.repeat(np.expand_dims(image_stack_once, axis = 0), REPEATS, axis = 0)
+    extracted_ycom_stack, extracted_xcom_stack = image_processing_functions.get_image_coms(image_stack) 
+    assert extracted_ycom_stack.shape == (REPEATS, REPEATS)
+    assert extracted_xcom_stack.shape == (REPEATS, REPEATS) 
+    assert np.allclose(extracted_ycom_stack, SAMPLE_IMAGE_CENTER_Y)
+    assert np.allclose(extracted_xcom_stack, SAMPLE_IMAGE_CENTER_X)
+
+
+def test_get_image_pixel_covariance():
+    SAMPLE_IMAGE_SHAPE = (501, 501) 
+    SAMPLE_IMAGE_CENTER_X = 142
+    SAMPLE_IMAGE_CENTER_Y = 267 
+    SAMPLE_GAUSSIAN_WIDTH_X = 25
+    SAMPLE_GAUSSIAN_WIDTH_Y = 31
+
+    sample_image_y_indices, sample_image_x_indices = np.indices(SAMPLE_IMAGE_SHAPE) 
+    sample_image_values = data_fitting_functions.two_dimensional_gaussian(
+        sample_image_x_indices, sample_image_y_indices, 1.0, SAMPLE_IMAGE_CENTER_X, SAMPLE_IMAGE_CENTER_Y, 
+        SAMPLE_GAUSSIAN_WIDTH_X, SAMPLE_GAUSSIAN_WIDTH_Y, 0.0
+    )
+
+    extracted_covariance = image_processing_functions.get_image_pixel_covariance(sample_image_values)
+    expected_covariance = np.array([
+        [np.square(SAMPLE_GAUSSIAN_WIDTH_Y), 0],
+        [0, np.square(SAMPLE_GAUSSIAN_WIDTH_X)]
+    ])
+
+    assert np.allclose(extracted_covariance, expected_covariance)
+
+    #Now make sure broadcasting is working... 
+    REPEATS = 3
+    image_stack_once = np.repeat(np.expand_dims(sample_image_values, axis = 0), REPEATS, axis = 0) 
+    image_stack_twice = np.repeat(np.expand_dims(image_stack_once, axis = 0), REPEATS, axis = 0)
+
+    extracted_covariance_stack = image_processing_functions.get_image_pixel_covariance(image_stack_twice)
+    expected_covariance_stack = np.expand_dims(expected_covariance, axis = (-2, -1))
+
+    assert np.allclose(extracted_covariance_stack, expected_covariance_stack)
+    assert extracted_covariance_stack[0][0].shape == (REPEATS, REPEATS)
+
+
+def test_convolve_gaussian():
+    SAMPLE_IMAGE_SHAPE = (501, 501) 
+    SAMPLE_IMAGE_CENTER_X = 142
+    SAMPLE_IMAGE_CENTER_Y = 267 
+    SAMPLE_GAUSSIAN_WIDTH = 25
+
+    sample_image_y_indices, sample_image_x_indices = np.indices(SAMPLE_IMAGE_SHAPE) 
+    sample_image_values = data_fitting_functions.two_dimensional_gaussian(
+        sample_image_x_indices, sample_image_y_indices, 1.0, SAMPLE_IMAGE_CENTER_X, SAMPLE_IMAGE_CENTER_Y, 
+        SAMPLE_GAUSSIAN_WIDTH, SAMPLE_GAUSSIAN_WIDTH, 0.0
+    )
+
+    CONVOLUTION_GAUSSIAN_WIDTH = 10
+    convolved_image = image_processing_functions.convolve_gaussian(sample_image_values, CONVOLUTION_GAUSSIAN_WIDTH)
+
+
+    convolved_ycom, convolved_xcom = image_processing_functions.get_image_coms(convolved_image) 
+
+    assert np.isclose(convolved_ycom, SAMPLE_IMAGE_CENTER_Y) 
+    assert np.isclose(convolved_xcom, SAMPLE_IMAGE_CENTER_X)
+
+    convolved_covariance_matrix = image_processing_functions.get_image_pixel_covariance(convolved_image)
+    expected_y_var = np.square(SAMPLE_GAUSSIAN_WIDTH) + np.square(CONVOLUTION_GAUSSIAN_WIDTH)
+    expected_x_var = np.square(SAMPLE_GAUSSIAN_WIDTH) + np.square(CONVOLUTION_GAUSSIAN_WIDTH)
+    expected_convolved_covariance_matrix = np.array([
+        [expected_y_var, 0],
+        [0, expected_x_var]
+    ])
+
+    assert np.allclose(convolved_covariance_matrix, expected_convolved_covariance_matrix, rtol = 5e-3)
+
+    #Test with different convolution Gaussian widths 
+    convolved_image_extra_x_variance = image_processing_functions.convolve_gaussian(sample_image_values, (CONVOLUTION_GAUSSIAN_WIDTH, 2 * CONVOLUTION_GAUSSIAN_WIDTH))
+    convolved_ycom_extra_xvar, convolved_xcom_extra_xvar = image_processing_functions.get_image_coms(convolved_image_extra_x_variance)
+
+    assert np.isclose(convolved_ycom_extra_xvar, SAMPLE_IMAGE_CENTER_Y)
+    assert np.isclose(convolved_xcom_extra_xvar, SAMPLE_IMAGE_CENTER_X)
+
+    convolved_covariance_matrix_extra_xvar = image_processing_functions.get_image_pixel_covariance(convolved_image_extra_x_variance)
+
+    expected_x_var_extra_xvar = np.square(SAMPLE_GAUSSIAN_WIDTH) + np.square(2 * CONVOLUTION_GAUSSIAN_WIDTH)
+
+    expected_convolved_covariance_matrix_extra_xvar = np.array([
+        [expected_y_var, 0], 
+        [0, expected_x_var_extra_xvar]
+    ]
+    )
+    assert np.allclose(convolved_covariance_matrix_extra_xvar, expected_convolved_covariance_matrix_extra_xvar, rtol = 1e-2)
+
+    #Now test broadcasting... 
+    REPEATS = 3 
+    stacked_image_once = np.repeat(np.expand_dims(sample_image_values, axis = 0), REPEATS, axis = 0)
+    stacked_image_twice = np.repeat(np.expand_dims(stacked_image_once, axis = 0), REPEATS, axis = 0)
+    convolved_image_stack = image_processing_functions.convolve_gaussian(stacked_image_twice, CONVOLUTION_GAUSSIAN_WIDTH)
+    assert len(convolved_image_stack.shape) == 4
+    assert convolved_image_stack.shape[0] == REPEATS 
+    assert convolved_image_stack.shape[1] == REPEATS
+    assert np.allclose(convolved_image_stack[0][0], convolved_image)
+
+    
+def test_inverse_abel():
+    SAMPLE_IMAGE_SHAPE = (501, 501)
+    SAMPLE_IMAGE_CENTER_X = 250
+    SAMPLE_IMAGE_CENTER_Y = 250
+    SAMPLE_IMAGE_Y_SIGMA = 62.8
+    SAMPLE_IMAGE_X_SIGMA = 23.7
+    sample_image_y_indices, sample_image_x_indices = np.indices(SAMPLE_IMAGE_SHAPE)
+
+    sample_image = np.exp(
+        -np.square(sample_image_y_indices - SAMPLE_IMAGE_CENTER_Y) / (2 * np.square(SAMPLE_IMAGE_Y_SIGMA)) - 
+        np.square(sample_image_x_indices - SAMPLE_IMAGE_CENTER_X) / (2 * np.square(SAMPLE_IMAGE_X_SIGMA)))
+
+    inverse_abel = image_processing_functions.inverse_abel(sample_image)
+
+    #For a 2D gaussian the expectation is just a gaussian divided by a constant
+    expected_inverse_abel = sample_image / np.sqrt(2 * np.pi * np.square(SAMPLE_IMAGE_X_SIGMA))
+
+    assert np.allclose(inverse_abel, expected_inverse_abel, rtol = 3e-3)
 
 
 def test_bin_and_average_data():

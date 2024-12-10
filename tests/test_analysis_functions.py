@@ -7,7 +7,7 @@ import shutil
 
 import astropy
 import numpy as np
-from scipy import ndimage
+import scipy
 
 #Temp import 
 import matplotlib.pyplot as plt
@@ -51,6 +51,7 @@ DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [50, 50, 140, 140]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX_SHAPE = (90, 90)
 EXPANDED_ABSORPTION_IMAGE_NORM_BOX = [30, 30, 35, 35]
 HYBRID_AVOID_ZERO_ROI = [100, 200, 420, 320]
+DENSITY_COM_OFFSET = 5
 
 
 
@@ -614,6 +615,60 @@ def test_get_atom_densities_box_autocut():
     finally:
         shutil.rmtree(measurement_pathname)
 
+
+def test_get_top_atom_densities_COM_centered():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0,
+        "hf_lock_setpoint":0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0, 
+        "top_um_per_pixel":E_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    no_stored_density_kwargs = {
+        "imaging_mode":"abs"
+    }
+    offset_box_image = get_offset_box_absorption_image()
+    offset_box_image_stack = generate_image_stack_from_absorption(offset_box_image)
+    roi_cropped_offset_box_image = get_offset_box_absorption_image(crop_to_roi = True)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = offset_box_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #First test cropping 
+        cropped_density_1, cropped_density_2 = analysis_functions.get_top_atom_densities_COM_centered(my_measurement, my_run, crop_not_pad = True,
+                                                                                                  imaging_mode = "abs")
+        cropped_density_ycom, cropped_density_xcom = image_processing_functions.get_image_coms(cropped_density_2)
+        cropped_density_y_length = cropped_density_2.shape[0]
+        cropped_density_x_length = cropped_density_2.shape[1]
+        assert roi_cropped_offset_box_image.shape[0] == cropped_density_y_length + 2 * DENSITY_COM_OFFSET 
+        assert roi_cropped_offset_box_image.shape[1] == cropped_density_x_length + 2 * DENSITY_COM_OFFSET
+        cropped_density_y_center = (cropped_density_y_length - 1) / 2 
+        cropped_density_x_center = (cropped_density_x_length - 1) / 2 
+        assert np.isclose(cropped_density_x_center, cropped_density_xcom)
+        assert np.isclose(cropped_density_y_center, cropped_density_ycom)
+        #Now test padding 
+        padded_density_1, padded_density_2 = analysis_functions.get_top_atom_densities_COM_centered(my_measurement, my_run, crop_not_pad = False, 
+                                                                                               imaging_mode = "abs")
+        padded_density_ycom, padded_density_xcom = image_processing_functions.get_image_coms(padded_density_2)
+        padded_density_y_length = padded_density_2.shape[0]
+        padded_density_x_length = padded_density_2.shape[1]
+        assert roi_cropped_offset_box_image.shape[0] == padded_density_y_length - 2 * DENSITY_COM_OFFSET
+        assert roi_cropped_offset_box_image.shape[1] == padded_density_x_length - 2 * DENSITY_COM_OFFSET
+        padded_density_y_center = (padded_density_y_length - 1) / 2 
+        padded_density_x_center = (padded_density_x_length - 1) / 2
+        assert np.isclose(padded_density_y_center, padded_density_ycom) 
+        assert np.isclose(padded_density_x_center, padded_density_xcom)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
 def _get_integrated_densities_test_helper(function_to_use, integration_axis):
     hf_atom_density_experiment_param_values = {
         "state_1_unitarity_res_freq_MHz": 0.0,
@@ -981,6 +1036,66 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
         assert np.all(np.isclose(hybrid_integrated_potentials, expected_hybrid_integrated_potentials))
     finally:
         shutil.rmtree(measurement_pathname)
+
+
+def test_hybrid_trap_density_helper():
+    EXPECTED_X_CENTER = 228 
+    EXPECTED_Y_CENTER = 398
+    SAMPLE_UM_PER_PIXEL = 0.6
+    SAMPLE_AXICON_DIAMETER_PIX = 189
+    SAMPLE_AXICON_LENGTH_PIX = 250
+    SAMPLE_TILT_DEG = 6.3
+    SAMPLE_SIDE_TILT_DEG = 10
+    SAMPLE_SIDE_ASPECT_RATIO = 1.4
+    hybrid_trap_experiment_parameters = {
+        "top_um_per_pixel":SAMPLE_UM_PER_PIXEL, 
+        "axicon_diameter_pix":SAMPLE_AXICON_DIAMETER_PIX,
+        "axicon_tilt_deg":SAMPLE_TILT_DEG,
+        "axicon_side_aspect_ratio":SAMPLE_SIDE_ASPECT_RATIO, 
+        "axicon_side_angle_deg": SAMPLE_SIDE_TILT_DEG,
+        "hybrid_trap_typical_length_pix":SAMPLE_AXICON_LENGTH_PIX,
+    }
+    try:
+        measurement_pathname, my_measurement, _ = create_measurement("top_double", experiment_param_values = hybrid_trap_experiment_parameters)
+        sample_hybrid_trap_data = np.load('resources/Sample_Box_Exp.npy')
+        hybrid_trap_harmonic_positions, hybrid_trap_harmonic_data = analysis_functions._hybrid_trap_density_helper(my_measurement, sample_hybrid_trap_data)
+        filtered_hybrid_trap_harmonic_data = scipy.signal.savgol_filter(hybrid_trap_harmonic_data, 15, 2)
+        max_index = np.argmax(hybrid_trap_harmonic_data) 
+        max_value = hybrid_trap_harmonic_data[max_index]
+        CENTER_SNIPPET_HALF_WIDTH = 10
+        center_snippet = sample_hybrid_trap_data[EXPECTED_Y_CENTER - CENTER_SNIPPET_HALF_WIDTH:EXPECTED_Y_CENTER+CENTER_SNIPPET_HALF_WIDTH, 
+                                                EXPECTED_X_CENTER - CENTER_SNIPPET_HALF_WIDTH: EXPECTED_X_CENTER + CENTER_SNIPPET_HALF_WIDTH]
+        center_snippet_average_2d_density = np.sum(center_snippet) / center_snippet.size
+        center_snippet_average_3d_density = center_snippet_average_2d_density / (SAMPLE_UM_PER_PIXEL * SAMPLE_AXICON_DIAMETER_PIX)
+        max_index = np.argmax(filtered_hybrid_trap_harmonic_data)
+        max_value = filtered_hybrid_trap_harmonic_data[max_index] 
+        max_position = hybrid_trap_harmonic_positions[max_index] 
+        assert(np.abs(max_position) < 10) 
+        assert(np.abs((center_snippet_average_3d_density - max_value) / center_snippet_average_3d_density < 1e-1))
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+
+def test_rotate_and_crop_hybrid_image():
+    X_SIZE = 300 
+    Y_SIZE = 300 
+    X_CENTER = 110 
+    Y_CENTER = 203 
+    GAUSSIAN_X_WIDTH = 50
+    GAUSSIAN_Y_WIDTH = 20
+    center = (X_CENTER, Y_CENTER)
+    y_indices, x_indices = np.mgrid[0:Y_SIZE, 0:X_SIZE]
+    gaussian_data = data_fitting_functions.two_dimensional_gaussian(x_indices, y_indices, 1.0, X_CENTER, Y_CENTER, GAUSSIAN_X_WIDTH, GAUSSIAN_Y_WIDTH, 0)
+    X_CROP_WIDTH = 100 
+    Y_CROP_WIDTH = 150
+    cropped_rotated_image, cropped_rotated_center = analysis_functions._rotate_and_crop_hybrid_image(gaussian_data, center, 90, 
+                                                                                x_crop_width = X_CROP_WIDTH, y_crop_width = Y_CROP_WIDTH)
+    rotated_x_center, rotated_y_center = cropped_rotated_center 
+    assert (np.abs(rotated_x_center - X_CROP_WIDTH / 2.0 < 1e-3))
+    assert (np.abs(rotated_y_center - Y_CROP_WIDTH / 2.0 < 1e-3))
+    EXPECTED_COUNTS_SUM = 5375.8749
+    counts_sum = np.sum(cropped_rotated_image)
+    assert (np.abs(counts_sum - EXPECTED_COUNTS_SUM) < 1e-3)
 
 
 def test_get_hybrid_trap_average_energy():
@@ -1732,9 +1847,7 @@ def test_get_box_in_situ_fermi_energies_from_counts():
 
         box_radius_um = um_per_pixel * hf_atom_density_experiment_param_values["axicon_diameter_pix"] / 2
         box_length_um = um_per_pixel * hf_atom_density_experiment_param_values["box_length_pix"]
-        box_cross_section_um = image_processing_functions.get_hybrid_cross_section_um(box_radius_um, 
-                                                            hf_atom_density_experiment_param_values["axicon_side_angle_deg"], 
-                                                            hf_atom_density_experiment_param_values["axicon_side_aspect_ratio"])
+        box_cross_section_um = analysis_functions.get_hybrid_cross_section_um(my_measurement)
         expected_fermi_energy = science_functions.get_box_fermi_energy_from_counts(expected_atom_counts, box_cross_section_um, box_length_um)
         
         #Now get them from the analysis function...
@@ -1775,7 +1888,7 @@ def test_get_rapid_ramp_densities_along_harmonic_axis():
     }
     rotation_angle_deg = hf_atom_density_experiment_param_values["rr_tilt_deg"]
     default_absorption_image = get_default_absorption_image()
-    rotated_default_absorption_image = ndimage.rotate(default_absorption_image, -rotation_angle_deg, reshape = False)
+    rotated_default_absorption_image = scipy.ndimage.rotate(default_absorption_image, -rotation_angle_deg, reshape = False)
     rotated_default_image_stack = generate_image_stack_from_absorption(rotated_default_absorption_image)
     try:
         measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = rotated_default_image_stack, 
@@ -1786,7 +1899,7 @@ def test_get_rapid_ramp_densities_along_harmonic_axis():
         rr_density_pre_rotation = -np.log(rotated_default_absorption_image) / li_6_res_cross_section
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         rr_density_pre_rotation_cropped = rr_density_pre_rotation[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
-        rr_density_expected = ndimage.rotate(rr_density_pre_rotation_cropped, rotation_angle_deg, reshape = False)
+        rr_density_expected = scipy.ndimage.rotate(rr_density_pre_rotation_cropped, rotation_angle_deg, reshape = False)
         rr_integrated_density_expected = np.sum(rr_density_expected, axis = 1) * um_per_pixel
         #Test getting densities both by storing and by re-processing
         rr_integrated_densities = analysis_functions.get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, imaging_mode = "abs", 
@@ -1823,7 +1936,7 @@ def test_get_rr_condensate_fractions_fit():
     }
     rotation_angle_deg = hf_atom_density_experiment_param_values["rr_tilt_deg"]
     rr_condensate_sample_absorption_image = get_rr_condensate_sample_absorption_image()
-    rotated_rr_condensate_sample_absorption_image = ndimage.rotate(rr_condensate_sample_absorption_image, -rotation_angle_deg, reshape = False)
+    rotated_rr_condensate_sample_absorption_image = scipy.ndimage.rotate(rr_condensate_sample_absorption_image, -rotation_angle_deg, reshape = False)
     rotated_default_image_stack = generate_image_stack_from_absorption(rotated_rr_condensate_sample_absorption_image)
     try:
         measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = rotated_default_image_stack, 
@@ -1857,7 +1970,7 @@ def test_get_rr_condensate_fractions_box():
     }
     rotation_angle_deg = hf_atom_density_experiment_param_values["rr_tilt_deg"]
     rr_condensate_sample_absorption_image = get_rr_condensate_sample_absorption_image()
-    rotated_rr_condensate_sample_absorption_image = ndimage.rotate(rr_condensate_sample_absorption_image, -rotation_angle_deg, reshape = False)
+    rotated_rr_condensate_sample_absorption_image = scipy.ndimage.rotate(rr_condensate_sample_absorption_image, -rotation_angle_deg, reshape = False)
     rotated_default_image_stack = generate_image_stack_from_absorption(rotated_rr_condensate_sample_absorption_image)
     rr_roi = [100, 256 - RR_CONDENSATE_WIDTH, 400, 256 + RR_CONDENSATE_WIDTH]
     shifted_rr_roi = [100, 256 - 3*RR_CONDENSATE_WIDTH, 400, 256 - RR_CONDENSATE_WIDTH]
@@ -1883,6 +1996,92 @@ def test_get_rr_condensate_fractions_box():
         assert np.isclose(rr_box_condensate_fraction_1, expected_rr_box_condensate_fraction, rtol = 1e-3)
     finally:
         shutil.rmtree(measurement_pathname)
+
+
+def test_get_uniform_reshaped_density():
+    try:
+        measurement_pathname, my_measurement, _ = create_measurement("top_double")
+        def create_fake_run(value):
+            parameters_dict = {"id":value}
+            num_points = (value + 1) * (value + 2)
+            analysis_dict = {"foo":np.arange(num_points).reshape((value + 1, value + 2))}
+            return measurement.Run(value, None, parameters_dict, analysis_results = analysis_dict, connected_mode = False)
+        NUM_RUNS = 5
+        for i in range(NUM_RUNS):
+            my_measurement.runs_dict[i] = create_fake_run(i)
+        ARB_RUN_VALUE = 2
+        arb_run = my_measurement.runs_dict[ARB_RUN_VALUE] 
+
+        arb_run_original_array = np.arange((ARB_RUN_VALUE + 1) * (ARB_RUN_VALUE + 2)).reshape((ARB_RUN_VALUE + 1, ARB_RUN_VALUE + 2))
+        expected_increment = ARB_RUN_VALUE
+        expected_lower_increment_sym = expected_increment // 2
+        expected_upper_increment_sym = expected_increment - expected_lower_increment_sym
+
+        EXPECTED_CROPPED_SHAPE = (1, 2)
+
+        cropped_arb_density_sym = analysis_functions.get_uniform_reshaped_density(my_measurement, arb_run, 
+                                                        stored_density_name = "foo", crop_not_pad = True, crop_or_pad_position = "sym")
+        expected_sym_crop = arb_run_original_array[expected_lower_increment_sym:expected_lower_increment_sym + EXPECTED_CROPPED_SHAPE[0], 
+                                                   expected_lower_increment_sym:expected_lower_increment_sym + EXPECTED_CROPPED_SHAPE[1]]
+        assert np.all(cropped_arb_density_sym == expected_sym_crop)
+
+        cropped_arb_density_lower = analysis_functions.get_uniform_reshaped_density(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = True, crop_or_pad_position = "lower")
+        expected_lower_crop = arb_run_original_array[expected_increment:, expected_increment:] 
+        assert np.all(cropped_arb_density_lower == expected_lower_crop)
+
+        cropped_arb_density_upper = analysis_functions.get_uniform_reshaped_density(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = True, crop_or_pad_position = "upper")
+        expected_upper_crop = arb_run_original_array[:-expected_increment, :-expected_increment] 
+        assert np.all(cropped_arb_density_upper == expected_upper_crop)
+
+        my_measurement.measurement_analysis_results.pop("foo_uniform_reshape_dimensions")
+
+        padded_arb_density_sym = analysis_functions.get_uniform_reshaped_density(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = False, 
+                                                                            crop_or_pad_position = "sym")
+        expected_sym_padded = np.pad(arb_run_original_array, ((expected_lower_increment_sym, expected_upper_increment_sym), 
+                                                            (expected_lower_increment_sym, expected_upper_increment_sym)))
+        assert np.all(padded_arb_density_sym == expected_sym_padded)
+
+        padded_arb_density_lower = analysis_functions.get_uniform_reshaped_density(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = False, 
+                                                                            crop_or_pad_position = "lower")
+        expected_lower_padded = np.pad(arb_run_original_array, ((expected_increment, 0), 
+                                                            (expected_increment, 0)))
+        assert np.all(padded_arb_density_lower == expected_lower_padded)
+
+        padded_arb_density_upper = analysis_functions.get_uniform_reshaped_density(my_measurement, arb_run, 
+                                                                            stored_density_name = "foo", crop_not_pad = False, 
+                                                                            crop_or_pad_position = "upper")
+        expected_upper_padded = np.pad(arb_run_original_array, ((0, expected_increment), 
+                                                                (0, expected_increment)))
+        assert np.all(padded_arb_density_upper == expected_upper_padded)
+        
+
+
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+def test_get_uniform_density_reshape_dimensions():
+    try:
+        measurement_pathname, my_measurement, _ = create_measurement("top_double")
+        def create_fake_run(value):
+            parameters_dict = {"id":value}
+            analysis_dict = {"foo":np.ones((value + 1, value + 2))}
+            return measurement.Run(value, None, parameters_dict, analysis_results = analysis_dict, connected_mode = False)
+        NUM_RUNS = 4
+        for i in range(NUM_RUNS):
+            my_measurement.runs_dict[i] = create_fake_run(i) 
+        #Manually remove a density to ensure correct ignoring
+        my_measurement.runs_dict[2].analysis_results.pop("foo")
+        cropped_dimensions = analysis_functions.get_uniform_density_reshape_dimensions(my_measurement, "foo", True)
+        assert cropped_dimensions == (1, 2)
+        padded_dimensions = analysis_functions.get_uniform_density_reshape_dimensions(my_measurement, "foo", False)
+        assert padded_dimensions == (NUM_RUNS, NUM_RUNS + 1)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
 
 def test_get_saturation_counts_top():
     experiment_param_values = {
@@ -1931,6 +2130,17 @@ def test_get_saturation_counts_top():
         assert np.isclose(expected_saturation_counts_fudged, saturation_counts_fudged)
     finally:
         shutil.rmtree(measurement_pathname)
+
+
+def test_hybrid_cross_section_geometry_formula():
+    SAMPLE_SIDE_ANGLE_DEG = 45
+    SAMPLE_SIDE_ASPECT_RATIO = 2 
+    SAMPLE_TOP_RADIUS_UM = 100
+    #From hand-evaluation of the formula
+    EXPECTED_CROSS_SECTION_UM2 = 25132.74123
+    cross_section = analysis_functions._hybrid_cross_section_geometry_formula(
+        SAMPLE_TOP_RADIUS_UM, SAMPLE_SIDE_ANGLE_DEG, SAMPLE_SIDE_ASPECT_RATIO)
+    assert np.isclose(cross_section, EXPECTED_CROSS_SECTION_UM2)
 
 
 
@@ -2049,6 +2259,24 @@ def generate_default_image_density_pattern(crop_to_roi = False, density_value = 
 
 def get_box_autocut_absorption_image(crop_to_roi = False):
     center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+    box_autocut_absorption_image = np.where(
+        np.logical_and(
+            np.abs(y_indices - center_y_index) < box_radius,
+            np.abs(x_indices - center_x_index) < box_radius
+        ), 
+        np.exp(-np.sqrt(1 - np.square((x_indices - center_x_index) / box_radius))),
+        1.0
+    )
+    if not crop_to_roi:
+        return box_autocut_absorption_image 
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return box_autocut_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+    
+def get_offset_box_absorption_image(crop_to_roi = False):
+    center_y_index, center_x_index = np.array(DEFAULT_ABS_SQUARE_CENTER_INDICES) + np.array([DENSITY_COM_OFFSET, -DENSITY_COM_OFFSET])
     y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
     box_radius = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
     box_autocut_absorption_image = np.where(
