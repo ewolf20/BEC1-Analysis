@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
 sys.path.insert(0, path_to_analysis)
-from BEC1_Analysis.code import measurement, image_processing_functions, science_functions, data_fitting_functions
+from BEC1_Analysis.code import measurement, image_processing_functions, science_functions, data_fitting_functions, eos_functions
 from BEC1_Analysis.code import analysis_functions
 
 
@@ -1442,8 +1442,8 @@ def test_get_axial_squish_normalized_pressures():
         axial_densities_1 = axial_densities_1.flatten()
         axial_densities_3 = axial_densities_3.flatten()
 
-        pressure_denominator_1 = science_functions.get_ideal_fermi_pressure_hz_um_from_density(axial_densities_1 * 1e18)
-        pressure_denominator_3 = science_functions.get_ideal_fermi_pressure_hz_um_from_density(axial_densities_3 * 1e18)
+        pressure_denominator_1 = eos_functions.fermi_pressure_Hz_um_from_density_um(axial_densities_1)
+        pressure_denominator_3 = eos_functions.fermi_pressure_Hz_um_from_density_um(axial_densities_3)
         expected_norm_pressure_1 = abs_pressure_1 / pressure_denominator_1
         expected_norm_pressure_3 = abs_pressure_3 / pressure_denominator_3
         #First test with the additional normalized pressure cut turned off

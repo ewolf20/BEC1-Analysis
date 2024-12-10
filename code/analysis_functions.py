@@ -7,7 +7,7 @@ from scipy.integrate import trapezoid
 from scipy import ndimage
 from scipy.signal import savgol_filter
 
-from . import data_fitting_functions, image_processing_functions, science_functions
+from . import data_fitting_functions, image_processing_functions, science_functions, eos_functions
 from .measurement import Run
 
 
@@ -697,8 +697,8 @@ def get_axial_squish_normalized_pressures(my_measurement, my_run, autocut = True
          my_measurement, my_run, autocut = autocut, first_stored_density_name=first_stored_density_name, 
          second_stored_density_name = second_stored_density_name, imaging_mode = imaging_mode, 
          return_positions = True, return_potentials = True, return_densities = True, **get_density_kwargs)
-    fermi_pressures_1 = science_functions.get_ideal_fermi_pressure_hz_um_from_density(densities_1 * 1e18) 
-    fermi_pressures_2 = science_functions.get_ideal_fermi_pressure_hz_um_from_density(densities_2 * 1e18)
+    fermi_pressures_1 = eos_functions.fermi_pressure_Hz_um_from_density_um(densities_1) 
+    fermi_pressures_2 = eos_functions.fermi_pressure_Hz_um_from_density_um(densities_2)
     normalized_pressures_1 = pressures_1_absolute / fermi_pressures_1 
     normalized_pressures_2 = pressures_2_absolute / fermi_pressures_2
     if normalized_pressure_cut:

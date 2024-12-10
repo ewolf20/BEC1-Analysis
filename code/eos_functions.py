@@ -14,6 +14,35 @@ H_BAR_MKS = 1.054572e-34
 H_MKS = 2 * np.pi * H_BAR_MKS
 KB_MKS = 1.380649e-23
 
+#BASIC EQUATIONS - ZERO TEMP & ELEMENTARY
+
+def thermal_de_broglie_mks(kBT_J, mass_kg):
+    return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * mass_kg * kBT_J)
+
+def fermi_energy_Hz_from_density_um(density_um, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG
+    else:
+        raise ValueError("Unsupported species")
+    density_m = density_um * 1e18
+    kF_m = np.cbrt(6 * np.square(np.pi) * density_m) 
+    energy_J = np.square(H_BAR_MKS * kF_m) / (2 * mass_kg) 
+    energy_Hz = energy_J / (2 * np.pi * H_BAR_MKS)
+    return energy_Hz
+
+
+def fermi_pressure_Hz_um_from_density_um(density_um, species = "6Li"):
+    fermi_energy_Hz = fermi_energy_Hz_from_density_um(density_um, species = species) 
+    return fermi_P0(density_um, fermi_energy_Hz)
+
+
+def fermi_P0(n, E_F):
+    return 2 / 5 * n * E_F 
+
+def fermi_kappa0(n, E_F):
+    return 3 / (2 * n * E_F)
+
+
 
 #IDEAL FERMI GAS
 
@@ -100,18 +129,6 @@ def ideal_fermi_f_twice_deriv(betamu):
     return kardar_f_minus_function(1/2, betamu)
 
 
-
-
-
-def thermal_de_broglie_mks(kBT_J, mass_kg):
-    return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * mass_kg * kBT_J)
-
-def ideal_fermi_P0(n, E_F):
-    return 2 / 5 * n * E_F 
-
-def ideal_fermi_kappa0(n, E_F):
-    return 3 / (2 * n * E_F)
-
 #Function for calculating the density of an ideal Fermi gas vs. betamu and T. 
 #Because of a lack of normalization, this takes two parameters betamu and T, and requires the species to be 
 #specified, so that the mass is known.
@@ -126,9 +143,15 @@ def ideal_fermi_density_um(betamu, kBT_Hz, species = "6Li"):
     return np.power(thermal_de_broglie_um, -3.0) * ideal_fermi_f_once_deriv(betamu)
 
 
-#Note: Only valid for box potentials
-def ideal_fermi_E0_uniform(E_F):
-    return 3/5 * E_F
+def ideal_fermi_pressure_Hz_um3(betamu, kBT_Hz, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG
+    else:
+        raise ValueError("Unsupported species")
+    density_um = ideal_fermi_density_um(betamu, kBT_Hz, species = species)
+    fermi_pressure_Hz_um = fermi_pressure_Hz_um_from_density_um(density_um, species = species)
+    P_over_P0 = ideal_fermi_P_over_P0(betamu)
+    return P_over_P0 * fermi_pressure_Hz_um
 
 
 def get_ideal_eos_functions(key = None, independent_variable = "betamu"):
@@ -571,3 +594,5 @@ def ultralow_fugacity_betamu_function_E_over_E0(E_over_E0):
 
 def ultralow_fugacity_betamu_function_S_over_NkB(S_over_NkB):
     return 5/2 - S_over_NkB
+
+

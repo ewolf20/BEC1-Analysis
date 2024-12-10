@@ -32,20 +32,6 @@ def test_two_level_system_population_rabi():
     assert np.abs(two_level_population_1B- 0.0) < 1e-4 
     assert np.abs(two_level_population_2B - 1.0) < 1e-4
 
-def test_get_fermi_energy_hz_from_density():
-    SAMPLE_DENSITY = 0.314
-    #Checked calculation for this value manually & cross-checked with another student
-    EXPECTED_FERMI_ENERGY = 5.8969e-09
-    energy = science_functions.get_fermi_energy_hz_from_density(SAMPLE_DENSITY) 
-    assert (np.abs((energy - EXPECTED_FERMI_ENERGY) / EXPECTED_FERMI_ENERGY) < 1e-4)
-
-
-def test_get_ideal_fermi_pressure_hz_um_from_density():
-    SAMPLE_DENSITY = 2.71818
-    #Checked calculation for this value manually 
-    EXPECTED_PRESSURE_HZ_UM = 2.703112e-26
-    pressure_hz_um = science_functions.get_ideal_fermi_pressure_hz_um_from_density(SAMPLE_DENSITY)
-    assert np.isclose(EXPECTED_PRESSURE_HZ_UM, pressure_hz_um, atol = 0.0, rtol = 1e-6)
 
 
 def test_get_li_energy_hz_in_1D_trap():

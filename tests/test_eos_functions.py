@@ -42,7 +42,19 @@ def test_thermal_de_broglie_mks():
     calculated_wavelength_m = eos_functions.thermal_de_broglie_mks(sample_kBT_J, sample_mass_kg)
     assert np.isclose(EXPECTED_WAVELENGTH_M, calculated_wavelength_m)
 
+def test_fermi_energy_Hz_from_density_um():
+    SAMPLE_DENSITY = 0.314 * 1e-18
+    #Checked calculation for this value manually & cross-checked with another student
+    EXPECTED_FERMI_ENERGY = 5.8969e-09
+    energy = eos_functions.fermi_energy_Hz_from_density_um(SAMPLE_DENSITY) 
+    assert (np.abs((energy - EXPECTED_FERMI_ENERGY) / EXPECTED_FERMI_ENERGY) < 1e-4)
 
+def test_fermi_pressure_Hz_um_from_density_um():
+    SAMPLE_DENSITY = 2.71818e-18
+    #Checked calculation for this value manually 
+    EXPECTED_PRESSURE_HZ_UM = 2.703112e-26
+    pressure_hz_um = eos_functions.fermi_pressure_Hz_um_from_density_um(SAMPLE_DENSITY)
+    assert np.isclose(EXPECTED_PRESSURE_HZ_UM, pressure_hz_um, atol = 0.0, rtol = 1e-6)
 
 def test_ideal_fermi_density_um():
     #First test for correct results in the ultra cold limit
@@ -51,7 +63,7 @@ def test_ideal_fermi_density_um():
     ultra_cold_mu_values = ultra_cold_betamu_values * ultra_cold_kBT_Hz 
     calculated_ultra_cold_densities_um = eos_functions.ideal_fermi_density_um(ultra_cold_betamu_values, ultra_cold_kBT_Hz)
     #This function is tested separately
-    calculated_ultra_cold_density_fermi_energies = science_functions.get_fermi_energy_hz_from_density(calculated_ultra_cold_densities_um * 1e18)
+    calculated_ultra_cold_density_fermi_energies = eos_functions.fermi_energy_Hz_from_density_um(calculated_ultra_cold_densities_um)
     assert np.all(np.isclose(ultra_cold_mu_values, calculated_ultra_cold_density_fermi_energies, rtol = 1e-2, atol = 0.0))
     #Then test for correct results in the ultra hot limit 
     ultra_hot_betamu_values = np.linspace(-15, -8, 100)
@@ -157,7 +169,7 @@ def test_balanced_density_um():
     sample_large_betamu_mu_values_Hz = cold_betamu_values * SAMPLE_KBT_HZ_VALUE
     expected_large_betamu_fermi_energies = sample_large_betamu_mu_values_Hz / BERTSCH_PARAMETER
     calculated_large_betamu_densities = eos_functions.balanced_density_um(cold_betamu_values, SAMPLE_KBT_HZ_VALUE)
-    calculated_large_betamu_fermi_energies = science_functions.get_fermi_energy_hz_from_density(calculated_large_betamu_densities * 1e18)
+    calculated_large_betamu_fermi_energies = eos_functions.fermi_energy_Hz_from_density_um(calculated_large_betamu_densities)
     assert np.all(np.isclose(expected_large_betamu_fermi_energies, calculated_large_betamu_fermi_energies, rtol = 5e-2))
     #At high temperatures, the density is given by the inverse thermal de Broglie wavelength times the fugacity 
     hot_betamu_values = np.linspace(-15, -8, 100)

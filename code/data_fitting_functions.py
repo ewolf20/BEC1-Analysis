@@ -737,7 +737,7 @@ def _fit_li6_density_helper(function, potentials_Hz, densities_um, errors = None
     if absolute_mu_0_Hz_guess is None:
         #Assume zero temperature fermi gas at maximum density point
         peak_density_um = np.max(densities_um)
-        relative_mu_0_Hz_guess = science_functions.get_fermi_energy_hz_from_density(peak_density_um * 1e18)
+        relative_mu_0_Hz_guess = eos_functions.fermi_energy_Hz_from_density_um(peak_density_um)
         absolute_mu_0_Hz_guess = relative_mu_0_Hz_guess + potential_minimum
     if kBT_Hz_guess is None: 
         #Assume T/T_F value of 0.5. Inconsistent with above... but useful for getting order of magnitude
