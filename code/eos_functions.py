@@ -595,4 +595,45 @@ def ultralow_fugacity_betamu_function_E_over_E0(E_over_E0):
 def ultralow_fugacity_betamu_function_S_over_NkB(S_over_NkB):
     return 5/2 - S_over_NkB
 
+#Polaron EOS functions 
+#See e.g. https://arxiv.org/abs/1811.00481 for explanation. By convention, we take mu_up to be the 
+#majority species, mu_down to be the minority species.
 
+#Unless otherwise specified, dimensionful units are in micrometers and Hz
+
+
+POLARON_EOS_A = -0.615
+POLARON_MSTAR_OVER_M = 1.25 
+
+def polaron_eos_minority_density_um(mu_up, mu_down, T):
+    adjusted_mu_down = mu_down - POLARON_EOS_A * mu_up 
+    adjusted_betamu_down = mu_down / T
+    return np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_density_um(adjusted_betamu_down, T) 
+
+def polaron_eos_majority_density_um(mu_up, mu_down, T):
+    betamu_up = mu_up / T
+    return ideal_fermi_density_um(betamu_up, T) - POLARON_EOS_A * polaron_eos_minority_density_um(mu_up, mu_down, T)
+
+def polaron_eos_pressure_Hz_um(mu_up, mu_down, T):
+    betamu_up = mu_up / T 
+    adjusted_mu_down = mu_down - POLARON_EOS_A * mu_up 
+    adjusted_betamu_down = adjusted_mu_down / T 
+    pressure_contribution_up = ideal_fermi_pressure_Hz_um3(betamu_up, T)
+    pressure_contribution_down = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_pressure_Hz_um3(adjusted_betamu_down, T)
+    return pressure_contribution_up + pressure_contribution_down
+
+
+#Dimensionless versions of the above, useful for fitting
+
+#Returns the dimensionless quantity n_down / n_0(mu_up, T), where quantities are as defined in above reference
+def polaron_eos_minority_to_ideal_majority_ratio(betamu_up, betamu_down):
+    adjusted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up
+    return np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f_once_deriv(adjusted_betamu_down) / ideal_fermi_f_once_deriv(betamu_up)
+
+
+def polaron_eos_pressure_to_ideal_pressure_ratio(betamu_up, betamu_down):
+    adjusted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up
+    prefactor = 10 / np.cbrt(36 * np.pi) 
+    majority_contribution = ideal_fermi_f(betamu_up) / np.power(ideal_fermi_f_once_deriv(betamu_up), 5/3) 
+    minority_contribution = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f(adjusted_betamu_down) / np.power(ideal_fermi_f_once_deriv(betamu_up), 5/3)
+    return prefactor * (majority_contribution + minority_contribution)
