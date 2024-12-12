@@ -27,9 +27,18 @@ def fermi_energy_Hz_from_density_um(density_um, species = "6Li"):
     density_m = density_um * 1e18
     kF_m = np.cbrt(6 * np.square(np.pi) * density_m) 
     energy_J = np.square(H_BAR_MKS * kF_m) / (2 * mass_kg) 
-    energy_Hz = energy_J / (2 * np.pi * H_BAR_MKS)
+    energy_Hz = energy_J / H_MKS
     return energy_Hz
 
+def density_um_from_fermi_energy_Hz(fermi_energy_Hz, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG 
+    else:
+        raise ValueError("Unsupported species")
+    fermi_energy_J = fermi_energy_Hz * H_MKS
+    density_m = (1.0 / (6 * np.square(np.pi))) * np.power(2 * mass_kg * fermi_energy_J / np.square(H_BAR_MKS), 1.5)
+    density_um = density_m * 1e-18 
+    return density_um
 
 def fermi_pressure_Hz_um_from_density_um(density_um, species = "6Li"):
     fermi_energy_Hz = fermi_energy_Hz_from_density_um(density_um, species = species) 
@@ -143,7 +152,7 @@ def ideal_fermi_density_um(betamu, kBT_Hz, species = "6Li"):
     return np.power(thermal_de_broglie_um, -3.0) * ideal_fermi_f_once_deriv(betamu)
 
 
-def ideal_fermi_pressure_Hz_um3(betamu, kBT_Hz, species = "6Li"):
+def ideal_fermi_pressure_Hz_um(betamu, kBT_Hz, species = "6Li"):
     if species == "6Li":
         mass_kg = LI_6_MASS_KG
     else:
@@ -607,7 +616,7 @@ POLARON_MSTAR_OVER_M = 1.25
 
 def polaron_eos_minority_density_um(mu_up, mu_down, T):
     adjusted_mu_down = mu_down - POLARON_EOS_A * mu_up 
-    adjusted_betamu_down = mu_down / T
+    adjusted_betamu_down = adjusted_mu_down / T
     return np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_density_um(adjusted_betamu_down, T) 
 
 def polaron_eos_majority_density_um(mu_up, mu_down, T):
@@ -618,8 +627,8 @@ def polaron_eos_pressure_Hz_um(mu_up, mu_down, T):
     betamu_up = mu_up / T 
     adjusted_mu_down = mu_down - POLARON_EOS_A * mu_up 
     adjusted_betamu_down = adjusted_mu_down / T 
-    pressure_contribution_up = ideal_fermi_pressure_Hz_um3(betamu_up, T)
-    pressure_contribution_down = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_pressure_Hz_um3(adjusted_betamu_down, T)
+    pressure_contribution_up = ideal_fermi_pressure_Hz_um(betamu_up, T)
+    pressure_contribution_down = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_pressure_Hz_um(adjusted_betamu_down, T)
     return pressure_contribution_up + pressure_contribution_down
 
 
