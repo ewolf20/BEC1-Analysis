@@ -33,6 +33,28 @@ def test_two_level_system_population_rabi():
     assert np.abs(two_level_population_2B - 1.0) < 1e-4
 
 
+def test_get_polaron_eos_mus_and_T_from_box_energy():
+    SAMPLE_BOX_VOLUME_UM = 100
+    SAMPLE_MU_UP = 2000 
+    SAMPLE_MU_DOWN = -500
+    SAMPLE_T = 1000 
+    #First get the pressure and densities from the forward functions 
+    sample_minority_density_um = eos_functions.polaron_eos_minority_density_um(SAMPLE_MU_UP, SAMPLE_MU_DOWN, SAMPLE_T)
+    sample_majority_density_um = eos_functions.polaron_eos_majority_density_um(SAMPLE_MU_UP, SAMPLE_MU_DOWN, SAMPLE_T)
+    sample_pressure_Hz_um = eos_functions.polaron_eos_pressure_Hz_um(SAMPLE_MU_UP, SAMPLE_MU_DOWN, SAMPLE_T) 
+    #Convert to experimental units 
+    sample_majority_counts = sample_majority_density_um * SAMPLE_BOX_VOLUME_UM
+    sample_minority_counts = sample_minority_density_um * SAMPLE_BOX_VOLUME_UM
+    sample_energy_Hz = 3/2 * sample_pressure_Hz_um * SAMPLE_BOX_VOLUME_UM
+    #Then solve for the values 
+    extracted_mu_up, extracted_mu_down, extracted_T = science_functions.get_polaron_eos_mus_and_T_from_box_counts_and_energy(
+        sample_majority_counts, sample_minority_counts, sample_energy_Hz, SAMPLE_BOX_VOLUME_UM
+    )
+    assert np.isclose(extracted_mu_up, SAMPLE_MU_UP) 
+    assert np.isclose(extracted_mu_down, SAMPLE_MU_DOWN) 
+    assert np.isclose(extracted_T, SAMPLE_T)
+
+
 
 def test_get_li_energy_hz_in_1D_trap():
     SAMPLE_DISPLACEMENT = 3.27

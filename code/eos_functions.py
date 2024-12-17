@@ -631,6 +631,18 @@ def polaron_eos_pressure_Hz_um(mu_up, mu_down, T):
     pressure_contribution_down = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_pressure_Hz_um(adjusted_betamu_down, T)
     return pressure_contribution_up + pressure_contribution_down
 
+#Convenience function for calculating the minimum pressure possible for a given minority and majority density at zero T
+def polaron_eos_minimum_pressure_zero_T_Hz_um(majority_density_um, minority_density_um):
+    ideal_majority_density_um = polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)
+    zero_T_majority_pressure_contribution = fermi_pressure_Hz_um_from_density_um(ideal_majority_density_um) 
+    mass_adjusted_minority_density_um = np.power(POLARON_MSTAR_OVER_M, -1.5) * minority_density_um
+    zero_T_minority_pressure_contribution = np.power(POLARON_MSTAR_OVER_M, 1.5) * fermi_pressure_Hz_um_from_density_um(mass_adjusted_minority_density_um)
+    return zero_T_majority_pressure_contribution + zero_T_minority_pressure_contribution
+    
+
+#Convenience function for calculating the "ideal" majority density from the majority and minority densities in the polaron EOS
+def polaron_eos_ideal_majority_density(majority_density_um, minority_density_um):
+    return majority_density_um + POLARON_EOS_A * minority_density_um
 
 #Dimensionless versions of the above, useful for fitting
 

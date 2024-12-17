@@ -174,6 +174,38 @@ def get_absolute_pressures(potentials, densities_3d):
     return pressures_array
 
 
+def get_polaron_eos_mus_and_T_from_box_counts_and_energy(majority_counts, minority_counts, total_energy_Hz, box_volume_um):
+    majority_density_um = majority_counts / box_volume_um 
+    minority_density_um = minority_counts / box_volume_um 
+    #Check for illegal density that won't be possible to fit
+    if minority_counts < 0 or majority_counts < 0:
+        raise ValueError("Counts cannot be negative for polaron fitting.")
+    #Now also get the pressure using PV = 2/3 E
+    overall_pressure_Hz_um = (2/3) * total_energy_Hz / box_volume_um
+    #Likewise, check for unphysically small pressure 
+    minimum_pressure_zero_T_Hz_um = eos_functions.polaron_eos_minimum_pressure_zero_T_Hz_um(majority_density_um, minority_density_um)
+    if overall_pressure_Hz_um < minimum_pressure_zero_T_Hz_um: 
+        raise ValueError("Pressure cannot be less than zero-T value")
+    #Normalize by the "ideal" majority density to reduce number of parameters
+    ideal_majority_density_um = eos_functions.polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)
+    minority_over_ideal_majority_ratio = minority_density_um / ideal_majority_density_um
+    ideal_majority_pressure_Hz_um = eos_functions.fermi_pressure_Hz_um_from_density_um(ideal_majority_density_um)
+    pressure_over_ideal_majority_ratio = overall_pressure_Hz_um / ideal_majority_pressure_Hz_um
+    #Given both ratios, determine the values of betamu_up and betamu_down
+    def offset_normalized_density_pressure_function(betamus):
+        betamu_up, betamu_down = betamus
+        return np.array([eos_functions.polaron_eos_minority_to_ideal_majority_ratio(betamu_up, betamu_down) - minority_over_ideal_majority_ratio, 
+                         eos_functions.polaron_eos_pressure_to_ideal_pressure_ratio(betamu_up, betamu_down) - pressure_over_ideal_majority_ratio])
+    
+    fitted_betamu_up, fitted_betamu_down = fsolve(offset_normalized_density_pressure_function, [0, 0])
+    #Now obtain T by fitting the ideal majority density, plus the betamu extracted above 
+    def offset_ideal_majority_function(T):
+        return eos_functions.ideal_fermi_density_um(fitted_betamu_up, T) - ideal_majority_density_um
+    fitted_T = fsolve(offset_ideal_majority_function, 1)
+    fitted_mu_up = fitted_betamu_up * fitted_T 
+    fitted_mu_down = fitted_betamu_down * fitted_T
+    return (fitted_mu_up, fitted_mu_down, fitted_T)
+    
 
 def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)

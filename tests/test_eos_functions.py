@@ -346,6 +346,17 @@ def test_polaron_eos_pressure_Hz_um():
     extracted_pressure = eos_functions.polaron_eos_pressure_Hz_um(sample_mu_up, sample_mu_down, sample_T)
     assert np.isclose(expected_pressure, extracted_pressure)
 
+
+def test_polaron_eos_minimum_pressure_zero_T_Hz_um():
+    sample_mu_up = 2000 
+    sample_mu_down = -500 
+    sample_T = 1
+    sample_density_up_um = eos_functions.polaron_eos_majority_density_um(sample_mu_up, sample_mu_down, sample_T) 
+    sample_density_down_um = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down, sample_T) 
+    sample_pressure_Hz_um = eos_functions.polaron_eos_pressure_Hz_um(sample_mu_up, sample_mu_down, sample_T)
+    extracted_minimum_pressure = eos_functions.polaron_eos_minimum_pressure_zero_T_Hz_um(sample_density_up_um, sample_density_down_um)
+    assert np.isclose(extracted_minimum_pressure, sample_pressure_Hz_um)
+
 def test_polaron_eos_minority_to_ideal_majority_ratio():
     sample_T = 1000 
     sample_mu_up = 2000
