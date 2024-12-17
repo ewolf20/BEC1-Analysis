@@ -14,6 +14,44 @@ H_BAR_MKS = 1.054572e-34
 H_MKS = 2 * np.pi * H_BAR_MKS
 KB_MKS = 1.380649e-23
 
+#BASIC EQUATIONS - ZERO TEMP & ELEMENTARY
+
+def thermal_de_broglie_mks(kBT_J, mass_kg):
+    return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * mass_kg * kBT_J)
+
+def fermi_energy_Hz_from_density_um(density_um, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG
+    else:
+        raise ValueError("Unsupported species")
+    density_m = density_um * 1e18
+    kF_m = np.cbrt(6 * np.square(np.pi) * density_m) 
+    energy_J = np.square(H_BAR_MKS * kF_m) / (2 * mass_kg) 
+    energy_Hz = energy_J / H_MKS
+    return energy_Hz
+
+def density_um_from_fermi_energy_Hz(fermi_energy_Hz, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG 
+    else:
+        raise ValueError("Unsupported species")
+    fermi_energy_J = fermi_energy_Hz * H_MKS
+    density_m = (1.0 / (6 * np.square(np.pi))) * np.power(2 * mass_kg * fermi_energy_J / np.square(H_BAR_MKS), 1.5)
+    density_um = density_m * 1e-18 
+    return density_um
+
+def fermi_pressure_Hz_um_from_density_um(density_um, species = "6Li"):
+    fermi_energy_Hz = fermi_energy_Hz_from_density_um(density_um, species = species) 
+    return fermi_P0(density_um, fermi_energy_Hz)
+
+
+def fermi_P0(n, E_F):
+    return 2 / 5 * n * E_F 
+
+def fermi_kappa0(n, E_F):
+    return 3 / (2 * n * E_F)
+
+
 
 #IDEAL FERMI GAS
 
@@ -100,18 +138,6 @@ def ideal_fermi_f_twice_deriv(betamu):
     return kardar_f_minus_function(1/2, betamu)
 
 
-
-
-
-def thermal_de_broglie_mks(kBT_J, mass_kg):
-    return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * mass_kg * kBT_J)
-
-def ideal_fermi_P0(n, E_F):
-    return 2 / 5 * n * E_F 
-
-def ideal_fermi_kappa0(n, E_F):
-    return 3 / (2 * n * E_F)
-
 #Function for calculating the density of an ideal Fermi gas vs. betamu and T. 
 #Because of a lack of normalization, this takes two parameters betamu and T, and requires the species to be 
 #specified, so that the mass is known.
@@ -126,9 +152,15 @@ def ideal_fermi_density_um(betamu, kBT_Hz, species = "6Li"):
     return np.power(thermal_de_broglie_um, -3.0) * ideal_fermi_f_once_deriv(betamu)
 
 
-#Note: Only valid for box potentials
-def ideal_fermi_E0_uniform(E_F):
-    return 3/5 * E_F
+def ideal_fermi_pressure_Hz_um(betamu, kBT_Hz, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG
+    else:
+        raise ValueError("Unsupported species")
+    density_um = ideal_fermi_density_um(betamu, kBT_Hz, species = species)
+    fermi_pressure_Hz_um = fermi_pressure_Hz_um_from_density_um(density_um, species = species)
+    P_over_P0 = ideal_fermi_P_over_P0(betamu)
+    return P_over_P0 * fermi_pressure_Hz_um
 
 
 def get_ideal_eos_functions(key = None, independent_variable = "betamu"):
@@ -571,3 +603,58 @@ def ultralow_fugacity_betamu_function_E_over_E0(E_over_E0):
 
 def ultralow_fugacity_betamu_function_S_over_NkB(S_over_NkB):
     return 5/2 - S_over_NkB
+
+#Polaron EOS functions 
+#See e.g. https://arxiv.org/abs/1811.00481 for explanation. By convention, we take mu_up to be the 
+#majority species, mu_down to be the minority species.
+
+#Unless otherwise specified, dimensionful units are in micrometers and Hz
+
+
+POLARON_EOS_A = -0.615
+POLARON_MSTAR_OVER_M = 1.25 
+
+def polaron_eos_minority_density_um(mu_up, mu_down, T):
+    adjusted_mu_down = mu_down - POLARON_EOS_A * mu_up 
+    adjusted_betamu_down = adjusted_mu_down / T
+    return np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_density_um(adjusted_betamu_down, T) 
+
+def polaron_eos_majority_density_um(mu_up, mu_down, T):
+    betamu_up = mu_up / T
+    return ideal_fermi_density_um(betamu_up, T) - POLARON_EOS_A * polaron_eos_minority_density_um(mu_up, mu_down, T)
+
+def polaron_eos_pressure_Hz_um(mu_up, mu_down, T):
+    betamu_up = mu_up / T 
+    adjusted_mu_down = mu_down - POLARON_EOS_A * mu_up 
+    adjusted_betamu_down = adjusted_mu_down / T 
+    pressure_contribution_up = ideal_fermi_pressure_Hz_um(betamu_up, T)
+    pressure_contribution_down = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_pressure_Hz_um(adjusted_betamu_down, T)
+    return pressure_contribution_up + pressure_contribution_down
+
+#Convenience function for calculating the minimum pressure possible for a given minority and majority density at zero T
+def polaron_eos_minimum_pressure_zero_T_Hz_um(majority_density_um, minority_density_um):
+    ideal_majority_density_um = polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)
+    zero_T_majority_pressure_contribution = fermi_pressure_Hz_um_from_density_um(ideal_majority_density_um) 
+    mass_adjusted_minority_density_um = np.power(POLARON_MSTAR_OVER_M, -1.5) * minority_density_um
+    zero_T_minority_pressure_contribution = np.power(POLARON_MSTAR_OVER_M, 1.5) * fermi_pressure_Hz_um_from_density_um(mass_adjusted_minority_density_um)
+    return zero_T_majority_pressure_contribution + zero_T_minority_pressure_contribution
+    
+
+#Convenience function for calculating the "ideal" majority density from the majority and minority densities in the polaron EOS
+def polaron_eos_ideal_majority_density(majority_density_um, minority_density_um):
+    return majority_density_um + POLARON_EOS_A * minority_density_um
+
+#Dimensionless versions of the above, useful for fitting
+
+#Returns the dimensionless quantity n_down / n_0(mu_up, T), where quantities are as defined in above reference
+def polaron_eos_minority_to_ideal_majority_ratio(betamu_up, betamu_down):
+    adjusted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up
+    return np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f_once_deriv(adjusted_betamu_down) / ideal_fermi_f_once_deriv(betamu_up)
+
+
+def polaron_eos_pressure_to_ideal_pressure_ratio(betamu_up, betamu_down):
+    adjusted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up
+    prefactor = 10 / np.cbrt(36 * np.pi) 
+    majority_contribution = ideal_fermi_f(betamu_up) / np.power(ideal_fermi_f_once_deriv(betamu_up), 5/3) 
+    minority_contribution = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f(adjusted_betamu_down) / np.power(ideal_fermi_f_once_deriv(betamu_up), 5/3)
+    return prefactor * (majority_contribution + minority_contribution)

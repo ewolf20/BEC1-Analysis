@@ -42,7 +42,27 @@ def test_thermal_de_broglie_mks():
     calculated_wavelength_m = eos_functions.thermal_de_broglie_mks(sample_kBT_J, sample_mass_kg)
     assert np.isclose(EXPECTED_WAVELENGTH_M, calculated_wavelength_m)
 
+def test_fermi_energy_Hz_from_density_um():
+    SAMPLE_DENSITY = 0.314 * 1e-18
+    #Checked calculation for this value manually & cross-checked with another student
+    EXPECTED_FERMI_ENERGY = 5.8969e-09
+    energy = eos_functions.fermi_energy_Hz_from_density_um(SAMPLE_DENSITY) 
+    assert (np.abs((energy - EXPECTED_FERMI_ENERGY) / EXPECTED_FERMI_ENERGY) < 1e-4)
 
+
+def test_density_um_from_fermi_energy_Hz():
+    test_fermi_energy = 1000
+    extracted_density = eos_functions.density_um_from_fermi_energy_Hz(test_fermi_energy)
+    extracted_fermi_energy = eos_functions.fermi_energy_Hz_from_density_um(extracted_density)
+    assert np.isclose(extracted_fermi_energy, test_fermi_energy)
+
+
+def test_fermi_pressure_Hz_um_from_density_um():
+    SAMPLE_DENSITY = 2.71818e-18
+    #Checked calculation for this value manually 
+    EXPECTED_PRESSURE_HZ_UM = 2.703112e-26
+    pressure_hz_um = eos_functions.fermi_pressure_Hz_um_from_density_um(SAMPLE_DENSITY)
+    assert np.isclose(EXPECTED_PRESSURE_HZ_UM, pressure_hz_um, atol = 0.0, rtol = 1e-6)
 
 def test_ideal_fermi_density_um():
     #First test for correct results in the ultra cold limit
@@ -51,7 +71,7 @@ def test_ideal_fermi_density_um():
     ultra_cold_mu_values = ultra_cold_betamu_values * ultra_cold_kBT_Hz 
     calculated_ultra_cold_densities_um = eos_functions.ideal_fermi_density_um(ultra_cold_betamu_values, ultra_cold_kBT_Hz)
     #This function is tested separately
-    calculated_ultra_cold_density_fermi_energies = science_functions.get_fermi_energy_hz_from_density(calculated_ultra_cold_densities_um * 1e18)
+    calculated_ultra_cold_density_fermi_energies = eos_functions.fermi_energy_Hz_from_density_um(calculated_ultra_cold_densities_um)
     assert np.all(np.isclose(ultra_cold_mu_values, calculated_ultra_cold_density_fermi_energies, rtol = 1e-2, atol = 0.0))
     #Then test for correct results in the ultra hot limit 
     ultra_hot_betamu_values = np.linspace(-15, -8, 100)
@@ -64,6 +84,27 @@ def test_ideal_fermi_density_um():
     ultra_hot_z_values = np.exp(ultra_hot_betamu_values)
     predicted_ultra_hot_densities_um = ultra_hot_z_values * np.power(ultra_hot_thermal_de_Broglie_um, -3.0)
     assert np.all(np.isclose(predicted_ultra_hot_densities_um, calculated_ultra_hot_densities_um, atol = 0.0, rtol = 2e-4))
+
+
+def test_ideal_fermi_pressure_Hz_um():
+    kBT_Hz = 1234
+    ultra_cold_betamu_values = np.linspace(20, 30, 100)
+    #At ultra cold temperatures, the pressure should be equal to the fermi pressure 
+    calculated_ultra_cold_pressures_Hz_um = eos_functions.ideal_fermi_pressure_Hz_um(ultra_cold_betamu_values, kBT_Hz)
+    ultra_cold_densities_um = eos_functions.ideal_fermi_density_um(ultra_cold_betamu_values, kBT_Hz)
+    expected_ultra_cold_pressures_Hz_um = eos_functions.fermi_pressure_Hz_um_from_density_um(ultra_cold_densities_um)
+    assert np.allclose(calculated_ultra_cold_pressures_Hz_um, expected_ultra_cold_pressures_Hz_um, rtol = 2e-2)
+    #At ultra high temperatures, use the direct expression from the virial 
+    kBT_J = kBT_Hz * eos_functions.H_MKS
+    mass_kg = eos_functions.LI_6_MASS_KG
+    de_broglie_wavelength_m = eos_functions.thermal_de_broglie_mks(kBT_J, mass_kg)
+    de_broglie_wavelength_um = de_broglie_wavelength_m * 1e6
+    pressure_prefactor = kBT_Hz / np.power(de_broglie_wavelength_um, 3) 
+    ultra_hot_betamu_values = np.linspace(-10, -15, 100) 
+    ultra_hot_z_values = np.exp(ultra_hot_betamu_values)
+    expected_ultra_hot_pressures_Hz_um = pressure_prefactor * ultra_hot_z_values
+    calculated_ultra_hot_pressures_Hz_um = eos_functions.ideal_fermi_pressure_Hz_um(ultra_hot_betamu_values, kBT_Hz)
+    assert np.allclose(calculated_ultra_hot_pressures_Hz_um, expected_ultra_hot_pressures_Hz_um, atol = 0.0)
 
 
 #NOTE: Test is only of internal consistency. Need to figure out some way to compare to known ideal Fermi data
@@ -157,7 +198,7 @@ def test_balanced_density_um():
     sample_large_betamu_mu_values_Hz = cold_betamu_values * SAMPLE_KBT_HZ_VALUE
     expected_large_betamu_fermi_energies = sample_large_betamu_mu_values_Hz / BERTSCH_PARAMETER
     calculated_large_betamu_densities = eos_functions.balanced_density_um(cold_betamu_values, SAMPLE_KBT_HZ_VALUE)
-    calculated_large_betamu_fermi_energies = science_functions.get_fermi_energy_hz_from_density(calculated_large_betamu_densities * 1e18)
+    calculated_large_betamu_fermi_energies = eos_functions.fermi_energy_Hz_from_density_um(calculated_large_betamu_densities)
     assert np.all(np.isclose(expected_large_betamu_fermi_energies, calculated_large_betamu_fermi_energies, rtol = 5e-2))
     #At high temperatures, the density is given by the inverse thermal de Broglie wavelength times the fugacity 
     hot_betamu_values = np.linspace(-15, -8, 100)
@@ -249,3 +290,98 @@ def test_generate_and_save_balanced_eos_betamu_from_other_value_virial_data():
     finally:
         shutil.rmtree(workfolder_pathname)
 
+
+polaron_eos_A = eos_functions.POLARON_EOS_A
+polaron_mstar_over_m = eos_functions.POLARON_MSTAR_OVER_M
+
+def test_polaron_eos_minority_density_um():
+    sample_T = 1
+    sample_mu_up = 1000
+    #First test for agreement at very high fugacity
+    sample_mu_down_cold = 50
+    adjusted_mu_down_cold = sample_mu_down_cold - polaron_eos_A * sample_mu_up
+    #Then expected density is just given by the adjusted Fermi energy, adjusted by the mass ratio
+    expected_fermi_energy_down = adjusted_mu_down_cold
+    expected_bare_density_down_cold = eos_functions.density_um_from_fermi_energy_Hz(expected_fermi_energy_down) 
+    expected_density_down_cold = np.power(polaron_mstar_over_m, 1.5) * expected_bare_density_down_cold
+    extracted_density_down_cold = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down_cold, sample_T)
+    assert np.isclose(expected_density_down_cold, extracted_density_down_cold)
+    #Also test for agreement at very low fugacity
+    sample_mu_down_hot = -15 + polaron_eos_A * sample_mu_up 
+    adjusted_mu_down_hot = sample_mu_down_hot - polaron_eos_A * sample_mu_up 
+    adjusted_betamu_down = adjusted_mu_down_hot / sample_T
+    sample_T_J = sample_T * eos_functions.H_MKS
+    de_broglie_wavelength_m = eos_functions.thermal_de_broglie_mks(sample_T_J, eos_functions.LI_6_MASS_KG)
+    sample_z_down_hot = np.exp(adjusted_betamu_down)
+    expected_bare_density_down_m_hot = np.power(de_broglie_wavelength_m, -3) * sample_z_down_hot 
+    expected_bare_density_down_um_hot = expected_bare_density_down_m_hot * 1e-18 
+    expected_density_down_hot = np.power(polaron_mstar_over_m, 1.5) * expected_bare_density_down_um_hot 
+    extracted_density_down_hot = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down_hot, sample_T) 
+    assert np.isclose(expected_density_down_hot, extracted_density_down_hot, atol = 0.0)
+
+
+def test_polaron_eos_majority_density_um():
+    sample_T = 1000 
+    sample_mu_up = 2000 
+    sample_mu_down = 500
+    betamu_up = sample_mu_up / sample_T
+    expected_bare_density_up = eos_functions.ideal_fermi_density_um(betamu_up, sample_T)
+    density_down = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down, sample_T)
+    expected_density_up = expected_bare_density_up - polaron_eos_A * density_down
+    extracted_density_up = eos_functions.polaron_eos_majority_density_um(sample_mu_up, sample_mu_down, sample_T)
+    assert np.isclose(expected_density_up, extracted_density_up)
+
+
+def test_polaron_eos_pressure_Hz_um():
+    #Just test that we've implemented the equation correctly 
+    sample_T = 1000 
+    sample_mu_up = 2000 
+    sample_mu_down = 500 
+    betamu_up = sample_mu_up / sample_T 
+    mu_down_adjusted = sample_mu_down - polaron_eos_A * sample_mu_up
+    betamu_down_adjusted = mu_down_adjusted / sample_T
+    pressure_contribution_up = eos_functions.ideal_fermi_pressure_Hz_um(betamu_up, sample_T)
+    pressure_contribution_down = np.power(polaron_mstar_over_m, 1.5) * eos_functions.ideal_fermi_pressure_Hz_um(betamu_down_adjusted, sample_T)
+    expected_pressure = pressure_contribution_up + pressure_contribution_down 
+    extracted_pressure = eos_functions.polaron_eos_pressure_Hz_um(sample_mu_up, sample_mu_down, sample_T)
+    assert np.isclose(expected_pressure, extracted_pressure)
+
+
+def test_polaron_eos_minimum_pressure_zero_T_Hz_um():
+    sample_mu_up = 2000 
+    sample_mu_down = -500 
+    sample_T = 1
+    sample_density_up_um = eos_functions.polaron_eos_majority_density_um(sample_mu_up, sample_mu_down, sample_T) 
+    sample_density_down_um = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down, sample_T) 
+    sample_pressure_Hz_um = eos_functions.polaron_eos_pressure_Hz_um(sample_mu_up, sample_mu_down, sample_T)
+    extracted_minimum_pressure = eos_functions.polaron_eos_minimum_pressure_zero_T_Hz_um(sample_density_up_um, sample_density_down_um)
+    assert np.isclose(extracted_minimum_pressure, sample_pressure_Hz_um)
+
+def test_polaron_eos_minority_to_ideal_majority_ratio():
+    sample_T = 1000 
+    sample_mu_up = 2000
+    sample_mu_down = -500
+    betamu_up = sample_mu_up / sample_T 
+    betamu_down = sample_mu_down / sample_T
+    ideal_majority_density = eos_functions.ideal_fermi_density_um(betamu_up, sample_T) 
+    minority_density = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down, sample_T) 
+    expected_minority_to_ideal_majority_ratio = minority_density / ideal_majority_density 
+    calculated_minority_to_ideal_majority_ratio = eos_functions.polaron_eos_minority_to_ideal_majority_ratio(
+                                                            betamu_up, betamu_down)
+    assert np.isclose(expected_minority_to_ideal_majority_ratio, calculated_minority_to_ideal_majority_ratio)
+
+
+def test_polaron_eos_pressure_to_ideal_pressure_ratio():
+    sample_T = 1000
+    sample_mu_up = 2000 
+    sample_mu_down = -500 
+    betamu_up = sample_mu_up / sample_T 
+    betamu_down = sample_mu_down / sample_T
+    ideal_majority_density = eos_functions.ideal_fermi_density_um(betamu_up, sample_T) 
+    ideal_pressure = eos_functions.fermi_pressure_Hz_um_from_density_um(ideal_majority_density) 
+    total_pressure = eos_functions.polaron_eos_pressure_Hz_um(sample_mu_up, sample_mu_down, sample_T)
+    expected_pressure_to_ideal_pressure_ratio = total_pressure / ideal_pressure 
+    calculated_pressure_to_ideal_pressure_ratio = eos_functions.polaron_eos_pressure_to_ideal_pressure_ratio(betamu_up, betamu_down)
+    print(expected_pressure_to_ideal_pressure_ratio) 
+    print(calculated_pressure_to_ideal_pressure_ratio)
+    assert np.isclose(expected_pressure_to_ideal_pressure_ratio, calculated_pressure_to_ideal_pressure_ratio)

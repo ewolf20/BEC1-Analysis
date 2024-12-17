@@ -29,25 +29,27 @@ BERTSCH_PARAMETER = 0.370
 
 
 
-def get_fermi_energy_hz_from_density(atom_density_m):
-    fermi_k_m = np.cbrt(6 * np.square(np.pi) * atom_density_m)
-    fermi_energy_J = np.square(H_BAR_MKS) * np.square(fermi_k_m) / (2 * LI_6_MASS_KG)
-    fermi_energy_hz = fermi_energy_J / (2 * np.pi * H_BAR_MKS) 
-    return fermi_energy_hz
+#TODO move to eos functions 
 
-def get_ideal_fermi_pressure_hz_um_from_density(atom_density_m):
-    fermi_energy_hz = get_fermi_energy_hz_from_density(atom_density_m) 
-    atom_density_um = atom_density_m * 1e-18
-    ideal_pressure_hz_um = eos_functions.ideal_fermi_P0(atom_density_um, fermi_energy_hz) 
-    return ideal_pressure_hz_um
+# def get_fermi_energy_hz_from_density(atom_density_m):
+#     fermi_k_m = np.cbrt(6 * np.square(np.pi) * atom_density_m)
+#     fermi_energy_J = np.square(H_BAR_MKS) * np.square(fermi_k_m) / (2 * LI_6_MASS_KG)
+#     fermi_energy_hz = fermi_energy_J / (2 * np.pi * H_BAR_MKS) 
+#     return fermi_energy_hz
+
+# def get_ideal_fermi_pressure_hz_um_from_density(atom_density_m):
+#     fermi_energy_hz = get_fermi_energy_hz_from_density(atom_density_m) 
+#     atom_density_um = atom_density_m * 1e-18
+#     ideal_pressure_hz_um = eos_functions.ideal_fermi_P0(atom_density_um, fermi_energy_hz) 
+#     return ideal_pressure_hz_um
 
 
 #FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
 
 def get_box_fermi_energy_from_counts(atom_counts, box_cross_section_um, box_length_um):
-    box_volume_m = box_cross_section_um * box_length_um * 1e-18
-    atom_density_m = atom_counts / box_volume_m
-    return get_fermi_energy_hz_from_density(atom_density_m)
+    box_volume_um = box_cross_section_um * box_length_um
+    atom_density_um = atom_counts / box_volume_um
+    return eos_functions.fermi_energy_Hz_from_density_um(atom_density_um)
 
 
 def get_hybrid_trap_total_energy(harmonic_trap_positions_um, three_d_density_trap_profile_um, trap_cross_section_um, trap_freq):
@@ -113,7 +115,7 @@ def get_hybrid_trap_compressibilities_savgol(harmonic_trap_positions_um, three_d
                                         savgol_window_length = 21, savgol_polyorder = 2):
     if not np.all(np.isclose(np.diff(harmonic_trap_positions_um), np.diff(harmonic_trap_positions_um)[0])):
         raise ValueError("Savitzky-Golay differentiation requires equal position spacings")
-    fermi_energies = get_fermi_energy_hz_from_density(three_d_density_trap_profile_um * 1e18)
+    fermi_energies = eos_functions.fermi_energy_Hz_from_density_um(three_d_density_trap_profile_um)
     potentials = get_li_energy_hz_in_1D_trap(harmonic_trap_positions_um * 1e-6, trap_freq)
     potential_index_deriv = np.diff(potentials)
     potential_index_deriv_extended = np.append(potential_index_deriv, potential_index_deriv[-1])
@@ -125,7 +127,7 @@ def get_hybrid_trap_compressibilities_savgol(harmonic_trap_positions_um, three_d
 #TODO: Speed up this unintelligent for loop implementation with numpy syntax
 def get_hybrid_trap_compressibilities_window_fit(potentials_hz, three_d_density_trap_profile_um, breakpoint_indices, 
                                                  return_errors = False, polyorder = 2):
-    fermi_energies = get_fermi_energy_hz_from_density(three_d_density_trap_profile_um * 1e18)
+    fermi_energies = eos_functions.fermi_energy_Hz_from_density_um(three_d_density_trap_profile_um)
     compressibilities_list = []
     errors_list = []
     for lower_breakpoint_index, upper_breakpoint_index in zip(breakpoint_indices[:-1], breakpoint_indices[1:]):
@@ -172,6 +174,38 @@ def get_absolute_pressures(potentials, densities_3d):
     return pressures_array
 
 
+def get_polaron_eos_mus_and_T_from_box_counts_and_energy(majority_counts, minority_counts, total_energy_Hz, box_volume_um):
+    majority_density_um = majority_counts / box_volume_um 
+    minority_density_um = minority_counts / box_volume_um 
+    #Check for illegal density that won't be possible to fit
+    if minority_counts < 0 or majority_counts < 0:
+        raise ValueError("Counts cannot be negative for polaron fitting.")
+    #Now also get the pressure using PV = 2/3 E
+    overall_pressure_Hz_um = (2/3) * total_energy_Hz / box_volume_um
+    #Likewise, check for unphysically small pressure 
+    minimum_pressure_zero_T_Hz_um = eos_functions.polaron_eos_minimum_pressure_zero_T_Hz_um(majority_density_um, minority_density_um)
+    if overall_pressure_Hz_um < minimum_pressure_zero_T_Hz_um: 
+        raise ValueError("Pressure cannot be less than zero-T value")
+    #Normalize by the "ideal" majority density to reduce number of parameters
+    ideal_majority_density_um = eos_functions.polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)
+    minority_over_ideal_majority_ratio = minority_density_um / ideal_majority_density_um
+    ideal_majority_pressure_Hz_um = eos_functions.fermi_pressure_Hz_um_from_density_um(ideal_majority_density_um)
+    pressure_over_ideal_majority_ratio = overall_pressure_Hz_um / ideal_majority_pressure_Hz_um
+    #Given both ratios, determine the values of betamu_up and betamu_down
+    def offset_normalized_density_pressure_function(betamus):
+        betamu_up, betamu_down = betamus
+        return np.array([eos_functions.polaron_eos_minority_to_ideal_majority_ratio(betamu_up, betamu_down) - minority_over_ideal_majority_ratio, 
+                         eos_functions.polaron_eos_pressure_to_ideal_pressure_ratio(betamu_up, betamu_down) - pressure_over_ideal_majority_ratio])
+    
+    fitted_betamu_up, fitted_betamu_down = fsolve(offset_normalized_density_pressure_function, [0, 0])
+    #Now obtain T by fitting the ideal majority density, plus the betamu extracted above 
+    def offset_ideal_majority_function(T):
+        return eos_functions.ideal_fermi_density_um(fitted_betamu_up, T) - ideal_majority_density_um
+    fitted_T = fsolve(offset_ideal_majority_function, 1)
+    fitted_mu_up = fitted_betamu_up * fitted_T 
+    fitted_mu_down = fitted_betamu_down * fitted_T
+    return (fitted_mu_up, fitted_mu_down, fitted_T)
+    
 
 def get_li_energy_hz_in_1D_trap(displacement_m, trap_freq_hz):
     li_energy_mks = 0.5 * LI_6_MASS_KG * np.square(2 * np.pi * trap_freq_hz) * np.square(displacement_m)
