@@ -366,7 +366,7 @@ def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
 def hybrid_trap_center_finder(image_to_fit, tilt_deg, hybrid_pixel_width, hybrid_pixel_length, center_guess = None):
     width_sigma = hybrid_pixel_width / 4
     length_sigma = hybrid_pixel_length / 4
-    tilt_rad = tilt_deg * np.pi / 180
+    tilt_rad = np.deg2rad(tilt_deg)
     estimated_image_amplitude = np.sum(image_to_fit) / (hybrid_pixel_length * hybrid_pixel_width)
     def wrapped_hybrid_fitting_gaussian(coordinate, x_center, y_center):
         y, x = coordinate 
