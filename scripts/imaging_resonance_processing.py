@@ -14,7 +14,7 @@ sys.path.insert(0, path_to_repo_folder)
 from BEC1_Analysis.code.measurement import Measurement
 from BEC1_Analysis.code import analysis_functions, data_fitting_functions, loading_functions
 
-SUPPORTED_IMAGE_TYPES = ['Side_lf', 'Side_hf', 'TopA', 'TopB', 'TopAB']
+SUPPORTED_IMAGE_TYPES = ['Side_lf', 'Side_hf', 'TopA', 'TopB', 'TopAB', "Na_Side", "Na_Catch"]
 
 def main():
     measurement_directory_path = get_measurement_directory_input()
@@ -48,6 +48,14 @@ def main_after_inputs(measurement_directory_path, imaging_mode_string):
         my_measurement.analyze_runs(analysis_functions.get_od_pixel_sum_side, "counts", print_progress = True)
         frequencies, counts = my_measurement.get_parameter_analysis_value_pair_from_runs("LFImgFreq", "counts")
         clipboard_string = save_fit_and_plot_data(workfolder_pathname, frequencies, counts, "Side", frequency_multiplier)
+    elif imaging_mode_string == "Na_Side":
+        my_measurement.analyze_runs(analysis_functions.get_od_pixel_sum_side, "counts", print_progress = True)
+        frequencies, counts = my_measurement.get_parameter_analysis_value_pair_from_runs("Na Side Imag Freq", "counts")
+        clipboard_string = save_fit_and_plot_data(workfolder_pathname, frequencies, counts, "Side", frequency_multiplier)
+    elif imaging_mode_string == "Na_Catch":
+        my_measurement.analyze_runs(analysis_functions.get_od_pixel_sum_na_catch, "counts", print_progress = True)
+        frequencies, counts = my_measurement.get_parameter_analysis_value_pair_from_runs("Na Catch Imag Freq", "counts")
+        clipboard_string = save_fit_and_plot_data(workfolder_pathname, frequencies, counts, "Catch", frequency_multiplier)
     loading_functions.universal_clipboard_copy(clipboard_string)
 
 def setup_measurement(measurement_directory_path, imaging_mode_string):
@@ -116,19 +124,25 @@ def get_imaging_mode():
 def get_frequency_multiplier(my_measurement, imaging_mode_string):
     if imaging_mode_string == "Side_lf":
         return my_measurement.experiment_parameters["li_lf_freq_multiplier"] 
+    elif imaging_mode_string == "Na_Side" or imaging_mode_string == "Na_Catch":
+        return my_measurement.experiment_parameters["na_freq_multiplier"]
     else:
         return my_measurement.experiment_parameters["li_hf_freq_multiplier"]
 
 
 def imaging_mode_decoder(imaging_mode_string):
     SIDE_RUN_IMAGE_NAME = "Side" 
+    CATCH_RUN_IMAGE_NAME = "Catch"
     TOP_A_RUN_IMAGE_NAME = "TopA"
     TOP_B_RUN_IMAGE_NAME = "TopB" 
     SIDE_LF_MEASUREMENT_KEY = "side_low_mag"
     SIDE_HF_MEASUREMENT_KEY = "side_high_mag"
     TOP_MEASUREMENT_KEY = "top_double"
-    if(imaging_mode_string == "Side_lf"):
+    CATCH_MEASUREMENT_KEY = "na_catch"
+    if imaging_mode_string in ["Side_lf", "Na_Side"]:
         return (SIDE_RUN_IMAGE_NAME, SIDE_LF_MEASUREMENT_KEY)
+    elif imaging_mode_string == "Na_Catch":
+        return (CATCH_RUN_IMAGE_NAME, CATCH_MEASUREMENT_KEY)
     elif(imaging_mode_string == "Side_hf"):
         return (SIDE_RUN_IMAGE_NAME, SIDE_HF_MEASUREMENT_KEY)
     elif(imaging_mode_string == "TopA"):
