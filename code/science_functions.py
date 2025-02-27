@@ -4,7 +4,7 @@ from scipy.integrate import trapezoid
 from scipy.optimize import fsolve
 from scipy.signal import savgol_filter
 
-from . import statistics_functions, eos_functions
+from . import statistics_functions, eos_functions, loading_functions
 
 
 
@@ -21,7 +21,9 @@ LI_I = 1
 LI_F_PLUS = LI_I + 0.5
 
 #Data from https://physics.nist.gov/cgi-bin/cuu/Value?mubshhz
-BOHR_MAGNETON_IN_MHZ_PER_G = 1.3996245
+BOHR_MAGNETON_MHZ_PER_G = 1.3996245
+#Data from https://physics.nist.gov/cgi-bin/cuu/Value?bohrrada0
+BOHR_RADIUS_M = 5.29177211e-11
 
 
 #Data from https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.110.135301; Ku figure updated for Feshbach correction 
@@ -273,10 +275,10 @@ def _breit_rabi_stretched_minus(x, g_I, g_J, F_plus):
     return -1.0 / 4.0 + g_I / (g_I + g_J) * F_plus * x * F_plus + F_plus / 2.0 * (1 - x) 
 
 def _convert_gauss_to_li_x(field_in_gauss):
-    return field_in_gauss * (BOHR_MAGNETON_IN_MHZ_PER_G) * (LI_G_I + LI_G_J) / (LI_F_PLUS * LI_HYPERFINE_CONSTANT_MHZ)
+    return field_in_gauss * (BOHR_MAGNETON_MHZ_PER_G) * (LI_G_I + LI_G_J) / (LI_F_PLUS * LI_HYPERFINE_CONSTANT_MHZ)
 
 def _convert_li_x_to_gauss(x):
-    return x * (LI_F_PLUS * LI_HYPERFINE_CONSTANT_MHZ) / (BOHR_MAGNETON_IN_MHZ_PER_G * (LI_G_I + LI_G_J))
+    return x * (LI_F_PLUS * LI_HYPERFINE_CONSTANT_MHZ) / (BOHR_MAGNETON_MHZ_PER_G * (LI_G_I + LI_G_J))
 
 
 def _convert_li_state_index_to_br_notation(index):
@@ -292,3 +294,75 @@ def _convert_li_state_index_to_br_notation(index):
         return (0.5, True) 
     elif(index == 6):
         return (1.5, True)
+
+
+"""
+Given state indices and field in G, return the s-wave scattering length.
+
+Using the simple approximation for a Feshbach resonance and experimental data, 
+return a value for the scattering length between two lithium states from the 
+set {1, 2, 3}.
+
+Experimental values used are from Zurn 2013, https://doi.org/10.1103/PhysRevLett.110.135301"""
+
+SCATTERING_LENGTH_INDICES_LIST = [(1, 2), (1, 3), (2, 3)]
+SCATTERING_LENGTH_CENTERS_LIST_G = [832.18, 689.68, 809.76]
+SCATTERING_LENGTH_WIDTHS_LIST_G = [-262.3, -166.6, -200.2]
+SCATTERING_LENGTH_BACKGROUND_LENGTHS_LIST_A0 = [-1582, -1770, -1642]
+
+def get_scattering_length_feshbach_a0(state_indices, field_G):
+    sorted_state_indices = tuple(sorted(state_indices))
+    if not sorted_state_indices in SCATTERING_LENGTH_INDICES_LIST:
+        raise ValueError("Invalid indices. Allowed values are: {0}".format(SCATTERING_LENGTH_INDICES_LIST))
+    pair_index = SCATTERING_LENGTH_INDICES_LIST.index(sorted_state_indices)
+    feshbach_center_G = SCATTERING_LENGTH_CENTERS_LIST_G[pair_index] 
+    feshbach_width_G = SCATTERING_LENGTH_WIDTHS_LIST_G[pair_index] 
+    feshbach_background_length_a0 = SCATTERING_LENGTH_BACKGROUND_LENGTHS_LIST_A0[pair_index]
+    return feshbach_function(field_G, feshbach_center_G, feshbach_width_G, feshbach_background_length_a0)
+
+def feshbach_function(B, B0, width, background_a):
+    return background_a * (1 - width / (B - B0))
+
+
+"""
+Get scattering length, this time using tabulated data from Zurn 2013"""
+def get_scattering_length_tabulated_a0(state_indices, field_G):
+    sorted_state_indices = tuple(sorted(state_indices))
+    zurn_fields_G, zurn_scattering_lengths, zurn_state_indices = loading_functions.load_measured_lithium_scattering_lengths() 
+    if not sorted_state_indices in zurn_state_indices:
+        raise ValueError("Invalid indices. Allowed values are: {0}".format(zurn_state_indices))
+    pair_index = zurn_state_indices.index(sorted_state_indices) 
+    zurn_scattering_lengths_this_pair_a0 = zurn_scattering_lengths[pair_index] 
+    interpolated_scattering_lengths = np.interp(field_G, zurn_fields_G, zurn_scattering_lengths_this_pair_a0)
+    return interpolated_scattering_lengths
+
+#Formula for calculating the mean-field shift is from first Fermi Varenna notes, pg. 30
+def get_mean_field_shift_Hz(density_um, scattering_length_a0):
+    scattering_length_m = scattering_length_a0 * BOHR_RADIUS_M
+    density_m = density_um * 1e18 
+    #Formula from e.g. 2008 Varenna notes
+    shift_J = 4 * np.pi * np.square(H_BAR_MKS) / LI_6_MASS_KG * density_m * scattering_length_m 
+    shift_Hz = shift_J / (2 * np.pi * H_BAR_MKS)
+    return shift_Hz
+
+def get_density_um_from_clock_shift_Hz(field_G, shift_Hz, initial_state_index, final_state_index, spectator_state_index, length_source = "tabulated"):
+    initial_shift_indices = (initial_state_index, spectator_state_index)
+    final_shift_indices = (final_state_index, spectator_state_index)
+    initial_bare_energy_MHz = get_li6_br_energy_MHz(field_G, initial_state_index)
+    final_bare_energy_MHz = get_li6_br_energy_MHz(field_G, final_state_index)
+    shift_sign = np.sign(final_bare_energy_MHz - initial_bare_energy_MHz)
+    if length_source == "feshbach":
+        initial_spectator_scattering_length_a0 = get_scattering_length_feshbach_a0(initial_shift_indices, field_G)
+        final_spectator_scattering_length_a0 = get_scattering_length_feshbach_a0(final_shift_indices, field_G)
+    elif length_source == "tabulated":
+        initial_spectator_scattering_length_a0 = get_scattering_length_tabulated_a0(initial_shift_indices, field_G)
+        final_spectator_scattering_length_a0 = get_scattering_length_tabulated_a0(final_shift_indices, field_G)
+    else:
+        raise ValueError("Invalid value for length_source. Allowed values are 'feshbach' or 'tabulated'")
+    scattering_length_difference_a0 = final_spectator_scattering_length_a0 - initial_spectator_scattering_length_a0
+    scattering_length_difference_m = scattering_length_difference_a0 * BOHR_RADIUS_M
+    #Formula as above
+    shift_J = shift_Hz * (2 * np.pi * H_BAR_MKS)
+    extracted_density_m = shift_sign * shift_J * LI_6_MASS_KG / ((4 * np.pi * np.square(H_BAR_MKS)) * scattering_length_difference_m)
+    extracted_density_um = extracted_density_m * 1e-18
+    return extracted_density_um

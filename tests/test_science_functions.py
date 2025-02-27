@@ -185,3 +185,84 @@ def test_get_field_from_li6_resonance():
     SAMPLE_INDICES = (1, 2)
     extracted_field = science_functions.get_field_from_li6_resonance(SAMPLE_RESONANCE_FREQ, SAMPLE_INDICES)
     assert(np.abs((extracted_field - EXPECTED_B_FIELD) / EXPECTED_B_FIELD) < 1e-5)
+
+
+def test_get_scattering_length_feshbach_a0():
+    sample_field_vals = np.linspace(600, 610, 100) 
+    #Manually feed values in from science functions into Feshbach function; no test of correctness of values
+    indices = science_functions.SCATTERING_LENGTH_INDICES_LIST 
+    centers = science_functions.SCATTERING_LENGTH_CENTERS_LIST_G
+    widths = science_functions.SCATTERING_LENGTH_WIDTHS_LIST_G
+    background_lengths = science_functions.SCATTERING_LENGTH_BACKGROUND_LENGTHS_LIST_A0 
+
+    for index, center, width, background_length in zip(indices, centers, widths, background_lengths):
+        expected_values = science_functions.feshbach_function(sample_field_vals, center, width, background_length)
+        extracted_values = science_functions.get_scattering_length_feshbach_a0(index, sample_field_vals)
+        assert np.allclose(expected_values, extracted_values)
+
+
+def test_feshbach_function():
+    SAMPLE_WIDTH = 100 
+    SAMPLE_CENTER = 750 
+    SAMPLE_BACKGROUND = -300 
+    SAMPLE_FIELD = 900
+    #MANUALLY CALCULATED VALUE
+    EXPECTED_VALUE = -100 
+    extracted_value = science_functions.feshbach_function(SAMPLE_FIELD, SAMPLE_CENTER, SAMPLE_WIDTH, SAMPLE_BACKGROUND)
+    assert np.isclose(EXPECTED_VALUE, extracted_value)
+
+
+def test_get_scattering_length_tabulated_a0():
+    SAMPLE_FIELD_G = 300.5 
+    #Values from manual inspection of tabulated data
+    EXPECTED_SCATTERING_LENGTH_12 = -288.2 
+    EXPECTED_SCATTERING_LENGTH_13 = -888.15
+    EXPECTED_SCATTERING_LENGTH_23 = -451.65
+    extracted_scattering_length_12 = science_functions.get_scattering_length_tabulated_a0((2, 1), SAMPLE_FIELD_G)
+    extracted_scattering_length_13 = science_functions.get_scattering_length_tabulated_a0((1, 3), SAMPLE_FIELD_G)
+    extracted_scattering_length_23 = science_functions.get_scattering_length_tabulated_a0((2, 3), SAMPLE_FIELD_G) 
+    assert np.isclose(EXPECTED_SCATTERING_LENGTH_12, extracted_scattering_length_12)
+    assert np.isclose(EXPECTED_SCATTERING_LENGTH_13, extracted_scattering_length_13)
+    assert np.isclose(EXPECTED_SCATTERING_LENGTH_23, extracted_scattering_length_23)
+
+
+def test_get_mean_field_shift_Hz():
+    SAMPLE_DENSITY_UM = 3.14
+    SAMPLE_SCATTERING_LENGTH_A0 = 1337
+    #From manual evaluation of relevant formula with given values
+    EXPECTED_SHIFT_HZ = 4691.103628941158
+    extracted_shift_Hz = science_functions.get_mean_field_shift_Hz(SAMPLE_DENSITY_UM, SAMPLE_SCATTERING_LENGTH_A0)
+    assert np.isclose(extracted_shift_Hz, EXPECTED_SHIFT_HZ)
+
+
+def test_get_density_um_from_clock_shift_Hz():
+    SAMPLE_INITIAL_STATE = 1 
+    SAMPLE_FINAL_STATE = 2 
+    SAMPLE_SPECTATOR_STATE = 3
+    SAMPLE_SPECTATOR_DENSITY_UM = 3.14
+    SAMPLE_FIELD_G = 300
+
+    initial_spectator_index_pair = (SAMPLE_INITIAL_STATE, SAMPLE_SPECTATOR_STATE)
+    final_spectator_index_pair = (SAMPLE_FINAL_STATE, SAMPLE_SPECTATOR_STATE)
+
+    feshbach_scattering_length_initial_spectator = science_functions.get_scattering_length_feshbach_a0(initial_spectator_index_pair, 
+                                                                                                       SAMPLE_FIELD_G)
+    feshbach_scattering_length_final_spectator = science_functions.get_scattering_length_feshbach_a0(final_spectator_index_pair, 
+                                                                                                     SAMPLE_FIELD_G)
+    feshbach_shift_initial = science_functions.get_mean_field_shift_Hz(SAMPLE_SPECTATOR_DENSITY_UM, feshbach_scattering_length_initial_spectator)
+    feshbach_shift_final = science_functions.get_mean_field_shift_Hz(SAMPLE_SPECTATOR_DENSITY_UM, feshbach_scattering_length_final_spectator)
+    feshbach_mean_field_shift = feshbach_shift_final - feshbach_shift_initial
+    feshbach_extracted_density = science_functions.get_density_um_from_clock_shift_Hz(SAMPLE_FIELD_G, feshbach_mean_field_shift, 
+                                                                                SAMPLE_INITIAL_STATE, SAMPLE_FINAL_STATE, SAMPLE_SPECTATOR_STATE, 
+                                                                                length_source = "feshbach")
+    assert np.isclose(feshbach_extracted_density, SAMPLE_SPECTATOR_DENSITY_UM)
+
+    tabulated_scattering_length_initial_spectator = science_functions.get_scattering_length_tabulated_a0(initial_spectator_index_pair, SAMPLE_FIELD_G)
+    tabulated_scattering_length_final_spectator = science_functions.get_scattering_length_tabulated_a0(final_spectator_index_pair, SAMPLE_FIELD_G)
+    tabulated_shift_initial = science_functions.get_mean_field_shift_Hz(SAMPLE_SPECTATOR_DENSITY_UM, tabulated_scattering_length_initial_spectator)
+    tabulated_shift_final = science_functions.get_mean_field_shift_Hz(SAMPLE_SPECTATOR_DENSITY_UM, tabulated_scattering_length_final_spectator)
+    tabulated_mean_field_shift = tabulated_shift_final - tabulated_shift_initial
+    tabulated_extracted_density = science_functions.get_density_um_from_clock_shift_Hz(SAMPLE_FIELD_G, tabulated_mean_field_shift, 
+                                                                                       SAMPLE_INITIAL_STATE, SAMPLE_FINAL_STATE, SAMPLE_SPECTATOR_STATE, 
+                                                                                       length_source = "tabulated")
+    assert np.isclose(tabulated_extracted_density, SAMPLE_SPECTATOR_DENSITY_UM)
