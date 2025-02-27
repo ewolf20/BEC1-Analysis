@@ -86,3 +86,15 @@ def test_load_tabulated_ideal_eos_betamu_data():
     loaded_array_hash = get_sha_hash_string(loaded_array.data.tobytes())
     EXPECTED_ARRAY_HASH = "63f32b57987f8660d57ae6bfb60239973474edcf3a6f9b0903cb22d27f00a494"
     assert EXPECTED_ARRAY_HASH == loaded_array_hash
+
+
+def test_load_measured_lithium_scattering_lengths():
+    loaded_fields_G, loaded_scattering_lengths, loaded_indices = loading_functions.load_measured_lithium_scattering_lengths()
+    EXPECTED_INDICES = [(1, 2), (1, 3), (2, 3)]
+    assert loaded_indices == EXPECTED_INDICES
+    loaded_field_hash = get_sha_hash_string(loaded_fields_G.data.tobytes()) 
+    loaded_scattering_lengths_hash = get_sha_hash_string(loaded_scattering_lengths.data.tobytes())
+    EXPECTED_FIELD_HASH = "77608827c9c2199cdd4dd32b03cd38a829da40340e969cfe2bcc7e881968e91d"
+    EXPECTED_SCATTERING_LENGTH_HASH = "288b27fa93643c0d1aa0939f49d31eeef308a5a11b4f1f272a27f4a8c49456b0" 
+    assert loaded_field_hash == EXPECTED_FIELD_HASH
+    assert loaded_scattering_lengths_hash == EXPECTED_SCATTERING_LENGTH_HASH

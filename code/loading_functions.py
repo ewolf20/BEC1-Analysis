@@ -138,6 +138,15 @@ def load_tabulated_ideal_eos_betamu_data():
        file_path = os.path.join(package_path, TABULATED_IDEAL_EOS_BETAMU_FILE_BASEPATH)
        return np.load(file_path)
 
+def load_measured_lithium_scattering_lengths():
+    MEASURED_LITHIUM_SCATTERING_LENGTHS_FILENAME = "scattering_lengths_zurn_2013.txt"
+    with pkg_resources.path(r, MEASURED_LITHIUM_SCATTERING_LENGTHS_FILENAME) as scattering_length_path:
+        scattering_length_data = np.loadtxt(scattering_length_path, skiprows = 2, unpack = True)
+        fields_G = scattering_length_data[0] 
+        scattering_lengths = scattering_length_data[1:]
+        HARD_CODED_STATE_INDICES = [(1, 2), (1, 3), (2, 3)] 
+        return (fields_G, scattering_lengths, HARD_CODED_STATE_INDICES)
+
 
 def load_polylog_analytic_continuation_parameters():
     CENTERS_FILENAME = "Polylog_Taylor_Centers.npy"
