@@ -411,6 +411,45 @@ def test_fit_li6_balanced_density():
     assert np.all(np.isclose(offset_popt, expected_offset_popt))
 
 
+def test_fit_li6_polaron_eos_densities():
+    RNG_SEED = 1337 
+    rng = np.random.default_rng(seed = RNG_SEED)
+
+    SAMPLE_MU_UP_BARE_HZ = 3000
+    SAMPLE_MU_DOWN_BARE_HZ = -1000
+    SAMPLE_T_HZ = 1000 
+    POTENTIAL_MIN_HZ = 1000 
+    POTENTIAL_RANGE_MAJ_HZ = 3000 
+    POTENTIAL_RANGE_MIN_HZ = 2000 
+    NUM_SAMPLES_MAJ = 600
+    NUM_SAMPLES_MIN = 400
+    potentials_majority = POTENTIAL_MIN_HZ + np.linspace(0, POTENTIAL_RANGE_MAJ_HZ, NUM_SAMPLES_MAJ)
+    potentials_minority = POTENTIAL_MIN_HZ + np.linspace(0, POTENTIAL_RANGE_MIN_HZ, NUM_SAMPLES_MIN)
+    local_mu_up_maj = SAMPLE_MU_UP_BARE_HZ - potentials_majority 
+    local_mu_down_maj = SAMPLE_MU_DOWN_BARE_HZ - potentials_majority 
+    local_mu_up_min = SAMPLE_MU_UP_BARE_HZ - potentials_minority 
+    local_mu_down_min = SAMPLE_MU_DOWN_BARE_HZ - potentials_minority 
+
+    sample_densities_majority_um = eos_functions.polaron_eos_majority_density_um(local_mu_up_maj, local_mu_down_maj, SAMPLE_T_HZ)
+    sample_densities_minority_um = eos_functions.polaron_eos_minority_density_um(local_mu_up_min, local_mu_down_min, SAMPLE_T_HZ)
+
+    NOISE_SCALE_UM = 0.003
+    density_noise_maj = rng.normal(0.0, NOISE_SCALE_UM, NUM_SAMPLES_MAJ)
+    density_noise_min = rng.normal(0.0, NOISE_SCALE_UM, NUM_SAMPLES_MIN)
+    noisy_densities_majority_um = sample_densities_majority_um + density_noise_maj 
+    noisy_densities_minority_um = sample_densities_minority_um + density_noise_min
+    fit_results = data_fitting_functions.fit_li6_polaron_eos_densities(potentials_majority, potentials_minority, 
+                                                                      noisy_densities_majority_um, noisy_densities_minority_um)
+    popt, pcov = fit_results 
+    sigmas = np.sqrt(np.diag(pcov))
+
+    EXPECTED_POPT = np.array([3015.25932, -961.2358, 985.85386])
+    assert np.allclose(EXPECTED_POPT, popt)
+    
+
+
+
+
 def test_fit_li6_balanced_density_with_prefactor():
     normal_randoms = np.load(os.path.join("resources", "Sample_Normal_Randoms.npy"))
     potential_values = np.linspace(0, 1500, num = len(normal_randoms)) 

@@ -775,13 +775,12 @@ def fit_li6_polaron_eos_densities(majority_potentials_Hz, minority_potentials_Hz
     spliced_potentials_Hz = np.concatenate((majority_potentials_Hz, minority_potentials_Hz))
     spliced_densities_um = np.concatenate((majority_densities_um, minority_densities_um))
     #Spliced function to fit the majority and minority densities simultaneously with the same parameters
-    def spliced_fit_function(potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz):
-        indices = np.arange(len(potentials_Hz))
-        local_mu_up_Hz = mu_up_Hz - potentials_Hz
-        local_mu_down_Hz = mu_down_Hz - potentials_Hz
+    def spliced_fit_function(spliced_potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz):
+        indices = np.arange(len(spliced_potentials_Hz))
         return np.where(indices < majority_length, 
-                    eos_functions.polaron_eos_majority_density_um(local_mu_up_Hz, local_mu_down_Hz, T_Hz),
-                    eos_functions.polaron_eos_minority_density_um(local_mu_up_Hz, local_mu_down_Hz, T_Hz))
+                    li6_polaron_eos_density_majority(spliced_potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz),
+                    li6_polaron_eos_density_minority(spliced_potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz)
+                )
     potential_minimum_value = min(np.min(majority_potentials_Hz), np.min(minority_potentials_Hz))
     if majority_mu_guess_Hz is None:
         peak_majority_density = np.max(majority_densities_um) 
@@ -807,6 +806,17 @@ def fit_li6_polaron_eos_densities(majority_potentials_Hz, minority_potentials_Hz
     ]
     results = curve_fit(spliced_fit_function, spliced_potentials_Hz, spliced_densities_um, p0 = p_guess)
     return results
+
+def li6_polaron_eos_density_minority(potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz):
+    local_mu_up_Hz = mu_up_Hz - potentials_Hz
+    local_mu_down_Hz = mu_down_Hz - potentials_Hz
+    return eos_functions.polaron_eos_minority_density_um(local_mu_up_Hz, local_mu_down_Hz, T_Hz)
+
+def li6_polaron_eos_density_majority(potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz):
+    local_mu_up_Hz = mu_up_Hz - potentials_Hz
+    local_mu_down_Hz = mu_down_Hz - potentials_Hz
+    return eos_functions.polaron_eos_majority_density_um(local_mu_up_Hz, local_mu_down_Hz, T_Hz)
+
 
 def _sort_and_deduplicate_xy_data(x_values, y_values):
     sorted_x_values, sorted_y_values = zip(*sorted(zip(x_values, y_values), key = lambda f: f[0]))
