@@ -285,19 +285,31 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     atom_density_second = atom_density_second * second_state_fudge
     return (atom_density_first, atom_density_second)
 
-def get_atom_densities_box_autocut(my_measurement, my_run, vert_crop_point = 0.5, horiz_crop_point = 0.00, widths_free = False, density_to_use = 2,
-                                   first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot",
-                                   **get_density_kwargs):
-    density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
+def get_atom_densities_box_autocut(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None,
+                                    vert_crop_point = 0.5, horiz_crop_point = 0.00, widths_free = False, density_to_use = 2,
+                                    supersample_and_rotate = True, supersample_scale_factor = 2, angle = "axicon", reshape = False, clip = True,
+                                   imaging_mode = "polrot", **get_density_kwargs):
+    if not supersample_and_rotate:
+        density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                     imaging_mode, **get_density_kwargs)
+    else:
+        density_1, density_2 = get_top_atom_densities_supersampled_and_rotated(my_measurement, my_run, 
+                                    first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name, 
+                                    supersample_scale_factor = supersample_scale_factor, angle = angle, reshape = reshape, 
+                                    clip = clip, imaging_mode = imaging_mode, **get_density_kwargs)
+        my_measurement.measurement_parameters["supersample_scale_factor_box_autocut"] = supersample_scale_factor
     if density_to_use == 1:
-        crop_density = density_1 
+        crop_density = density_1
     elif density_to_use == 2:
-        crop_density = density_2 
+        crop_density = density_2
     else:
         raise ValueError("Density_to_use must be 1 or 2.")
-    box_crop = box_autocut(my_measurement, crop_density, vert_crop_point = vert_crop_point, 
-                            horiz_crop_point = horiz_crop_point, widths_free = widths_free)
+    if supersample_and_rotate:
+        box_crop = box_autocut(my_measurement, crop_density, vert_crop_point = vert_crop_point, 
+                                horiz_crop_point = horiz_crop_point, widths_free = widths_free, supersample_scale_factor = supersample_scale_factor)
+    else:
+        box_crop = box_autocut(my_measurement, crop_density, vert_crop_point = vert_crop_point, 
+                                horiz_crop_point = horiz_crop_point, widths_free = widths_free)
     x_min, y_min, x_max, y_max = box_crop 
     density_1_cropped = density_1[y_min:y_max, x_min:x_max] 
     density_2_cropped = density_2[y_min:y_max, x_min:x_max]
@@ -350,13 +362,63 @@ def _com_center_helper(crop_not_pad, density_1, density_2, x_com_center_differen
         returned_density_2 = np.pad(density_2, (y_pad_tuple, x_pad_tuple))
     return (returned_density_1, returned_density_2)
 
+def get_top_atom_densities_supersampled_and_rotated(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
+                                   supersample_scale_factor = 2, angle = None, reshape = False, clip = True, 
+                                   imaging_mode = "polrot", **get_density_kwargs):
+    density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name,
+                                                     second_stored_density_name, imaging_mode, **get_density_kwargs)
+    supersampled_density_1 = image_processing_functions.supersample_image(density_1, supersample_scale_factor)
+    supersampled_density_2 = image_processing_functions.supersample_image(density_2, supersample_scale_factor)
+    if angle is None:
+        raise ValueError("Angle must be specified as a float or a str.")
+    elif isinstance(angle, str):
+        if angle == "axicon":
+            rotation_angle_deg = my_measurement.experiment_parameters["axicon_tilt_deg"]
+        else:
+            raise ValueError("Illegal str value for angle. Allowed options are: 'axicon'")
+    else:
+        rotation_angle_deg = angle 
+    if rotation_angle_deg != 0.0:
+        rotated_supersampled_density_1 = ndimage.rotate(supersampled_density_1, rotation_angle_deg, reshape = reshape)
+        rotated_supersampled_density_2 = ndimage.rotate(supersampled_density_2, rotation_angle_deg, reshape = reshape)
+        #END TEST TEMP
+        if clip and not reshape:
+            rotated_supersampled_density_1 = _rotation_clip_helper(rotated_supersampled_density_1, rotation_angle_deg)
+            rotated_supersampled_density_2 = _rotation_clip_helper(rotated_supersampled_density_2, rotation_angle_deg)
+    else:
+        rotated_supersampled_density_1 = supersampled_density_1
+        rotated_supersampled_density_2 = supersampled_density_2
+    return (rotated_supersampled_density_1, rotated_supersampled_density_2)
+
+    
+#Auto clip rotated image to a square region containing only the initially populated pixels
+def _rotation_clip_helper(rotated_density, rotation_angle_deg):
+    mminimum_dimension = np.min(rotated_density.shape) 
+    rotation_angle_rad = np.deg2rad(rotation_angle_deg)
+    #Basic geometry; side length of maximal square region that fits in the intersection of the initial and 
+    #rotated image
+    angle_reduced_minimum_dimension = int(np.rint(np.floor(
+        mminimum_dimension / np.sqrt(1 + np.abs(np.sin(2 * rotation_angle_rad)))
+        )))
+    #Ad hoc safety factor to avoid off-by-one errors
+    angle_reduced_minimum_dimension -= 2
+    image_height, image_width = rotated_density.shape
+    image_height_center = (image_height - 1) // 2
+    image_width_center = (image_width - 1) // 2
+    angle_reduced_half_width = (angle_reduced_minimum_dimension - 1) // 2 
+    cropped_image = rotated_density[image_height_center - angle_reduced_half_width:image_height_center + angle_reduced_half_width + 1, 
+                                    image_width_center - angle_reduced_half_width:image_height_center + angle_reduced_half_width + 1]
+    return cropped_image
+
+
 
 def get_x_integrated_atom_densities_top_double(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                     imaging_mode = "polrot", **get_density_kwargs):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                     imaging_mode, **get_density_kwargs)
-    density_1_x_integrated = np.sum(density_1, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
-    density_2_x_integrated = np.sum(density_2, axis = 1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    density_1_x_integrated = np.sum(density_1, axis = 1) * um_per_pixel
+    density_2_x_integrated = np.sum(density_2, axis = 1) * um_per_pixel
     return (density_1_x_integrated, density_2_x_integrated)
 
 
@@ -364,8 +426,9 @@ def get_y_integrated_atom_densities_top_double(my_measurement, my_run, first_sto
                                         imaging_mode = "polrot", **get_density_kwargs):
     density_1, density_2 = _load_densities_top_double(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                     imaging_mode, **get_density_kwargs)
-    density_1_y_integrated = np.sum(density_1, axis = 0) * my_measurement.experiment_parameters["top_um_per_pixel"]
-    density_2_y_integrated = np.sum(density_2, axis = 0) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    density_1_y_integrated = np.sum(density_1, axis = 0) * um_per_pixel
+    density_2_y_integrated = np.sum(density_2, axis = 0) * um_per_pixel
     return (density_1_y_integrated, density_2_y_integrated)
 
 
@@ -387,47 +450,48 @@ If passed, the functions assume that the atom density is stored as an analysis r
 object, under the name stored_density_name. This is to allow patterns where multiple analyses which rely on 
 the atom number density can be run without re-calculating it (typically the slowest part of any analysis)."""
 
-def _get_atom_count_from_density(pixel_length_um, atom_density):
-    pixel_area_um = np.square(pixel_length_um)
+def _get_atom_count_from_density(um_per_pixel, atom_density):
+    pixel_area_um = np.square(um_per_pixel)
     return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area_um)
 
 
 def get_atom_count_side_li_lf(my_measurement, my_run, stored_density_name = None):
     atom_density = _load_density_side_li_lf(my_measurement, my_run, stored_density_name)
-    pixel_length_um = my_measurement.experiment_parameters["side_low_mag_um_per_pixel"]
-    return _get_atom_count_from_density(pixel_length_um, atom_density)
+    um_per_pixel = my_measurement.experiment_parameters["side_low_mag_um_per_pixel"]
+    return _get_atom_count_from_density(um_per_pixel, atom_density)
 
 
 def get_atom_count_side_li_hf(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
     atom_density = _load_density_side_li_hf(my_measurement, my_run, stored_density_name, **get_density_kwargs)
-    pixel_length_um = my_measurement.experiment_parameters["side_high_mag_um_per_pixel"]
-    return _get_atom_count_from_density(pixel_length_um, atom_density)
+    um_per_pixel = my_measurement.experiment_parameters["side_high_mag_um_per_pixel"]
+    return _get_atom_count_from_density(um_per_pixel, atom_density)
 
 
 def get_atom_count_top_A_abs(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
     atom_density = _load_density_top_A_abs(my_measurement, my_run, stored_density_name, **get_density_kwargs)
-    pixel_length_um = my_measurement.experiment_parameters["top_um_per_pixel"]
-    return _get_atom_count_from_density(pixel_length_um, atom_density)
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    return _get_atom_count_from_density(um_per_pixel, atom_density)
 
 def get_atom_count_top_B_abs(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
     atom_density = _load_density_top_B_abs(my_measurement, my_run, stored_density_name, **get_density_kwargs)
-    pixel_length_um = my_measurement.experiment_parameters["top_um_per_pixel"]
-    return _get_atom_count_from_density(pixel_length_um, atom_density)
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    return _get_atom_count_from_density(um_per_pixel, atom_density)
 
 def get_atom_counts_top_AB_abs(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                **get_density_kwargs):
     atom_density_A, atom_density_B = _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                                     **get_density_kwargs)
-    pixel_length_um = my_measurement.experiment_parameters["top_um_per_pixel"] 
-    counts_A = _get_atom_count_from_density(pixel_length_um, atom_density_A) 
-    counts_B = _get_atom_count_from_density(pixel_length_um, atom_density_B)
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"] 
+    counts_A = _get_atom_count_from_density(um_per_pixel, atom_density_A) 
+    counts_B = _get_atom_count_from_density(um_per_pixel, atom_density_B)
     return (counts_A, counts_B)
 
 def get_atom_counts_top_polrot(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
                                **get_density_kwargs):
     atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, 
                                                 first_stored_density_name, second_stored_density_name, **get_density_kwargs)
-    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    pixel_area = np.square(um_per_pixel)
     atom_count_first = image_processing_functions.atom_count_pixel_sum(atom_density_first, pixel_area)
     atom_count_second = image_processing_functions.atom_count_pixel_sum(atom_density_second, pixel_area)
     return (atom_count_first, atom_count_second)
@@ -478,18 +542,17 @@ def _hybrid_trap_density_helper(my_measurement, hybrid_trap_density_image):
     axicon_length_pix = my_measurement.experiment_parameters["hybrid_trap_typical_length_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     center = data_fitting_functions.hybrid_trap_center_finder(hybrid_trap_density_image, axicon_tilt_deg, axicon_diameter_pix, axicon_length_pix)
-    if(axicon_tilt_deg != 0.0):
-        image_to_use, new_center = _rotate_and_crop_hybrid_image(hybrid_trap_density_image, center, axicon_tilt_deg)
-        center = new_center 
-    else:
-        image_to_use = hybrid_trap_density_image
-    x_center, y_center = center
-    hybrid_trap_radius_um = um_per_pixel * axicon_diameter_pix / 2.0
-    hybrid_trap_cross_sectional_area_um = get_hybrid_cross_section_um(my_measurement)
+    # if(axicon_tilt_deg != 0.0):
+    #     image_to_use, new_center = _rotate_and_crop_hybrid_image(hybrid_trap_density_image, center, axicon_tilt_deg)
+    #     center = new_center 
+    # else:
+    #     image_to_use = hybrid_trap_density_image
+    _, y_center = center
+    hybrid_trap_cross_sectional_area_um = get_hybrid_cross_section_um(my_measurement, axis = "harmonic")
     radial_axis_index = 1
-    hybrid_trap_radial_integrated_density = um_per_pixel * np.sum(image_to_use, axis = radial_axis_index)
+    hybrid_trap_radial_integrated_density = um_per_pixel * np.sum(hybrid_trap_density_image, axis = radial_axis_index)
     hybrid_trap_3D_density_harmonic_axis = hybrid_trap_radial_integrated_density / hybrid_trap_cross_sectional_area_um 
-    harmonic_axis_positions_um = um_per_pixel * (np.arange(len(image_to_use)) - y_center)
+    harmonic_axis_positions_um = um_per_pixel * (np.arange(len(hybrid_trap_density_image)) - y_center)
     #Fit lorentzian to the 1D-integrated data to improve center-finding fidelity
     results = data_fitting_functions.fit_lorentzian_with_offset(harmonic_axis_positions_um, hybrid_trap_3D_density_harmonic_axis)
     popt, pcov = results
@@ -530,7 +593,7 @@ def get_hybrid_trap_average_energy(my_measurement, my_run, autocut = True, imagi
                                                                     first_stored_density_name = first_stored_density_name, 
                                                                     second_stored_density_name = second_stored_density_name, 
                                                                     **get_density_kwargs)
-    trap_cross_section_um = get_hybrid_cross_section_um(my_measurement)
+    trap_cross_section_um = get_hybrid_cross_section_um(my_measurement, axis = "harmonic")
     trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
     average_energy_first = science_functions.get_hybrid_trap_average_energy(positions_first, densities_first, trap_cross_section_um,
                                                                             trap_freq) 
@@ -617,7 +680,8 @@ def get_axial_squish_densities_along_harmonic_axis(my_measurement, my_run, autoc
     _, roi_ymin, *_ = my_measurement.measurement_parameters["ROI"]
     relative_hybrid_center_index = absolute_hybrid_center_index - roi_ymin
     center_referenced_index_positions = index_positions - relative_hybrid_center_index
-    center_referenced_positions_um = center_referenced_index_positions * my_measurement.experiment_parameters["top_um_per_pixel"]
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    center_referenced_positions_um = center_referenced_index_positions * um_per_pixel
     trap_freq = my_measurement.experiment_parameters["axial_trap_frequency_hz"]
     harmonic_potential = science_functions.get_li_energy_hz_in_1D_trap(center_referenced_positions_um * 1e-6, trap_freq)
     gradient_voltage = my_run.parameters["Axial_Squish_Imaging_Grad_V"]
@@ -991,59 +1055,40 @@ Get the fourier component of designated order from box shake data.
 Given a measurement and run, extract (1d) fourier components from the atom densities, integrated along the 
 non-shaken direction of the box. 
 
-Params:
-
-Most of the standard ones, plus, 
-
-order: The order of the fourier component to extract. If not passed, the dominant (nonzero) fourier amplitude will be 
-returned - though be warned that this may differ between runs!!!
-
-no_shake_density_name_(first, second): If not None, the function will assume that the atom density of the 
-(first/second) state with no box shaking is stored in measurement_analysis_results under the given name. 
-If None, the analysis will run without background subtraction.
-
-#NOTE: The analysis does not autorun the get_no_shake_average_profiles function because, as currently structured, 
-this would involve a new call for every run to be analyzed. This could be worked around, but I consider it better 
-to explicitly evaluate the density names first"""
-def get_box_shake_fourier_amplitudes(my_measurement, my_run, return_phases = False, autocut = False, autocut_density_to_use = 2, 
-                                     autocut_widths_free = False, autocut_vert_crop_point = 0.5, autocut_horiz_crop_point = 0.00, 
-                                     no_shake_density_name_first = None, order = None, no_shake_density_name_second = None, 
-                                     first_stored_density_name = None, second_stored_density_name = None, imaging_mode = "polrot", 
-                                     **get_density_kwargs):
-    if no_shake_density_name_first is None:
-        no_shake_density_first = 0.0
-    else:
-        no_shake_density_first = my_measurement.measurement_analysis_results[no_shake_density_name_first]
-        if autocut:
-            no_shake_density_first = box_autocut(my_measurement, no_shake_density_first, vert_crop_point = autocut_vert_crop_point, 
-                                                 horiz_crop_point = autocut_horiz_crop_point, widths_free = autocut_widths_free)
-    if no_shake_density_name_second is None:
-        no_shake_density_second = 0.0 
-    else:
-        no_shake_density_second = my_measurement.measurement_analysis_results[no_shake_density_name_second] 
-        if autocut:
-            no_shake_density_second = box_autocut(my_measurement, no_shake_density_second, vert_crop_point = autocut_vert_crop_point, 
-                                                 horiz_crop_point = autocut_horiz_crop_point, widths_free = autocut_widths_free)    
+"""
+def get_box_shake_fourier_amplitudes(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None,
+                                    return_phases = False, autocut = False, autocut_density_to_use = 2, autocut_widths_free = False,
+                                    autocut_vert_crop_point = 0.5, autocut_horiz_crop_point = 0.00, order = None,
+                                    supersample_and_rotate = True, supersample_scale_factor = 2, angle = "axicon", reshape = False, clip = True,
+                                    imaging_mode = "polrot", **get_density_kwargs):  
     if autocut:
         atom_density_first, atom_density_second = get_atom_densities_box_autocut(
             my_measurement, my_run, vert_crop_point = autocut_vert_crop_point, horiz_crop_point = autocut_horiz_crop_point,
-            widths_free = autocut_widths_free, density_to_use = autocut_density_to_use,
+            widths_free = autocut_widths_free, density_to_use = autocut_density_to_use, supersample_and_rotate = supersample_and_rotate,
+            supersample_scale_factor = supersample_scale_factor, angle = angle, reshape = reshape, clip = clip,
             first_stored_density_name = first_stored_density_name, second_stored_density_name = second_stored_density_name,
             imaging_mode = imaging_mode, **get_density_kwargs)
+        #Ad hoc crop of a few pix along the top axis to avoid the distorted region from a sharp axis being rotated... 
+        SUPERSAMPLE_AND_ROTATE_SAFETY_BUFFER_PIX = 3
+        if supersample_and_rotate:
+            atom_density_first = atom_density_first[SUPERSAMPLE_AND_ROTATE_SAFETY_BUFFER_PIX:-SUPERSAMPLE_AND_ROTATE_SAFETY_BUFFER_PIX]
+            atom_density_second = atom_density_second[SUPERSAMPLE_AND_ROTATE_SAFETY_BUFFER_PIX:-SUPERSAMPLE_AND_ROTATE_SAFETY_BUFFER_PIX]
     else:
         atom_density_first, atom_density_second = _load_densities_top_double(my_measurement, my_run, 
                                                     first_stored_density_name, second_stored_density_name, imaging_mode, 
                                                     **get_density_kwargs)
-    bs_density_first = atom_density_first - no_shake_density_first 
-    bs_density_second = atom_density_second - no_shake_density_second
+    #Ad hoc hack to handle the case where box autocut is supersampled. Alter if this becomes a more common use case.
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    if "supersample_scale_factor_box_autocut" in my_measurement.measurement_parameters:
+        um_per_pixel = um_per_pixel / my_measurement.measurement_parameters["supersample_scale_factor_box_autocut"]
     #Current convention has the integration direction as the last index, i.e. the x-axis. 
-    integrated_density_first = np.sum(bs_density_first, axis = -1) * my_measurement.experiment_parameters["top_um_per_pixel"]
-    integrated_density_second = np.sum(bs_density_second, axis = -1) * my_measurement.experiment_parameters["top_um_per_pixel"]
-    x_delta = my_measurement.experiment_parameters["top_um_per_pixel"]
+    integrated_density_first = np.sum(atom_density_first, axis = -1) * um_per_pixel
+    integrated_density_second = np.sum(atom_density_second, axis = -1) * um_per_pixel
+    x_delta = um_per_pixel
     fft_results_first = data_fitting_functions.get_fft_peak(x_delta, integrated_density_first, order = order)
-    frequency_first, amp_first, phase_first = fft_results_first 
+    _, amp_first, phase_first = fft_results_first 
     fft_results_second = data_fitting_functions.get_fft_peak(x_delta, integrated_density_second, order = order)
-    frequency_second, amp_second, phase_second = fft_results_second
+    _, amp_second, phase_second = fft_results_second
     if not return_phases:
         return (amp_first, amp_second)
     else:
@@ -1064,7 +1109,7 @@ def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_sto
     box_length_pix = my_measurement.experiment_parameters["box_length_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     box_length_um = box_length_pix * um_per_pixel
-    cross_section_um = get_hybrid_cross_section_um(my_measurement)
+    cross_section_um = get_hybrid_cross_section_um(my_measurement, axis = "axicon")
     first_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_first, cross_section_um, box_length_um)
     second_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_second, cross_section_um, box_length_um)
     return (first_fermi_energy_hz, second_fermi_energy_hz)
@@ -1088,8 +1133,9 @@ def get_rapid_ramp_densities_along_harmonic_axis(my_measurement, my_run, first_s
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
     atom_density_second = ndimage.rotate(atom_density_second, rr_angle, reshape = False)
     #The non-harmonic axis is the x axis in our experiments...
-    integrated_atom_density_first = np.sum(atom_density_first, axis = -1) * my_measurement.experiment_parameters["top_um_per_pixel"]
-    integrated_atom_density_second = np.sum(atom_density_second, axis = -1) * my_measurement.experiment_parameters["top_um_per_pixel"]
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    integrated_atom_density_first = np.sum(atom_density_first, axis = -1) * um_per_pixel
+    integrated_atom_density_second = np.sum(atom_density_second, axis = -1) * um_per_pixel
     return (integrated_atom_density_first, integrated_atom_density_second)
 
 
@@ -1132,7 +1178,8 @@ def get_rr_condensate_fractions_box(my_measurement, my_run, first_stored_density
     atom_density_first = ndimage.rotate(atom_density_first, rr_angle, reshape = False)
     atom_density_second = ndimage.rotate(atom_density_second, rr_angle, reshape = False)
     #Naive summing approach with background subtraction outside of the box
-    pixel_area = np.square(my_measurement.experiment_parameters["top_um_per_pixel"])
+    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
+    pixel_area = np.square(um_per_pixel)
     total_counts_first = image_processing_functions.atom_count_pixel_sum(atom_density_first, pixel_area)
     total_counts_second = image_processing_functions.atom_count_pixel_sum(atom_density_second, pixel_area)
     rr_roi = my_measurement.measurement_parameters["rr_condensate_roi"]
@@ -1232,10 +1279,14 @@ def get_stored_density_rotation_angle(my_measurement, my_run, stored_density_nam
 
 #UTILITY NON-RUN ANALYSIS FUNCTIONS, POSSIBLY FOR EXTERNAL CALLING
 
-def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, horiz_crop_point = 0.00, widths_free = False):
+def box_autocut(my_measurement, atom_density_to_fit, vert_crop_point = 0.5, horiz_crop_point = 0.00, widths_free = False, 
+                supersample_scale_factor = None):
     if not widths_free:
         horiz_radius = my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
         vert_width = my_measurement.experiment_parameters["box_length_pix"]
+        if not supersample_scale_factor is None:
+            vert_width = vert_width * supersample_scale_factor 
+            horiz_radius = horiz_radius * supersample_scale_factor
         box_crop = data_fitting_functions.crop_box(atom_density_to_fit, 
                             vert_crop_point = vert_crop_point, horiz_crop_point = horiz_crop_point, 
                             horiz_radius = horiz_radius, vert_width = vert_width)
@@ -1301,16 +1352,27 @@ def get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True)
 
 """
 Convenience function for getting the actual areal cross section of the tilted oval of the hybrid trap.
-Note that the tilt angle is the angle made by the semimajor axis of the oval to the plane that the top imaging can see."""
-def get_hybrid_cross_section_um(my_measurement):
+Note that the tilt angle is the angle made by the semimajor axis of the oval to the plane that the top imaging can see.
+
+The optional keyword 'axis' specifies the axis long which the cross section is taken. The default is the harmonic axis, corresponding to 
+the y-axis of the top images; if 'axicon' is instead passed, the cross section along the symmetry axis of the axicon is taken."""
+
+def get_hybrid_cross_section_um(my_measurement, axis = "harmonic"):
     axicon_diameter_pix = my_measurement.experiment_parameters["axicon_diameter_pix"]
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     axicon_side_angle_deg = my_measurement.experiment_parameters["axicon_side_angle_deg"]
     axicon_side_aspect_ratio = my_measurement.experiment_parameters["axicon_side_aspect_ratio"]
-    box_radius_um = um_per_pixel * axicon_diameter_pix / 2
-    top_radius_um = box_radius_um
-    cross_section_um = _hybrid_cross_section_geometry_formula(box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
-    return cross_section_um
+    top_box_radius_um = um_per_pixel * axicon_diameter_pix / 2
+    axicon_axis_cross_section_um = _hybrid_cross_section_geometry_formula(top_box_radius_um, axicon_side_angle_deg, axicon_side_aspect_ratio)
+    if axis == "axicon":
+        return axicon_axis_cross_section_um
+    elif axis == "harmonic":
+        axicon_to_harmonic_tilt_angle_deg = my_measurement.experiment_parameters["axicon_tilt_deg"]
+        axicon_to_harmonic_tilt_angle_rad = np.deg2rad(axicon_to_harmonic_tilt_angle_deg)
+        harmonic_tilt_correction_factor = 1.0 / np.cos(axicon_to_harmonic_tilt_angle_rad)
+        return axicon_axis_cross_section_um * harmonic_tilt_correction_factor
+    else:
+        raise ValueError("Invalid value for 'axis'. Valid options are: 'axicon', 'harmonic'")
 
 def _hybrid_cross_section_geometry_formula(top_radius_um, side_angle_deg, side_aspect_ratio):
     side_angle_rad = side_angle_deg * np.pi / 180 
@@ -1372,10 +1434,6 @@ def average_results_identical_runs_run_combine_function_factory(result_names, re
 average_densities_13_run_combine_function = average_results_identical_runs_run_combine_function_factory(
                                         ("densities_1", "densities_3"),
                                          lambda x: np.average(x, axis = 0))
-
-
-
-
 
 
 

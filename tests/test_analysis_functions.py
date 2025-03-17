@@ -71,6 +71,8 @@ SQRT_11_DUMMY = 3.317
 SQRT_13_DUMMY = 3.606
 SQRT_14_DUMMY = 3.742
 
+class DummyMeasurement(object):
+    pass
 
 def _get_raw_pixels_test_helper(type_name, function_to_test):
     try:
@@ -538,7 +540,7 @@ def test_get_atom_densities_top_polrot():
 EXPECTED_AUTOCUT_FREE_CROP = (192, 193, 320, 320)
 EXPECTED_AUTOCUT_FIXED_CROP = (194, 196, 318, 316)
 EXPECTED_AUTOCUT_FREE_HEIGHT = DEFAULT_ABS_SQUARE_WIDTH
-EXPECTED_AUTOCUT_FREE_WIDTH = DEFAULT_ABS_SQUARE_WIDTH + 1 
+EXPECTED_AUTOCUT_FREE_WIDTH = DEFAULT_ABS_SQUARE_WIDTH + 1
 ENFORCED_AUTOCUT_FIXED_HEIGHT = DEFAULT_ABS_SQUARE_WIDTH - 7 
 ENFORCED_AUTOCUT_FIXED_WIDTH = DEFAULT_ABS_SQUARE_WIDTH - 3
 
@@ -571,9 +573,13 @@ def test_box_autocut():
         shutil.rmtree(measurement_pathname)
 
 def test_get_atom_densities_box_autocut():
+    TEST_AXICON_TILT_DEG = 7.5
+    SUPERSAMPLE_SCALE_FACTOR = 2
     box_autocut_image = get_box_autocut_absorption_image() 
-    image_stack = generate_image_stack_from_absorption(box_autocut_image) 
-    hf_atom_density_experiment_param_values = {
+    tilted_box_autocut_image = scipy.ndimage.rotate(box_autocut_image, -TEST_AXICON_TILT_DEG, reshape = False)
+    with_tilt_image_stack = generate_image_stack_from_absorption(tilted_box_autocut_image) 
+    no_tilt_image_stack = generate_image_stack_from_absorption(box_autocut_image)
+    hf_atom_density_experiment_param_values_with_tilt = {
         "state_1_unitarity_res_freq_MHz": 0.0,
         "state_3_unitarity_res_freq_MHz":0.0,
         "hf_lock_unitarity_resonance_value":0,
@@ -582,7 +588,20 @@ def test_get_atom_densities_box_autocut():
         "li_top_sigma_multiplier":1.0,
         "li_hf_freq_multiplier":1.0, 
         "axicon_diameter_pix":ENFORCED_AUTOCUT_FIXED_WIDTH,
-        "box_length_pix":ENFORCED_AUTOCUT_FIXED_HEIGHT
+        "box_length_pix":ENFORCED_AUTOCUT_FIXED_HEIGHT,
+        "axicon_tilt_deg":TEST_AXICON_TILT_DEG
+    }
+    hf_atom_density_experiment_param_values_no_tilt = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0,
+        "hf_lock_setpoint":0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0, 
+        "axicon_diameter_pix":ENFORCED_AUTOCUT_FIXED_WIDTH,
+        "box_length_pix":ENFORCED_AUTOCUT_FIXED_HEIGHT,
+        "axicon_tilt_deg":0.0
     }
     run_param_values = {
         "ImagFreq1":0.0, 
@@ -598,22 +617,52 @@ def test_get_atom_densities_box_autocut():
         "widths_free":False
     }
     try:
-        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = image_stack, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = with_tilt_image_stack, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
                                             norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX, run_param_values = run_param_values, 
-                                            experiment_param_values = hf_atom_density_experiment_param_values)
+                                            experiment_param_values = hf_atom_density_experiment_param_values_with_tilt)
         #First try not pre-processing the density
-        autocut_density_1, autocut_density_2 = analysis_functions.get_atom_densities_box_autocut(my_measurement, my_run, **autocut_fun_kwargs_no_stored_density)
+        autocut_density_1, autocut_density_2 = analysis_functions.get_atom_densities_box_autocut(my_measurement, my_run, **autocut_fun_kwargs_no_stored_density, 
+                                                                                                 supersample_scale_factor = SUPERSAMPLE_SCALE_FACTOR)
+        autocut_density_free_height, autocut_density_free_width = autocut_density_1.shape
+        expected_free_height_with_supersample = EXPECTED_AUTOCUT_FREE_HEIGHT * SUPERSAMPLE_SCALE_FACTOR
+        assert autocut_density_free_height == expected_free_height_with_supersample
+        #Ad hoc... I don't want to figure out the off by 1
+        expected_free_width_with_supersample = EXPECTED_AUTOCUT_FREE_WIDTH * SUPERSAMPLE_SCALE_FACTOR - 1
+        assert autocut_density_free_width == expected_free_width_with_supersample
+
+        #With width fixed
+        autocut_density_1_fixed, _ = analysis_functions.get_atom_densities_box_autocut(my_measurement, my_run, **autocut_fun_kwargs_fixed_width, 
+                                                                                       supersample_scale_factor = SUPERSAMPLE_SCALE_FACTOR)
+        autocut_density_fixed_height, autocut_density_fixed_width = autocut_density_1_fixed.shape
+        enforced_autocut_fixed_height_with_supersample = ENFORCED_AUTOCUT_FIXED_HEIGHT * SUPERSAMPLE_SCALE_FACTOR
+        assert autocut_density_fixed_height == enforced_autocut_fixed_height_with_supersample
+        enforced_autocut_fixed_width_with_supersample = ENFORCED_AUTOCUT_FIXED_WIDTH * SUPERSAMPLE_SCALE_FACTOR
+        assert autocut_density_fixed_width == enforced_autocut_fixed_width_with_supersample
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+    #And now we try it with an un-rotated image 
+
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = no_tilt_image_stack, ROI = DEFAULT_ABSORPTION_IMAGE_ROI, 
+                                            norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX, run_param_values = run_param_values, 
+                                            experiment_param_values = hf_atom_density_experiment_param_values_no_tilt)
+        #First try not pre-processing the density
+        autocut_density_1, autocut_density_2 = analysis_functions.get_atom_densities_box_autocut(my_measurement, my_run, **autocut_fun_kwargs_no_stored_density, 
+                                                                                                 supersample_and_rotate = False)
         autocut_density_free_height, autocut_density_free_width = autocut_density_1.shape
         assert autocut_density_free_height == EXPECTED_AUTOCUT_FREE_HEIGHT
         assert autocut_density_free_width == EXPECTED_AUTOCUT_FREE_WIDTH
 
         #With width fixed
-        autocut_density_1_fixed, _ = analysis_functions.get_atom_densities_box_autocut(my_measurement, my_run, **autocut_fun_kwargs_fixed_width)
+        autocut_density_1_fixed, _ = analysis_functions.get_atom_densities_box_autocut(my_measurement, my_run, **autocut_fun_kwargs_fixed_width, 
+                                                                                       supersample_and_rotate = False)
         autocut_density_fixed_height, autocut_density_fixed_width = autocut_density_1_fixed.shape
         assert autocut_density_fixed_height == ENFORCED_AUTOCUT_FIXED_HEIGHT
         assert autocut_density_fixed_width == ENFORCED_AUTOCUT_FIXED_WIDTH
     finally:
         shutil.rmtree(measurement_pathname)
+
 
 
 def test_get_top_atom_densities_COM_centered():
@@ -643,7 +692,7 @@ def test_get_top_atom_densities_COM_centered():
                                                         ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
         #First test cropping 
         cropped_density_1, cropped_density_2 = analysis_functions.get_top_atom_densities_COM_centered(my_measurement, my_run, crop_not_pad = True,
-                                                                                                  imaging_mode = "abs")
+                                                                                                  **no_stored_density_kwargs)
         cropped_density_ycom, cropped_density_xcom = image_processing_functions.get_image_coms(cropped_density_2)
         cropped_density_y_length = cropped_density_2.shape[0]
         cropped_density_x_length = cropped_density_2.shape[1]
@@ -655,7 +704,7 @@ def test_get_top_atom_densities_COM_centered():
         assert np.isclose(cropped_density_y_center, cropped_density_ycom)
         #Now test padding 
         padded_density_1, padded_density_2 = analysis_functions.get_top_atom_densities_COM_centered(my_measurement, my_run, crop_not_pad = False, 
-                                                                                               imaging_mode = "abs")
+                                                                                               **no_stored_density_kwargs)
         padded_density_ycom, padded_density_xcom = image_processing_functions.get_image_coms(padded_density_2)
         padded_density_y_length = padded_density_2.shape[0]
         padded_density_x_length = padded_density_2.shape[1]
@@ -667,6 +716,77 @@ def test_get_top_atom_densities_COM_centered():
         assert np.isclose(padded_density_x_center, padded_density_xcom)
     finally:
         shutil.rmtree(measurement_pathname)
+
+def test_get_top_atom_densities_supersampled_and_rotated():
+    hf_atom_density_experiment_param_values = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0,
+        "hf_lock_setpoint":0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0, 
+        "top_um_per_pixel":E_DUMMY
+    }
+    run_param_values = {
+        "ImagFreq1":0.0, 
+        "ImagFreq2":0.0
+    }
+    no_stored_density_kwargs = {
+        "imaging_mode":"abs"
+    }
+    TEST_ROTATION_ANGLE = 10.0
+    rotated_rectangle_image = get_rotated_rectangle_absorption_image(-TEST_ROTATION_ANGLE)
+    rotated_rectangle_image_stack = generate_image_stack_from_absorption(rotated_rectangle_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = rotated_rectangle_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #First without stored densities, and with clip disabled...
+        supersampled_rotated_densities_1, supersampled_rotated_densities_2 = analysis_functions.get_top_atom_densities_supersampled_and_rotated(
+                                            my_measurement, my_run, angle = TEST_ROTATION_ANGLE, **no_stored_density_kwargs, clip = False)
+        assert np.all(supersampled_rotated_densities_1.shape == 2 * np.array(DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE))
+        assert np.allclose(supersampled_rotated_densities_1, supersampled_rotated_densities_2)
+        #Check that the angle is correct 
+        extracted_image_angle = image_processing_functions.get_image_principal_rotation_angle(
+            supersampled_rotated_densities_1
+        )
+        assert np.isclose(extracted_image_angle, 0.0, atol = 1e-4)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+    x_indices, y_indices = np.indices(rotated_rectangle_image.shape)
+    *_, default_norm_xmax, default_norm_ymax = DEFAULT_ABSORPTION_IMAGE_NORM_BOX
+    background_offset_multiplier = np.where(
+        np.logical_and(
+            x_indices > default_norm_xmax, 
+            y_indices > default_norm_ymax
+        ),
+        np.exp(-1.0),
+        1.0
+    )
+    background_offset_rotated_rectangle_image = rotated_rectangle_image * background_offset_multiplier
+    background_offset_rotated_rectangle_image_stack = generate_image_stack_from_absorption(background_offset_rotated_rectangle_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = background_offset_rotated_rectangle_image_stack, 
+                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Now we use the cut
+        supersampled_rotated_densities_1_clipped, supersampled_rotated_densities_2_clipped = analysis_functions.get_top_atom_densities_supersampled_and_rotated(
+                                            my_measurement, my_run, angle = TEST_ROTATION_ANGLE, **no_stored_density_kwargs, clip = True)
+        assert np.allclose(supersampled_rotated_densities_1_clipped, supersampled_rotated_densities_2_clipped)
+        extracted_clipped_image_angle = image_processing_functions.get_image_principal_rotation_angle(
+            supersampled_rotated_densities_1_clipped
+        )
+        assert np.isclose(extracted_clipped_image_angle, 0.0, atol = 3e-3)
+        #Check that there's no residual zero values - which would indicate an inappropriate clip... 
+        assert np.all(supersampled_rotated_densities_1_clipped != 0.0)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
+        
+
+
 
 
 def _get_integrated_densities_test_helper(function_to_use, integration_axis):
@@ -976,7 +1096,7 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
@@ -1010,8 +1130,9 @@ def test_get_hybrid_trap_densities_along_harmonic_axis():
         um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
         box_radius_um = um_per_pixel * my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
         box_cross_section_um = np.pi * np.square(box_radius_um)
-        #Ignore rotation, used only in legacy datasets...
-        expected_hybrid_integrated_densities = np.sum(cropped_hybrid_sample_densities, axis = 1) * um_per_pixel / box_cross_section_um 
+        #Correct for rotation, via adjustment to the cross section
+        angle_adjusted_cross_section_um = box_cross_section_um / np.cos(np.deg2rad(my_measurement.experiment_parameters["axicon_tilt_deg"]))
+        expected_hybrid_integrated_densities = np.sum(cropped_hybrid_sample_densities, axis = 1) * um_per_pixel / angle_adjusted_cross_section_um
         assert np.all(np.isclose(hybrid_integrated_density_uncut, expected_hybrid_integrated_densities, rtol = 1e-3, atol = 1e-4))
         #Also check that the positions are of the correct length and spacing
         assert len(hybrid_integrated_positions) == DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE[0] 
@@ -1109,14 +1230,14 @@ def test_get_hybrid_trap_average_energy():
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
         "axial_trap_frequency_hz":E_DUMMY
     }
     run_param_values = {
-        "ImagFreq1":0.0, 
+        "ImagFreq1":0.0,
         "ImagFreq2":0.0
     }
     hybrid_sample_image = get_hybrid_sample_absorption_image()
@@ -1143,13 +1264,13 @@ def test_get_hybrid_trap_average_energy():
         um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
         box_radius_um = um_per_pixel * my_measurement.experiment_parameters["axicon_diameter_pix"] / 2
         box_cross_section_um = np.pi * np.square(box_radius_um)
-        #Ignore rotation, used only in legacy datasets...
-        expected_hybrid_integrated_densities = np.sum(cropped_hybrid_sample_densities, axis = 1) * um_per_pixel / box_cross_section_um 
+        angle_adjusted_cross_section_um = box_cross_section_um / np.cos(np.deg2rad(my_measurement.experiment_parameters["axicon_tilt_deg"]))
+        expected_hybrid_integrated_densities = np.sum(cropped_hybrid_sample_densities, axis = 1) * um_per_pixel / angle_adjusted_cross_section_um 
         expected_densities_length = len(expected_hybrid_integrated_densities)
         expected_hybrid_integrated_positions = (np.arange(expected_densities_length) - (expected_densities_length - 1) // 2) * um_per_pixel
         expected_average_energy_uncropped = science_functions.get_hybrid_trap_average_energy(
             expected_hybrid_integrated_positions, expected_hybrid_integrated_densities, 
-            box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"])
+            angle_adjusted_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"])
         average_energy_uncropped = analysis_functions.get_hybrid_trap_average_energy(my_measurement, my_run, 
                                                                                      autocut = False, 
                                                                                      first_stored_density_name = "densities_1", 
@@ -1161,7 +1282,7 @@ def test_get_hybrid_trap_average_energy():
         expected_hybrid_integrated_positions_autocut = expected_hybrid_integrated_positions[autocut_start_index:autocut_stop_index] 
         expected_average_energy_autocut = science_functions.get_hybrid_trap_average_energy(
             expected_hybrid_integrated_positions_autocut, expected_hybrid_integrated_densities_autocut, 
-            box_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"])
+            angle_adjusted_cross_section_um, my_measurement.experiment_parameters["axial_trap_frequency_hz"])
         assert np.isclose(expected_average_energy_autocut, average_energy_autocut)
     finally:
         shutil.rmtree(measurement_pathname)
@@ -1243,7 +1364,7 @@ def test_get_axial_squish_densities_along_harmonic_axis():
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "axial_trap_frequency_hz":E_DUMMY,
@@ -1328,7 +1449,7 @@ def test_get_axial_squish_absolute_pressures():
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "axial_trap_frequency_hz":E_DUMMY,
@@ -1392,7 +1513,7 @@ def test_get_axial_squish_normalized_pressures():
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "axial_trap_frequency_hz":E_DUMMY,
@@ -1504,7 +1625,7 @@ def test_get_axial_squish_compressibilities():
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "axial_trap_frequency_hz":E_DUMMY,
@@ -1580,7 +1701,7 @@ def test_get_axial_squish_compressibilities_vs_pressure():
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "axial_trap_frequency_hz":E_DUMMY,
@@ -1693,7 +1814,7 @@ def _mu_and_T_fit_test_helper(tested_analysis_function, fit_function, fit_functi
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":2.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "axial_trap_frequency_hz":E_DUMMY,
@@ -1758,7 +1879,7 @@ def _mu_and_T_fit_test_helper(tested_analysis_function, fit_function, fit_functi
 
 
 def test_get_box_shake_fourier_amplitudes():
-    hf_atom_density_experiment_param_values = {
+    hf_atom_density_experiment_param_values_no_tilt = {
         "state_1_unitarity_res_freq_MHz": 0.0,
         "state_3_unitarity_res_freq_MHz":0.0,
         "hf_lock_unitarity_resonance_value":0.0,
@@ -1768,7 +1889,7 @@ def test_get_box_shake_fourier_amplitudes():
         "li_hf_freq_multiplier":1.0,
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
         "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
@@ -1782,10 +1903,10 @@ def test_get_box_shake_fourier_amplitudes():
     fourier_sample_image_stack = generate_image_stack_from_absorption(fourier_sample_image)
     try:
         measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = fourier_sample_image_stack, 
-                                                        run_param_values = run_param_values, experiment_param_values = hf_atom_density_experiment_param_values, 
+                                                        run_param_values = run_param_values, 
+                                                        experiment_param_values = hf_atom_density_experiment_param_values_no_tilt, 
                                                         ROI = DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
         #Test and compare gettting vs. storing the densities
-        
         my_measurement.analyze_runs(analysis_functions.get_atom_densities_top_abs, ("densities_1", "densities_3"))
         fourier_components_stored_densities = analysis_functions.get_box_shake_fourier_amplitudes(my_measurement, my_run, 
                                                                             first_stored_density_name = "densities_1", 
@@ -1796,7 +1917,7 @@ def test_get_box_shake_fourier_amplitudes():
         assert np.all(np.isclose(fourier_components_stored_densities, fourier_components_unstored_densities))
         fourier_component_1, fourier_component_2 = fourier_components_stored_densities 
         assert np.isclose(fourier_component_1, fourier_component_2)
-        top_um_per_pixel = hf_atom_density_experiment_param_values["top_um_per_pixel"]
+        top_um_per_pixel = hf_atom_density_experiment_param_values_no_tilt["top_um_per_pixel"]
         expected_fourier_amplitude = FOURIER_SAMPLE_AMPLITUDE *  (1.0 / li_6_res_cross_section) * DEFAULT_ABS_SQUARE_WIDTH * top_um_per_pixel
         assert np.isclose(fourier_component_1, expected_fourier_amplitude, rtol = 5e-3)
         fourier_components_with_phase = analysis_functions.get_box_shake_fourier_amplitudes(my_measurement, my_run, 
@@ -1813,6 +1934,55 @@ def test_get_box_shake_fourier_amplitudes():
     finally:
         shutil.rmtree(measurement_pathname)
 
+    #Now test with autocutting in a tilted box...
+    SAMPLE_AXICON_TILT_DEG = 5.0 
+    hf_atom_density_experiment_param_values_with_tilt = {
+        "state_1_unitarity_res_freq_MHz": 0.0,
+        "state_3_unitarity_res_freq_MHz":0.0,
+        "hf_lock_unitarity_resonance_value":0.0,
+        "hf_lock_setpoint":0.0,
+        "hf_lock_frequency_multiplier":1.0,
+        "li_top_sigma_multiplier":1.0,
+        "li_hf_freq_multiplier":1.0,
+        "top_um_per_pixel":SQRT_2_DUMMY, 
+        "axicon_diameter_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "box_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "axicon_tilt_deg":SAMPLE_AXICON_TILT_DEG,
+        "axicon_side_aspect_ratio":1.0, 
+        "axicon_side_angle_deg":0.0,
+        "hybrid_trap_typical_length_pix":DEFAULT_ABS_SQUARE_WIDTH,
+        "axial_trap_frequency_hz":E_DUMMY
+    }
+    tilted_fourier_image = scipy.ndimage.rotate(fourier_sample_image, -SAMPLE_AXICON_TILT_DEG, reshape = False, cval = 1.0)
+    tilted_fourier_sample_image_stack = generate_image_stack_from_absorption(tilted_fourier_image)
+    try:
+        measurement_pathname, my_measurement, my_run = create_measurement("top_double", image_stack = tilted_fourier_sample_image_stack, 
+                                                        run_param_values = run_param_values, 
+                                                        experiment_param_values = hf_atom_density_experiment_param_values_with_tilt, 
+                                                        ROI = DEFAULT_ABSORPTION_IMAGE_ROI, norm_box = DEFAULT_ABSORPTION_IMAGE_NORM_BOX)
+        #Test with autocut        
+        fourier_components_tilted_autocut = analysis_functions.get_box_shake_fourier_amplitudes(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", order = FOURIER_SAMPLE_ORDER, 
+                                                                            autocut = True)
+        fourier_component_1, fourier_component_2 = fourier_components_tilted_autocut 
+        assert np.isclose(fourier_component_1, fourier_component_2)
+        top_um_per_pixel = hf_atom_density_experiment_param_values_with_tilt["top_um_per_pixel"]
+        expected_fourier_amplitude = FOURIER_SAMPLE_AMPLITUDE *  (1.0 / li_6_res_cross_section) * DEFAULT_ABS_SQUARE_WIDTH * top_um_per_pixel
+        #Tolerance is pretty bad because of the rotation... 
+        assert np.isclose(fourier_component_1, expected_fourier_amplitude, rtol = 3e-2)
+        fourier_components_with_phase_tilted_autocut = analysis_functions.get_box_shake_fourier_amplitudes(my_measurement, my_run, 
+                                                                            imaging_mode = "abs", order = FOURIER_SAMPLE_ORDER, 
+                                                                            autocut = True, return_phases = True)
+        amp_1, phase_1, amp_2, phase_2 = fourier_components_with_phase_tilted_autocut
+        assert np.isclose(amp_1, fourier_component_1)
+        assert np.isclose(amp_1, amp_2)
+        assert np.isclose(phase_1, phase_2) 
+        assert np.isclose(amp_1, expected_fourier_amplitude, rtol = 3e-2)
+        #Also check phase information
+        assert np.isclose(0.0, phase_1, atol = 2e-2)
+    finally:
+        shutil.rmtree(measurement_pathname)
+
 def test_get_box_in_situ_fermi_energies_from_counts():
     hf_atom_density_experiment_param_values = {
         "state_1_unitarity_res_freq_MHz": 0.0,
@@ -1825,7 +1995,7 @@ def test_get_box_in_situ_fermi_energies_from_counts():
         "top_um_per_pixel":SQRT_2_DUMMY, 
         "axicon_diameter_pix":100,
         "box_length_pix": 141,
-        "axicon_tilt_deg":0.0,
+        "axicon_tilt_deg":5.0,
         "axicon_side_aspect_ratio":1.0, 
         "axicon_side_angle_deg":0.0,
     }
@@ -1847,7 +2017,7 @@ def test_get_box_in_situ_fermi_energies_from_counts():
 
         box_radius_um = um_per_pixel * hf_atom_density_experiment_param_values["axicon_diameter_pix"] / 2
         box_length_um = um_per_pixel * hf_atom_density_experiment_param_values["box_length_pix"]
-        box_cross_section_um = analysis_functions.get_hybrid_cross_section_um(my_measurement)
+        box_cross_section_um = analysis_functions.get_hybrid_cross_section_um(my_measurement, axis = "axicon")
         expected_fermi_energy = science_functions.get_box_fermi_energy_from_counts(expected_atom_counts, box_cross_section_um, box_length_um)
         
         #Now get them from the analysis function...
@@ -2131,16 +2301,29 @@ def test_get_saturation_counts_top():
     finally:
         shutil.rmtree(measurement_pathname)
 
-
-def test_hybrid_cross_section_geometry_formula():
+def test_get_hybrid_cross_section_um():
     SAMPLE_SIDE_ANGLE_DEG = 45
     SAMPLE_SIDE_ASPECT_RATIO = 2 
-    SAMPLE_TOP_RADIUS_UM = 100
+    SAMPLE_TOP_RADIUS_PIX = 100
+    SAMPLE_TOP_UM_PER_PIXEL = 3.14
+    SAMPLE_AXICON_ANGLE_DEG = 10
+    dummy_measurement = DummyMeasurement() 
+    dummy_measurement.experiment_parameters = {
+        "axicon_diameter_pix":SAMPLE_TOP_RADIUS_PIX * 2,
+        "top_um_per_pixel":SAMPLE_TOP_UM_PER_PIXEL,
+        "axicon_side_angle_deg":SAMPLE_SIDE_ANGLE_DEG, 
+        "axicon_side_aspect_ratio":SAMPLE_SIDE_ASPECT_RATIO,
+        "axicon_tilt_deg":SAMPLE_AXICON_ANGLE_DEG
+    }
+
     #From hand-evaluation of the formula
-    EXPECTED_CROSS_SECTION_UM2 = 25132.74123
-    cross_section = analysis_functions._hybrid_cross_section_geometry_formula(
-        SAMPLE_TOP_RADIUS_UM, SAMPLE_SIDE_ANGLE_DEG, SAMPLE_SIDE_ASPECT_RATIO)
-    assert np.isclose(cross_section, EXPECTED_CROSS_SECTION_UM2)
+    EXPECTED_CROSS_SECTION_UM2_AXICON = 247798.775431
+    cross_section_axicon = analysis_functions.get_hybrid_cross_section_um(dummy_measurement, axis = "axicon")
+    assert np.isclose(cross_section_axicon, EXPECTED_CROSS_SECTION_UM2_AXICON)
+    expected_cross_section_um2_harmonic = EXPECTED_CROSS_SECTION_UM2_AXICON / np.cos(np.deg2rad(SAMPLE_AXICON_ANGLE_DEG))
+    cross_section_harmonic = analysis_functions.get_hybrid_cross_section_um(dummy_measurement, axis = "harmonic")
+    assert np.isclose(cross_section_harmonic, expected_cross_section_um2_harmonic)
+
 
 
 
@@ -2274,6 +2457,26 @@ def get_box_autocut_absorption_image(crop_to_roi = False):
     else:
         roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
         return box_autocut_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
+
+def get_rotated_rectangle_absorption_image(angle, crop_to_roi = False):
+    center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
+    y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
+    base_half_width = (DEFAULT_ABS_SQUARE_WIDTH + 1) // 2
+    base_rectangle = np.where(
+        np.logical_and(
+            np.abs(y_indices - center_y_index) < base_half_width,
+            np.abs(x_indices - center_x_index) < base_half_width / 2
+        ),
+        np.exp(-np.sqrt(1 - np.square((x_indices - center_x_index) / (base_half_width / 2)))),
+        1.0
+    )
+    #Now rotate
+    rotated_rectangle = scipy.ndimage.rotate(base_rectangle, angle, reshape = False, cval = 1.0)
+    if not crop_to_roi:
+        return rotated_rectangle 
+    else:
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        return rotated_rectangle[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
     
 def get_offset_box_absorption_image(crop_to_roi = False):
     center_y_index, center_x_index = np.array(DEFAULT_ABS_SQUARE_CENTER_INDICES) + np.array([DENSITY_COM_OFFSET, -DENSITY_COM_OFFSET])

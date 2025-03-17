@@ -180,13 +180,13 @@ def get_polaron_eos_mus_and_T_from_box_counts_and_energy(majority_counts, minori
     majority_density_um = majority_counts / box_volume_um 
     minority_density_um = minority_counts / box_volume_um 
     #Check for illegal density that won't be possible to fit
-    if minority_counts < 0 or majority_counts < 0:
+    if np.any(minority_counts < 0) or np.any(majority_counts < 0):
         raise ValueError("Counts cannot be negative for polaron fitting.")
     #Now also get the pressure using PV = 2/3 E
     overall_pressure_Hz_um = (2/3) * total_energy_Hz / box_volume_um
     #Likewise, check for unphysically small pressure 
     minimum_pressure_zero_T_Hz_um = eos_functions.polaron_eos_minimum_pressure_zero_T_Hz_um(majority_density_um, minority_density_um)
-    if overall_pressure_Hz_um < minimum_pressure_zero_T_Hz_um: 
+    if np.any(overall_pressure_Hz_um < minimum_pressure_zero_T_Hz_um): 
         raise ValueError("Pressure cannot be less than zero-T value")
     #Normalize by the "ideal" majority density to reduce number of parameters
     ideal_majority_density_um = eos_functions.polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)

@@ -366,7 +366,7 @@ def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
 def hybrid_trap_center_finder(image_to_fit, tilt_deg, hybrid_pixel_width, hybrid_pixel_length, center_guess = None):
     width_sigma = hybrid_pixel_width / 4
     length_sigma = hybrid_pixel_length / 4
-    tilt_rad = tilt_deg * np.pi / 180
+    tilt_rad = np.deg2rad(tilt_deg)
     estimated_image_amplitude = np.sum(image_to_fit) / (hybrid_pixel_length * hybrid_pixel_width)
     def wrapped_hybrid_fitting_gaussian(coordinate, x_center, y_center):
         y, x = coordinate 
@@ -766,6 +766,56 @@ def li6_balanced_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz):
 
 def li6_balanced_density_with_prefactor(potentials_Hz, absolute_mu_0_Hz, kBT_Hz, prefactor):
     return prefactor * li6_balanced_density(potentials_Hz, absolute_mu_0_Hz, kBT_Hz)
+
+
+def fit_li6_polaron_eos_densities(majority_potentials_Hz, minority_potentials_Hz, 
+                                  majority_densities_um, minority_densities_um, majority_mu_guess_Hz = None, 
+                                  minority_mu_guess_Hz = None, T_guess_Hz = None):
+    majority_length = len(majority_potentials_Hz)
+    spliced_potentials_Hz = np.concatenate((majority_potentials_Hz, minority_potentials_Hz))
+    spliced_densities_um = np.concatenate((majority_densities_um, minority_densities_um))
+    #Spliced function to fit the majority and minority densities simultaneously with the same parameters
+    def spliced_fit_function(spliced_potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz):
+        indices = np.arange(len(spliced_potentials_Hz))
+        return np.where(indices < majority_length, 
+                    li6_polaron_eos_density_majority(spliced_potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz),
+                    li6_polaron_eos_density_minority(spliced_potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz)
+                )
+    potential_minimum_value = min(np.min(majority_potentials_Hz), np.min(minority_potentials_Hz))
+    if majority_mu_guess_Hz is None:
+        peak_majority_density = np.max(majority_densities_um) 
+        #Get Fermi energy at peak density, assuming T=0
+        fermi_energy_majority = eos_functions.fermi_energy_Hz_from_density_um(peak_majority_density)
+        majority_mu_guess_Hz = fermi_energy_majority + potential_minimum_value
+    if minority_mu_guess_Hz is None:
+        #Do the same for the minority, albeit taking the polaron EOS into account
+        peak_minority_density = np.max(minority_densities_um)
+        mass_dressed_minority_density = peak_minority_density / np.power(eos_functions.POLARON_MSTAR_OVER_M, 1.5)
+        mass_dressed_fermi_energy_minority = eos_functions.fermi_energy_Hz_from_density_um(mass_dressed_minority_density)
+        dressed_minority_mu_guess_Hz = mass_dressed_fermi_energy_minority 
+        potential_offset_majority_mu_guess_Hz = majority_mu_guess_Hz - potential_minimum_value 
+        bare_minority_mu_guess_Hz = dressed_minority_mu_guess_Hz + eos_functions.POLARON_EOS_A * potential_offset_majority_mu_guess_Hz
+        minority_mu_guess_Hz = bare_minority_mu_guess_Hz + potential_minimum_value
+    if T_guess_Hz is None:
+        #Ad hoc guess
+        T_guess_Hz = majority_mu_guess_Hz / 3
+    p_guess = [
+        majority_mu_guess_Hz, 
+        minority_mu_guess_Hz, 
+        T_guess_Hz
+    ]
+    results = curve_fit(spliced_fit_function, spliced_potentials_Hz, spliced_densities_um, p0 = p_guess)
+    return results
+
+def li6_polaron_eos_density_minority(potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz):
+    local_mu_up_Hz = mu_up_Hz - potentials_Hz
+    local_mu_down_Hz = mu_down_Hz - potentials_Hz
+    return eos_functions.polaron_eos_minority_density_um(local_mu_up_Hz, local_mu_down_Hz, T_Hz)
+
+def li6_polaron_eos_density_majority(potentials_Hz, mu_up_Hz, mu_down_Hz, T_Hz):
+    local_mu_up_Hz = mu_up_Hz - potentials_Hz
+    local_mu_down_Hz = mu_down_Hz - potentials_Hz
+    return eos_functions.polaron_eos_majority_density_um(local_mu_up_Hz, local_mu_down_Hz, T_Hz)
 
 
 def _sort_and_deduplicate_xy_data(x_values, y_values):
