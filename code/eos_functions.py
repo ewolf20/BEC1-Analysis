@@ -656,10 +656,10 @@ def polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)
 #Dimensionless versions of the above, useful for fitting
 
 #Returns the dimensionless quantity n_down / n_0(mu_up, T), where quantities are as defined in above reference
-def polaron_eos_minority_to_ideal_majority_ratio(betamu_up, betamu_down):
-    return polaron_f_once_deriv_down(betamu_up, betamu_down) / ideal_fermi_f_once_deriv(betamu_up)
+def polaron_eos_minority_to_majority_ratio(betamu_up, betamu_down):
+    return polaron_f_once_deriv_down(betamu_up, betamu_down) / polaron_f_once_deriv_up(betamu_up, betamu_down)
 
 
-def polaron_eos_pressure_to_ideal_pressure_ratio(betamu_up, betamu_down):
+def polaron_eos_pressure_to_ideal_majority_pressure_ratio(betamu_up, betamu_down):
     prefactor = 10 / np.cbrt(36 * np.pi)
-    return prefactor * polaron_f(betamu_up, betamu_down) / np.power(ideal_fermi_f_once_deriv(betamu_up), 5/3)
+    return prefactor * polaron_f(betamu_up, betamu_down) / np.power(polaron_f_once_deriv_up(betamu_up, betamu_down), 5/3)

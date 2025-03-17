@@ -357,31 +357,31 @@ def test_polaron_eos_minimum_pressure_zero_T_Hz_um():
     extracted_minimum_pressure = eos_functions.polaron_eos_minimum_pressure_zero_T_Hz_um(sample_density_up_um, sample_density_down_um)
     assert np.isclose(extracted_minimum_pressure, sample_pressure_Hz_um)
 
-def test_polaron_eos_minority_to_ideal_majority_ratio():
+def test_polaron_eos_minority_to_majority_ratio():
     sample_T = 1000 
     sample_mu_up = 2000
     sample_mu_down = -500
     betamu_up = sample_mu_up / sample_T 
     betamu_down = sample_mu_down / sample_T
-    ideal_majority_density = eos_functions.ideal_fermi_density_um(betamu_up, sample_T) 
+    majority_density = eos_functions.polaron_eos_majority_density_um(sample_mu_up, sample_mu_down, sample_T)
     minority_density = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down, sample_T) 
-    expected_minority_to_ideal_majority_ratio = minority_density / ideal_majority_density 
-    calculated_minority_to_ideal_majority_ratio = eos_functions.polaron_eos_minority_to_ideal_majority_ratio(
+    expected_minority_to_ideal_majority_ratio = minority_density / majority_density 
+    calculated_minority_to_ideal_majority_ratio = eos_functions.polaron_eos_minority_to_majority_ratio(
                                                             betamu_up, betamu_down)
     assert np.isclose(expected_minority_to_ideal_majority_ratio, calculated_minority_to_ideal_majority_ratio)
 
 
-def test_polaron_eos_pressure_to_ideal_pressure_ratio():
+def test_polaron_eos_pressure_to_ideal_majority_pressure_ratio():
     sample_T = 1000
     sample_mu_up = 2000 
     sample_mu_down = -500 
     betamu_up = sample_mu_up / sample_T 
     betamu_down = sample_mu_down / sample_T
-    ideal_majority_density = eos_functions.ideal_fermi_density_um(betamu_up, sample_T) 
-    ideal_pressure = eos_functions.fermi_pressure_Hz_um_from_density_um(ideal_majority_density) 
+    majority_density = eos_functions.polaron_eos_majority_density_um(sample_mu_up, sample_mu_down, sample_T) 
+    ideal_pressure = eos_functions.fermi_pressure_Hz_um_from_density_um(majority_density) 
     total_pressure = eos_functions.polaron_eos_pressure_Hz_um(sample_mu_up, sample_mu_down, sample_T)
     expected_pressure_to_ideal_pressure_ratio = total_pressure / ideal_pressure 
-    calculated_pressure_to_ideal_pressure_ratio = eos_functions.polaron_eos_pressure_to_ideal_pressure_ratio(betamu_up, betamu_down)
+    calculated_pressure_to_ideal_pressure_ratio = eos_functions.polaron_eos_pressure_to_ideal_majority_pressure_ratio(betamu_up, betamu_down)
     print(expected_pressure_to_ideal_pressure_ratio) 
     print(calculated_pressure_to_ideal_pressure_ratio)
     assert np.isclose(expected_pressure_to_ideal_pressure_ratio, calculated_pressure_to_ideal_pressure_ratio)
