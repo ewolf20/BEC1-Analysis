@@ -639,6 +639,25 @@ def polaron_eos_pressure_Hz_um(mu_up_Hz, mu_down_Hz, T_Hz, species = "6Li"):
     betamu_down = mu_down_Hz / T_Hz
     return T_Hz * np.power(thermal_de_broglie_um, -3.0) * polaron_f(betamu_up, betamu_down)
 
+def polaron_eos_entropy_density_um(mu_up_Hz, mu_down_Hz, T_Hz, species = "6Li"):
+    thermal_de_broglie_um = thermal_de_broglie_um_from_species(T_Hz, species = species)
+    betamu_up = mu_up_Hz / T_Hz 
+    betamu_down = mu_down_Hz / T_Hz
+    return np.power(thermal_de_broglie_um, -3.0) * (5/2 * polaron_f(betamu_up, betamu_down) - betamu_up * polaron_f_once_deriv_up(betamu_up, betamu_down) 
+                                                    - betamu_down * polaron_f_once_deriv_down(betamu_up, betamu_down))
+
+
+def polaron_eos_entropy_per_particle(betamu_up, betamu_down):
+    entropy_denominator = polaron_f_once_deriv_up(betamu_up, betamu_down) + polaron_f_once_deriv_down(betamu_up, betamu_down)
+    entropy_numerator = (5/2 * polaron_f(betamu_up, betamu_down) - betamu_up * polaron_f_once_deriv_up(betamu_up, betamu_down)
+                          - betamu_down * polaron_f_once_deriv_down(betamu_up, betamu_down))
+    return entropy_numerator / entropy_denominator
+
+
+def polaron_eos_T_over_TF_up(betamu_up, betamu_down):
+    return np.cbrt(16 / (9 * np.pi)) * np.power(polaron_f_once_deriv_up(betamu_up, betamu_down), -2/3)
+
+
 #Convenience function for calculating the minimum pressure possible for a given minority and majority density at zero T
 def polaron_eos_minimum_pressure_zero_T_Hz_um(majority_density_um, minority_density_um, species = "6Li"):
     ideal_majority_density_um = polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)

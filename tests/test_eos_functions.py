@@ -323,7 +323,7 @@ def test_polaron_eos_minority_density_um():
 def test_polaron_eos_majority_density_um():
     sample_T = 1000 
     sample_mu_up = 2000 
-    sample_mu_down = 500
+    sample_mu_down = -500
     betamu_up = sample_mu_up / sample_T
     expected_bare_density_up = eos_functions.ideal_fermi_density_um(betamu_up, sample_T)
     density_down = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down, sample_T)
@@ -336,7 +336,7 @@ def test_polaron_eos_pressure_Hz_um():
     #Just test that we've implemented the equation correctly 
     sample_T = 1000 
     sample_mu_up = 2000 
-    sample_mu_down = 500 
+    sample_mu_down = -500 
     betamu_up = sample_mu_up / sample_T 
     mu_down_adjusted = sample_mu_down - polaron_eos_A * sample_mu_up
     betamu_down_adjusted = mu_down_adjusted / sample_T
@@ -345,6 +345,38 @@ def test_polaron_eos_pressure_Hz_um():
     expected_pressure = pressure_contribution_up + pressure_contribution_down 
     extracted_pressure = eos_functions.polaron_eos_pressure_Hz_um(sample_mu_up, sample_mu_down, sample_T)
     assert np.isclose(expected_pressure, extracted_pressure)
+
+def test_polaron_eos_entropy_density_um():
+    #Utilize thermodynamic relation Phi_G / V = -P for our gas, and also Phi_G / V = E - Ts - mu N 
+    sample_T_Hz = 1000
+    sample_mu_up_Hz = 2000 
+    sample_mu_down_Hz = -500 
+    sample_pressure_Hz_um = eos_functions.polaron_eos_pressure_Hz_um(sample_mu_up_Hz, sample_mu_down_Hz, sample_T_Hz)
+    expected_grand_potential_density_Hz_um = -sample_pressure_Hz_um
+    sample_minority_density_um = eos_functions.polaron_eos_minority_density_um(sample_mu_up_Hz, sample_mu_down_Hz, sample_T_Hz)
+    sample_majority_density_um = eos_functions.polaron_eos_majority_density_um(sample_mu_up_Hz, sample_mu_down_Hz, sample_T_Hz)
+    sample_entropy_density_um = eos_functions.polaron_eos_entropy_density_um(sample_mu_up_Hz, sample_mu_down_Hz, sample_T_Hz) 
+    sample_energy_density_Hz_um = sample_pressure_Hz_um * 3/2 
+    #Use definition of grand potential
+    extracted_grand_potential_density_Hz_um = (sample_energy_density_Hz_um 
+                                               - sample_T_Hz * sample_entropy_density_um - sample_minority_density_um * sample_mu_down_Hz 
+                                               - sample_majority_density_um * sample_mu_up_Hz)
+    assert np.isclose(extracted_grand_potential_density_Hz_um, expected_grand_potential_density_Hz_um) 
+
+
+
+def test_polaron_eos_entropy_per_particle():
+    sample_T = 1000 
+    sample_mu_up = 2000
+    sample_mu_down = -500
+    betamu_up = sample_mu_up / sample_T 
+    betamu_down = sample_mu_down / sample_T 
+    majority_density_um = eos_functions.polaron_eos_majority_density_um(sample_mu_up, sample_mu_down, sample_T)
+    minority_density_um = eos_functions.polaron_eos_minority_density_um(sample_mu_up, sample_mu_down, sample_T) 
+    entropy_density_um = eos_functions.polaron_eos_entropy_density_um(sample_mu_up, sample_mu_down, sample_T) 
+    expected_entropy_per_particle = entropy_density_um / (majority_density_um + minority_density_um)
+    extracted_entropy_per_particle = eos_functions.polaron_eos_entropy_per_particle(betamu_up, betamu_down)
+    assert np.isclose(expected_entropy_per_particle, extracted_entropy_per_particle)
 
 
 def test_polaron_eos_minimum_pressure_zero_T_Hz_um():
