@@ -48,8 +48,7 @@ BERTSCH_PARAMETER = 0.370
 
 #FUNCTIONS FOR CALCULATIONS IN BOX AND HYBRID TRAP
 
-def get_box_fermi_energy_from_counts(atom_counts, box_cross_section_um, box_length_um):
-    box_volume_um = box_cross_section_um * box_length_um
+def get_box_fermi_energy_from_counts(atom_counts, box_volume_um):
     atom_density_um = atom_counts / box_volume_um
     return eos_functions.fermi_energy_Hz_from_density_um(atom_density_um)
 
