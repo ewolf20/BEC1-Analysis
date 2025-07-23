@@ -450,50 +450,60 @@ If passed, the functions assume that the atom density is stored as an analysis r
 object, under the name stored_density_name. This is to allow patterns where multiple analyses which rely on 
 the atom number density can be run without re-calculating it (typically the slowest part of any analysis)."""
 
-def _get_atom_count_from_density(um_per_pixel, atom_density):
+def _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density, subcrop = None):
     pixel_area_um = np.square(um_per_pixel)
-    return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area_um)
+    if not subcrop is None: 
+        if isinstance(subcrop, str): 
+            subcrop_box = my_measurement.measurement_parameters[subcrop]
+        else:
+            subcrop_box = subcrop
+        subcropped_image = image_processing_functions.subcrop(
+            atom_density, subcrop_box, my_measurement.measurement_parameters["ROI"]
+        )
+        return image_processing_functions.atom_count_pixel_sum(subcropped_image, pixel_area_um)
+    else: 
+        return image_processing_functions.atom_count_pixel_sum(atom_density, pixel_area_um)
 
 
-def get_atom_count_side_li_lf(my_measurement, my_run, stored_density_name = None):
+def get_atom_count_side_li_lf(my_measurement, my_run, stored_density_name = None, subcrop = None):
     atom_density = _load_density_side_li_lf(my_measurement, my_run, stored_density_name)
     um_per_pixel = my_measurement.experiment_parameters["side_low_mag_um_per_pixel"]
-    return _get_atom_count_from_density(um_per_pixel, atom_density)
+    return _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density, subcrop = subcrop)
 
 
-def get_atom_count_side_li_hf(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
+def get_atom_count_side_li_hf(my_measurement, my_run, stored_density_name = None, subcrop = None, **get_density_kwargs):
     atom_density = _load_density_side_li_hf(my_measurement, my_run, stored_density_name, **get_density_kwargs)
     um_per_pixel = my_measurement.experiment_parameters["side_high_mag_um_per_pixel"]
-    return _get_atom_count_from_density(um_per_pixel, atom_density)
+    return _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density, subcrop = subcrop)
 
 
-def get_atom_count_top_A_abs(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
+def get_atom_count_top_A_abs(my_measurement, my_run, stored_density_name = None, subcrop = None, **get_density_kwargs):
     atom_density = _load_density_top_A_abs(my_measurement, my_run, stored_density_name, **get_density_kwargs)
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
-    return _get_atom_count_from_density(um_per_pixel, atom_density)
+    return _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density, subcrop = subcrop)
 
-def get_atom_count_top_B_abs(my_measurement, my_run, stored_density_name = None, **get_density_kwargs):
+def get_atom_count_top_B_abs(my_measurement, my_run, stored_density_name = None, subcrop = None, **get_density_kwargs):
     atom_density = _load_density_top_B_abs(my_measurement, my_run, stored_density_name, **get_density_kwargs)
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
-    return _get_atom_count_from_density(um_per_pixel, atom_density)
+    return _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density, subcrop = subcrop)
 
 def get_atom_counts_top_AB_abs(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
-                               **get_density_kwargs):
+                               subcrop = None, **get_density_kwargs):
     atom_density_A, atom_density_B = _load_densities_top_AB_abs(my_measurement, my_run, first_stored_density_name, second_stored_density_name, 
                                                                     **get_density_kwargs)
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"] 
-    counts_A = _get_atom_count_from_density(um_per_pixel, atom_density_A) 
-    counts_B = _get_atom_count_from_density(um_per_pixel, atom_density_B)
+    counts_A = _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density_A, subcrop = subcrop) 
+    counts_B = _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density_B, subcrop = subcrop)
     return (counts_A, counts_B)
 
 def get_atom_counts_top_polrot(my_measurement, my_run, first_stored_density_name = None, second_stored_density_name = None, 
-                               **get_density_kwargs):
+                               subcrop = None, **get_density_kwargs):
     atom_density_first, atom_density_second = _load_densities_polrot(my_measurement, my_run, 
                                                 first_stored_density_name, second_stored_density_name, **get_density_kwargs)
     um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
     pixel_area = np.square(um_per_pixel)
-    atom_count_first = image_processing_functions.atom_count_pixel_sum(atom_density_first, pixel_area)
-    atom_count_second = image_processing_functions.atom_count_pixel_sum(atom_density_second, pixel_area)
+    atom_count_first = _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density_first, subcrop = subcrop)
+    atom_count_second = _get_atom_count_from_density(my_measurement, um_per_pixel, atom_density_second, subcrop = subcrop)
     return (atom_count_first, atom_count_second)
 
 #TRAP-SPECIFIC_ANALYSES
