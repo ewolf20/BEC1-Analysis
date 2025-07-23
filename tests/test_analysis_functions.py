@@ -45,6 +45,7 @@ RR_THERMAL_WIDTH = 64
 
 DEFAULT_ABSORPTION_IMAGE_ROI = [171, 171, 342, 342]
 DEFAULT_ABSORPTION_IMAGE_ROI_SHAPE = (171, 171)
+COUNT_SUBCROP_ROI = [171, 253, 342, 342]
 EXPANDED_ABSORPTION_IMAGE_ROI = [50, 50, 462, 462]
 DEFAULT_ABSORPTION_IMAGE_CLOSE_ROI = [193, 193, 320, 320]
 DEFAULT_ABSORPTION_IMAGE_NORM_BOX = [50, 50, 140, 140]
@@ -891,7 +892,13 @@ def _get_atom_counts_test_helper(type_name, function_to_test, experiment_param_v
                                                                         experiment_param_values = experiment_param_values, 
                                                                         run_param_values = run_param_values)
         atom_counts = function_to_test(my_measurement, my_run, **fun_kwargs)
+        atom_counts_subcropped = function_to_test(my_measurement, my_run, subcrop = COUNT_SUBCROP_ROI, **fun_kwargs)
+        SUBCROP_BOX_NAME = "foo"
+        my_measurement.set_box(SUBCROP_BOX_NAME, box_coordinates = COUNT_SUBCROP_ROI)
+        atom_counts_subcropped_from_meas_box = function_to_test(my_measurement, my_run, subcrop = SUBCROP_BOX_NAME, **fun_kwargs)
+        assert np.isclose(atom_counts_subcropped_from_meas_box, atom_counts_subcropped)
         cropped_expected_densities = -np.log(get_default_absorption_image(crop_to_roi = True)) / li_6_res_cross_section 
+        subcropped_expected_densities = -np.log(get_default_absorption_image(crop_to_roi = True, roi_to_use= COUNT_SUBCROP_ROI)) / li_6_res_cross_section 
         if type_name == "side_low_mag":
             pixel_length = my_measurement.experiment_parameters["side_low_mag_um_per_pixel"] 
         elif type_name == "side_high_mag":
@@ -899,7 +906,9 @@ def _get_atom_counts_test_helper(type_name, function_to_test, experiment_param_v
         elif type_name == "top_double":
             pixel_length = my_measurement.experiment_parameters["top_um_per_pixel"]
         expected_counts = np.square(pixel_length) * np.sum(cropped_expected_densities)
+        expected_counts_subcropped = np.square(pixel_length) * np.sum(subcropped_expected_densities)
         assert np.isclose(atom_counts, expected_counts, rtol = 1e-3)
+        assert np.isclose(atom_counts_subcropped, expected_counts_subcropped, rtol = 1e-3)
     finally:
         shutil.rmtree(measurement_pathname)
 
@@ -2406,7 +2415,7 @@ def create_measurement(type_name, image_stack = None, run_param_values= None, ex
 #Generate a test image, suitable for use in most analysis functions
 #The image pattern is a square, with -ln(abs) = 1 for a grid of pixels centered 
 #on the origin and -ln(abs) = 0 for all others.
-def get_default_absorption_image(crop_to_roi = False):
+def get_default_absorption_image(crop_to_roi = False, roi_to_use = DEFAULT_ABSORPTION_IMAGE_ROI):
     center_y_index, center_x_index = DEFAULT_ABS_SQUARE_CENTER_INDICES
     y_indices, x_indices = np.indices(DEFAULT_ABS_IMAGE_SHAPE)
     default_absorption_image = np.where(
@@ -2420,7 +2429,7 @@ def get_default_absorption_image(crop_to_roi = False):
     if not crop_to_roi:
         return default_absorption_image
     else:
-        roi_xmin, roi_ymin, roi_xmax, roi_ymax = DEFAULT_ABSORPTION_IMAGE_ROI
+        roi_xmin, roi_ymin, roi_xmax, roi_ymax = roi_to_use
         return default_absorption_image[roi_ymin:roi_ymax, roi_xmin:roi_xmax]
     
 def generate_default_image_density_pattern(crop_to_roi = False, density_value = 0.0):
