@@ -325,19 +325,24 @@ def fit_rf_spect_detuning_scan(rf_freqs, transfers, tau, center = None, rabi_fre
     transfers = np.array(transfers) 
     if(errors):
         errors = np.array(errors)
-    if(center is None):
+    if(center is None or rabi_freq is None):
         transfers_sort_indices = np.argsort(transfers)
         sorted_transfers = transfers[transfers_sort_indices] 
         sorted_rf_freqs = rf_freqs[transfers_sort_indices]
         #Ad hoc method - discard largest two points, just to avoid one or two outliers
         POINTS_TO_DISCARD = 2
         transfers_with_discarded_points = sorted_transfers[:-POINTS_TO_DISCARD]
-        center_index = np.argmax(transfers_with_discarded_points)
-        center_guess = sorted_rf_freqs[center_index]
+        peak_index = np.argmax(transfers_with_discarded_points)
+        
+    if center is None: 
+        center_guess = sorted_rf_freqs[peak_index]
     else:
         center_guess = center 
     if(rabi_freq is None):
-        rabi_freq_guess = 1.0 
+        peak_transfer = sorted_transfers[peak_index] 
+        estimated_omega_rabi = (2.0 / tau) * np.arcsin(np.sqrt(peak_transfer))
+        estimated_rabi_freq = estimated_omega_rabi / (2 * np.pi)
+        rabi_freq_guess = estimated_rabi_freq
     else:
         rabi_freq_guess = rabi_freq
     def wrapped_rf_spect_function_factory(tau):
