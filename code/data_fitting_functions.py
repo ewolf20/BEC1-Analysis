@@ -594,6 +594,54 @@ def _semicircle_crop_helper(center, radius, crop_point = 0.0):
     return (center - crop_center_shift, center + crop_center_shift)
 
 
+def fit_self_similar_expansion_polytrope_full_scaled(full_scaled_positions, values, gamma_guess = None): 
+    #Ad hoc value, compromise among typical range of 1.6-2.0
+    if gamma_guess is None:
+        gamma_guess = 1.75
+    p_init = [
+        gamma_guess 
+    ]
+    return curve_fit(self_similar_expansion_polytrope_full_scaled, full_scaled_positions, values, p0 = p_init)
+
+def fit_self_similar_expansion_polytrope_time_scaled(time_scaled_positions, values, gamma_guess = None, c_guess = None): 
+    #Ad hoc as above 
+    if gamma_guess is None: 
+        gamma_guess = 1.75 
+    if c_guess is None: 
+        density_max = max(values)
+        density_min = min(values)
+        density_range = (density_max - density_min)
+        density_edge_increment = 0.25 * density_range
+
+        rightmost_density_max_position = time_scaled_positions[values > density_max - density_edge_increment][-1]
+
+        leftmost_density_min_position = time_scaled_positions[values < density_min + density_edge_increment][0]
+        density_position_difference = leftmost_density_min_position - rightmost_density_max_position
+
+        #Characteristic length scale of the data is the distance from min to max
+        c_guess = density_position_difference
+    
+    p_init = [
+        gamma_guess, 
+        c_guess
+    ]
+    return curve_fit(self_similar_expansion_polytrope_time_scaled, time_scaled_positions, values, p0 = p_init)
+
+
+def self_similar_expansion_polytrope_time_scaled(time_scaled_positions, gamma, c):
+    return self_similar_expansion_polytrope_full_scaled(time_scaled_positions / c, gamma) 
+
+def self_similar_expansion_polytrope_full_scaled(full_scaled_positions, gamma):
+    #avoid imaginary values by clipping function values to 1, 0 range BEFORE root
+    return np.power(
+        np.clip(
+            1 - (gamma - 1) / (gamma + 1) * (1 + full_scaled_positions), 
+            0, 
+            1
+        ),
+        2 / (gamma - 1)
+    )
+
 
 def crop_box(atom_densities, vert_crop_point = 0.5, horiz_crop_point = 0.01, horiz_radius = None, vert_width = None):
     x_integrated_atom_densities = np.sum(atom_densities, axis = -1) 
