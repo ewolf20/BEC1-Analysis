@@ -2027,7 +2027,8 @@ def test_get_box_in_situ_fermi_energies_from_counts():
         box_radius_um = um_per_pixel * hf_atom_density_experiment_param_values["axicon_diameter_pix"] / 2
         box_length_um = um_per_pixel * hf_atom_density_experiment_param_values["box_length_pix"]
         box_cross_section_um = analysis_functions.get_hybrid_cross_section_um(my_measurement, axis = "axicon")
-        expected_fermi_energy = science_functions.get_box_fermi_energy_from_counts(expected_atom_counts, box_cross_section_um, box_length_um)
+        box_volume_um = box_cross_section_um * box_length_um
+        expected_fermi_energy = science_functions.get_box_fermi_energy_from_counts(expected_atom_counts, box_volume_um)
         
         #Now get them from the analysis function...
         #First use unstored densities

@@ -68,10 +68,11 @@ def test_get_box_fermi_energy_from_counts():
     SAMPLE_RADIUS_UM = 37 
     SAMPLE_LENGTH_UM = 52 
     SAMPLE_COUNTS = 1337 
-    sample_cross_section = np.square(SAMPLE_RADIUS_UM) * np.pi
+    sample_cross_section_um = np.square(SAMPLE_RADIUS_UM) * np.pi
+    box_volume_um = sample_cross_section_um * SAMPLE_LENGTH_UM
     #Calculated manually to agree with this
     EXPECTED_ENERGY = 420.459
-    energy = science_functions.get_box_fermi_energy_from_counts(SAMPLE_COUNTS, sample_cross_section, SAMPLE_LENGTH_UM)
+    energy = science_functions.get_box_fermi_energy_from_counts(SAMPLE_COUNTS, box_volume_um)
     assert (np.abs((energy - EXPECTED_ENERGY) / EXPECTED_ENERGY) < 1e-4)
 
 def test_get_hybrid_trap_average_energy():
