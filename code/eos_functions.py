@@ -19,6 +19,15 @@ KB_MKS = 1.380649e-23
 def thermal_de_broglie_mks(kBT_J, mass_kg):
     return (2 * np.pi * H_BAR_MKS) / np.sqrt(2 * np.pi * mass_kg * kBT_J)
 
+def thermal_de_broglie_um_from_species(kBT_Hz, species = "6Li"):
+    if species == "6Li":
+        mass_kg = LI_6_MASS_KG
+    else:
+        raise ValueError("Unsupported species")
+    kBT_J = kBT_Hz * H_MKS
+    de_broglie_m = thermal_de_broglie_mks(kBT_J, mass_kg)
+    return de_broglie_m * 1e6
+
 def fermi_energy_Hz_from_density_um(density_um, species = "6Li"):
     if species == "6Li":
         mass_kg = LI_6_MASS_KG
@@ -142,21 +151,11 @@ def ideal_fermi_f_twice_deriv(betamu):
 #Because of a lack of normalization, this takes two parameters betamu and T, and requires the species to be 
 #specified, so that the mass is known.
 def ideal_fermi_density_um(betamu, kBT_Hz, species = "6Li"):
-    if species == "6Li":
-        mass_kg = LI_6_MASS_KG
-    else:
-        raise ValueError("Unsupported species")
-    kBT_J = kBT_Hz * H_MKS
-    thermal_de_broglie_m = thermal_de_broglie_mks(kBT_J, mass_kg)
-    thermal_de_broglie_um = thermal_de_broglie_m * 1e6
+    thermal_de_broglie_um = thermal_de_broglie_um_from_species(kBT_Hz, species = species)
     return np.power(thermal_de_broglie_um, -3.0) * ideal_fermi_f_once_deriv(betamu)
 
 
 def ideal_fermi_pressure_Hz_um(betamu, kBT_Hz, species = "6Li"):
-    if species == "6Li":
-        mass_kg = LI_6_MASS_KG
-    else:
-        raise ValueError("Unsupported species")
     density_um = ideal_fermi_density_um(betamu, kBT_Hz, species = species)
     fermi_pressure_Hz_um = fermi_pressure_Hz_um_from_density_um(density_um, species = species)
     P_over_P0 = ideal_fermi_P_over_P0(betamu)
@@ -435,19 +434,12 @@ ku_maximum_betamu = ku_experimental_values_dict["betamu"][0]
 ku_maximum_betamu_mu = ku_experimental_values_dict["mu_over_EF"][0]
 
 def balanced_density_um(betamu, kBT_Hz, species = "6Li"):
-    if species == "6Li":
-        mass_kg = LI_6_MASS_KG
-    else:
-        raise ValueError("Unsupported species")
     global _balanced_density_T_over_TF_vs_betamu_func
     if _balanced_density_T_over_TF_vs_betamu_func is None:
         _balanced_density_T_over_TF_vs_betamu_func =  get_balanced_eos_functions("T_over_TF")
 
     T_over_TF_values = np.where(betamu <= ku_maximum_betamu, _balanced_density_T_over_TF_vs_betamu_func(betamu), ku_maximum_betamu_mu / betamu)
-    # T_over_TF_values = _balanced_density_T_over_TF_vs_betamu_func(betamu)
-    kBT_J = kBT_Hz * H_MKS
-    thermal_de_broglie_m = thermal_de_broglie_mks(kBT_J, mass_kg)
-    thermal_de_broglie_um = thermal_de_broglie_m * 1e6
+    thermal_de_broglie_um = thermal_de_broglie_um_from_species(kBT_Hz, species = species)
     return np.power(thermal_de_broglie_um, -3.0) * 4.0 / (3 * np.sqrt(np.pi)) * np.power(T_over_TF_values, -1.5)
 
 
@@ -614,29 +606,65 @@ def ultralow_fugacity_betamu_function_S_over_NkB(S_over_NkB):
 POLARON_EOS_A = -0.615
 POLARON_MSTAR_OVER_M = 1.25 
 
-def polaron_eos_minority_density_um(mu_up, mu_down, T):
-    adjusted_mu_down = mu_down - POLARON_EOS_A * mu_up 
-    adjusted_betamu_down = adjusted_mu_down / T
-    return np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_density_um(adjusted_betamu_down, T) 
+def polaron_f(betamu_up, betamu_down):
+    shifted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up 
+    return ideal_fermi_f(betamu_up) + np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f(shifted_betamu_down)
 
-def polaron_eos_majority_density_um(mu_up, mu_down, T):
-    betamu_up = mu_up / T
-    return ideal_fermi_density_um(betamu_up, T) - POLARON_EOS_A * polaron_eos_minority_density_um(mu_up, mu_down, T)
+#Using the convention above, this is equal to z_up * df/dz_up, a derivative combination that occurs very frequently
+def polaron_f_once_deriv_up(betamu_up, betamu_down):
+    shifted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up
+    return ideal_fermi_f_once_deriv(betamu_up) - POLARON_EOS_A * np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f_once_deriv(shifted_betamu_down)
 
-def polaron_eos_pressure_Hz_um(mu_up, mu_down, T):
-    betamu_up = mu_up / T 
-    adjusted_mu_down = mu_down - POLARON_EOS_A * mu_up 
-    adjusted_betamu_down = adjusted_mu_down / T 
-    pressure_contribution_up = ideal_fermi_pressure_Hz_um(betamu_up, T)
-    pressure_contribution_down = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_pressure_Hz_um(adjusted_betamu_down, T)
-    return pressure_contribution_up + pressure_contribution_down
+
+def polaron_f_once_deriv_down(betamu_up, betamu_down):
+    shifted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up
+    return np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f_once_deriv(shifted_betamu_down)
+
+
+def polaron_eos_minority_density_um(mu_up_Hz, mu_down_Hz, T_Hz, species = "6Li"):
+    betamu_up = mu_up_Hz / T_Hz
+    betamu_down = mu_down_Hz / T_Hz
+    thermal_de_broglie_um = thermal_de_broglie_um_from_species(T_Hz, species = species)
+    return np.power(thermal_de_broglie_um, -3.0) * polaron_f_once_deriv_down(betamu_up, betamu_down)
+
+def polaron_eos_majority_density_um(mu_up_Hz, mu_down_Hz, T_Hz, species = "6Li"):
+    betamu_up = mu_up_Hz / T_Hz
+    betamu_down = mu_down_Hz / T_Hz
+    thermal_de_broglie_um = thermal_de_broglie_um_from_species(T_Hz, species = species)
+    return np.power(thermal_de_broglie_um, -3.0) * polaron_f_once_deriv_up(betamu_up, betamu_down)
+
+def polaron_eos_pressure_Hz_um(mu_up_Hz, mu_down_Hz, T_Hz, species = "6Li"):
+    thermal_de_broglie_um = thermal_de_broglie_um_from_species(T_Hz, species = species)
+    betamu_up = mu_up_Hz / T_Hz
+    betamu_down = mu_down_Hz / T_Hz
+    return T_Hz * np.power(thermal_de_broglie_um, -3.0) * polaron_f(betamu_up, betamu_down)
+
+def polaron_eos_entropy_density_um(mu_up_Hz, mu_down_Hz, T_Hz, species = "6Li"):
+    thermal_de_broglie_um = thermal_de_broglie_um_from_species(T_Hz, species = species)
+    betamu_up = mu_up_Hz / T_Hz 
+    betamu_down = mu_down_Hz / T_Hz
+    return np.power(thermal_de_broglie_um, -3.0) * (5/2 * polaron_f(betamu_up, betamu_down) - betamu_up * polaron_f_once_deriv_up(betamu_up, betamu_down) 
+                                                    - betamu_down * polaron_f_once_deriv_down(betamu_up, betamu_down))
+
+
+def polaron_eos_entropy_per_particle(betamu_up, betamu_down):
+    entropy_denominator = polaron_f_once_deriv_up(betamu_up, betamu_down) + polaron_f_once_deriv_down(betamu_up, betamu_down)
+    entropy_numerator = (5/2 * polaron_f(betamu_up, betamu_down) - betamu_up * polaron_f_once_deriv_up(betamu_up, betamu_down)
+                          - betamu_down * polaron_f_once_deriv_down(betamu_up, betamu_down))
+    return entropy_numerator / entropy_denominator
+
+
+def polaron_eos_T_over_TF_up(betamu_up, betamu_down):
+    return np.cbrt(16 / (9 * np.pi)) * np.power(polaron_f_once_deriv_up(betamu_up, betamu_down), -2/3)
+
 
 #Convenience function for calculating the minimum pressure possible for a given minority and majority density at zero T
-def polaron_eos_minimum_pressure_zero_T_Hz_um(majority_density_um, minority_density_um):
+def polaron_eos_minimum_pressure_zero_T_Hz_um(majority_density_um, minority_density_um, species = "6Li"):
     ideal_majority_density_um = polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)
-    zero_T_majority_pressure_contribution = fermi_pressure_Hz_um_from_density_um(ideal_majority_density_um) 
+    zero_T_majority_pressure_contribution = fermi_pressure_Hz_um_from_density_um(ideal_majority_density_um, species = species) 
     mass_adjusted_minority_density_um = np.power(POLARON_MSTAR_OVER_M, -1.5) * minority_density_um
-    zero_T_minority_pressure_contribution = np.power(POLARON_MSTAR_OVER_M, 1.5) * fermi_pressure_Hz_um_from_density_um(mass_adjusted_minority_density_um)
+    zero_T_minority_pressure_contribution = np.power(POLARON_MSTAR_OVER_M, 1.5) * fermi_pressure_Hz_um_from_density_um(
+                                                                mass_adjusted_minority_density_um, species = species)
     return zero_T_majority_pressure_contribution + zero_T_minority_pressure_contribution
     
 
@@ -647,14 +675,10 @@ def polaron_eos_ideal_majority_density(majority_density_um, minority_density_um)
 #Dimensionless versions of the above, useful for fitting
 
 #Returns the dimensionless quantity n_down / n_0(mu_up, T), where quantities are as defined in above reference
-def polaron_eos_minority_to_ideal_majority_ratio(betamu_up, betamu_down):
-    adjusted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up
-    return np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f_once_deriv(adjusted_betamu_down) / ideal_fermi_f_once_deriv(betamu_up)
+def polaron_eos_minority_to_majority_ratio(betamu_up, betamu_down):
+    return polaron_f_once_deriv_down(betamu_up, betamu_down) / polaron_f_once_deriv_up(betamu_up, betamu_down)
 
 
-def polaron_eos_pressure_to_ideal_pressure_ratio(betamu_up, betamu_down):
-    adjusted_betamu_down = betamu_down - POLARON_EOS_A * betamu_up
-    prefactor = 10 / np.cbrt(36 * np.pi) 
-    majority_contribution = ideal_fermi_f(betamu_up) / np.power(ideal_fermi_f_once_deriv(betamu_up), 5/3) 
-    minority_contribution = np.power(POLARON_MSTAR_OVER_M, 1.5) * ideal_fermi_f(adjusted_betamu_down) / np.power(ideal_fermi_f_once_deriv(betamu_up), 5/3)
-    return prefactor * (majority_contribution + minority_contribution)
+def polaron_eos_pressure_to_ideal_majority_pressure_ratio(betamu_up, betamu_down):
+    prefactor = 10 / np.cbrt(36 * np.pi)
+    return prefactor * polaron_f(betamu_up, betamu_down) / np.power(polaron_f_once_deriv_up(betamu_up, betamu_down), 5/3)

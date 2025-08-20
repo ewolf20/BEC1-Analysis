@@ -1116,12 +1116,10 @@ def get_box_in_situ_fermi_energies_from_counts(my_measurement, my_run, first_sto
         counts_first, counts_second = get_atom_counts_top_AB_abs(my_measurement, my_run, first_stored_density_name = first_stored_density_name, 
                                                                  second_stored_density_name = second_stored_density_name, 
                                                                  **get_density_kwargs)
-    box_length_pix = my_measurement.experiment_parameters["box_length_pix"]
-    um_per_pixel = my_measurement.experiment_parameters["top_um_per_pixel"]
-    box_length_um = box_length_pix * um_per_pixel
-    cross_section_um = get_hybrid_cross_section_um(my_measurement, axis = "axicon")
-    first_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_first, cross_section_um, box_length_um)
-    second_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_second, cross_section_um, box_length_um)
+    box_volume_um = get_box_volume_um(my_measurement)
+
+    first_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_first, box_volume_um)
+    second_fermi_energy_hz = science_functions.get_box_fermi_energy_from_counts(counts_second, box_volume_um)
     return (first_fermi_energy_hz, second_fermi_energy_hz)
 
 
@@ -1396,7 +1394,11 @@ def _hybrid_cross_section_geometry_formula(top_radius_um, side_angle_deg, side_a
     cross_section_um = np.pi * semimajor_radius_um * semiminor_radius_um
     return cross_section_um
 
-
+def get_box_volume_um(my_measurement):
+    box_cross_section_um = get_hybrid_cross_section_um(my_measurement, axis = "axicon")
+    box_length_pix = my_measurement.experiment_parameters["box_length_pix"]
+    box_length_um = box_length_pix * my_measurement.experiment_parameters["top_um_per_pixel"]
+    return box_length_um * box_cross_section_um
 
 
 #RUN COMBINING FUNCTIONS
