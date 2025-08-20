@@ -378,6 +378,16 @@ def test_polaron_eos_entropy_per_particle():
     extracted_entropy_per_particle = eos_functions.polaron_eos_entropy_per_particle(betamu_up, betamu_down)
     assert np.isclose(expected_entropy_per_particle, extracted_entropy_per_particle)
 
+def test_polaron_eos_T_over_TF_up():
+    #Test at ultra low temperature and minimal minority state density
+    SAMPLE_BETAMU_UP = 500
+    SAMPLE_BETAMU_DOWN = -500
+    T_over_TF_up_expected = 1.0 / SAMPLE_BETAMU_UP 
+    T_over_TF_up_extracted = eos_functions.polaron_eos_T_over_TF_up(
+        SAMPLE_BETAMU_UP, SAMPLE_BETAMU_DOWN
+    )
+    assert np.isclose(T_over_TF_up_expected, T_over_TF_up_extracted, rtol = 1e-4)
+
 
 def test_polaron_eos_minimum_pressure_zero_T_Hz_um():
     sample_mu_up = 2000 
