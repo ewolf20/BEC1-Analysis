@@ -331,6 +331,92 @@ def test_fit_semicircle():
     assert np.isclose(radius, EXPECTED_RADIUS, rtol = 1e-3)
 
 
+def test_fit_self_similar_expansion_polytrope_full_scaled():
+    RNG_SEED = 1337
+    rng = np.random.default_rng(seed = RNG_SEED)
+
+    SAMPLE_GAMMA = 1.7
+    
+    NUM_POINTS = 1000
+    sample_full_position_range = np.linspace(-2, 5, NUM_POINTS)
+
+    values_noiseless = data_fitting_functions.self_similar_expansion_polytrope_full_scaled(
+        sample_full_position_range, SAMPLE_GAMMA
+    )
+
+    NOISE_SCALE = 0.005
+    gaussian_noise = rng.normal(0.0, NOISE_SCALE, NUM_POINTS)
+
+    values_noisy = values_noiseless + gaussian_noise
+    
+    #Test with no guess
+    fit_results = data_fitting_functions.fit_self_similar_expansion_polytrope_full_scaled(
+        sample_full_position_range, values_noisy
+    )
+
+    popt, pcov = fit_results
+
+    fitted_gamma, = popt
+
+    EXPECTED_GAMMA = 1.709913
+    assert np.isclose(EXPECTED_GAMMA, fitted_gamma)
+    assert np.isclose(fitted_gamma, SAMPLE_GAMMA, rtol = 1e-2)
+
+def test_fit_self_similar_expansion_polytrope_time_scaled():
+    RNG_SEED = 1337
+    rng = np.random.default_rng(seed = RNG_SEED)
+
+
+    SAMPLE_GAMMA = 1.72 
+    SAMPLE_C = 13.7 
+    NUM_POINTS = 1000
+    rng = np.random.default_rng(seed = RNG_SEED)
+
+    sample_full_scaled_position_range = np.linspace(-2, 5, NUM_POINTS)
+    sample_time_scaled_position_range = sample_full_scaled_position_range * SAMPLE_C 
+    values_noiseless = data_fitting_functions.self_similar_expansion_polytrope_time_scaled(
+        sample_time_scaled_position_range, SAMPLE_GAMMA, SAMPLE_C
+    )
+
+    NOISE_SCALE = 0.005
+    gaussian_noise = rng.normal(0.0, NOISE_SCALE, NUM_POINTS)
+    values_noisy = values_noiseless + gaussian_noise
+
+    fit_results = data_fitting_functions.fit_self_similar_expansion_polytrope_time_scaled(
+        sample_time_scaled_position_range, values_noisy
+    )
+    popt, pcov = fit_results 
+
+    fitted_gamma, fitted_c = popt 
+
+    assert np.isclose(SAMPLE_GAMMA, fitted_gamma, rtol = 1e-2)
+    assert np.isclose(SAMPLE_C, fitted_c, rtol = 1e-2)
+
+    EXPECTED_GAMMA =  1.728511
+    EXPECTED_C = 13.69073
+
+    assert np.isclose(fitted_gamma, EXPECTED_GAMMA)
+    assert np.isclose(fitted_c, EXPECTED_C)
+
+
+def test_self_similar_expansion_polytrope_full_scaled():
+    NUM_POINTS = 1000 
+    sample_full_scaled_position_range = np.linspace(-2, 5, NUM_POINTS)
+
+    def self_similar_expansion_polytrope_5_3(position): 
+        return np.clip(
+            np.power((3 - position) / 4, 3.0), 
+            0, 
+            1
+        )
+    
+    values_hard_coded_5_3 = self_similar_expansion_polytrope_5_3(sample_full_scaled_position_range)
+    values_5_3 = data_fitting_functions.self_similar_expansion_polytrope_full_scaled(
+        sample_full_scaled_position_range, 5/3)
+    
+    assert np.allclose(values_5_3, values_hard_coded_5_3)
+
+
 def test_crop_box():
     sample_box_data = np.load(os.path.join("resources", "Sample_Box.npy")) 
     EXPECTED_BOX_CROP = (34, 50, 214, 174)
