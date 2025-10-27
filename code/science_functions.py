@@ -303,11 +303,13 @@ Using the simple approximation for a Feshbach resonance and experimental data,
 return a value for the scattering length between two lithium states from the 
 set {1, 2, 3}.
 
-Experimental values used are from Zurn 2013, https://doi.org/10.1103/PhysRevLett.110.135301"""
+Experimental values used are from Zurn 2013, https://doi.org/10.1103/PhysRevLett.110.135301. 
+One correction has been made to account for a probable typo in the manuscript; the resonance width 
+for (1,3) has been taken to -116.6 from -166.6."""
 
 SCATTERING_LENGTH_INDICES_LIST = [(1, 2), (1, 3), (2, 3)]
 SCATTERING_LENGTH_CENTERS_LIST_G = [832.18, 689.68, 809.76]
-SCATTERING_LENGTH_WIDTHS_LIST_G = [-262.3, -166.6, -200.2]
+SCATTERING_LENGTH_WIDTHS_LIST_G = [-262.3, -116.6, -200.2]
 SCATTERING_LENGTH_BACKGROUND_LENGTHS_LIST_A0 = [-1582, -1770, -1642]
 
 def get_scattering_length_feshbach_a0(state_indices, field_G):
