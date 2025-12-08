@@ -311,71 +311,58 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
     return beer_lambert_term + saturation_term
 
 
+
+#POLROT IMAGING
+
 @jit(nopython = True)
-def _python_polrot_image_function_with_target_offset(od_naught_vector, abs_A, abs_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
-                                        linewidth, intensity_A, intensity_B, intensity_sat, phase_sign):
-    fun_val = _compiled_python_polrot_image_function(od_naught_vector, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
-                                        intensity_A, intensity_B, intensity_sat, phase_sign)
-    fun_val[0] -= abs_A 
-    fun_val[1] -= abs_B
+def _python_polrot_image_function_with_target_offset(od_naught_vector, abs, norm_detunings, 
+                                        sat_intensities, phase_sign):
+    fun_val = _compiled_python_polrot_image_function(od_naught_vector, norm_detunings,
+                                        sat_intensities, phase_sign)
+    fun_val -= abs
     return fun_val
 
 """
 Polrot image function, implemented in python. More readable & accessible, but slower."""
 @jit(nopython = True)
-def _compiled_python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
-                                             intensity_A, intensity_B, intensity_sat, phase_sign):
-    od_naught_1, od_naught_2 = od_naughts 
-    od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
-    od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
-    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_A, intensity_sat) 
-    od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
-    phi_A = (-od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth ) * phase_sign
-    phi_B = (-od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth ) * phase_sign
-    abs_A = np.exp(-od_1A / 2.0) * np.exp(-od_2A / 2.0) 
-    abs_B = np.exp(-od_1B / 2.0) * np.exp(-od_2B / 2.0) 
-    result_A = 0.5 + np.square(abs_A) / 2.0 - abs_A * np.sin(phi_A) 
-    result_B = 0.5 + np.square(abs_B) / 2.0 - abs_B * np.sin(phi_B) 
-    return np.array([result_A, result_B])
+def _compiled_python_polrot_image_function(od_naughts, norm_detunings,
+                                             sat_intensities, phase_sign):
+    ods_imaged = od_naughts * od_lorentzian(norm_detunings, sat_intensities)
+    phi_values = -phase_sign * np.sum(norm_detunings * ods_imaged, axis = -1)
+    abs_values = np.exp(-0.5 * np.sum(ods_imaged, axis = -1))
+    results = 0.5 + np.square(abs_values) / 2.0 - abs_values * np.sin(phi_values) 
+    return results
 
-
-def python_polrot_image_function(od_naughts, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth,
-                                             intensity_A, intensity_B, intensity_sat, phase_sign):
-    od_naught_1, od_naught_2 = od_naughts 
-    od_1A = od_naught_1 * od_lorentzian(detuning_1A, linewidth, intensity_A, intensity_sat) 
-    od_1B = od_naught_1 * od_lorentzian(detuning_1B, linewidth, intensity_B, intensity_sat)
-    od_2A = od_naught_2 * od_lorentzian(detuning_2A, linewidth, intensity_A, intensity_sat) 
-    od_2B = od_naught_2 * od_lorentzian(detuning_2B, linewidth, intensity_B, intensity_sat)
-    phi_A = (-od_1A * detuning_1A / linewidth - od_2A * detuning_2A / linewidth ) * phase_sign
-    phi_B = (-od_1B * detuning_1B / linewidth - od_2B * detuning_2B / linewidth ) * phase_sign
-    abs_A = np.exp(-od_1A / 2.0) * np.exp(-od_2A / 2.0) 
-    abs_B = np.exp(-od_1B / 2.0) * np.exp(-od_2B / 2.0) 
-    result_A = 0.5 + np.square(abs_A) / 2.0 - abs_A * np.sin(phi_A) 
-    result_B = 0.5 + np.square(abs_B) / 2.0 - abs_B * np.sin(phi_B) 
-    return np.array([result_A, result_B])
-
+def python_polrot_image_function(od_naughts, norm_detunings,
+                                             sat_intensities, phase_sign):
+    ods_imaged = od_naughts * od_lorentzian(norm_detunings, sat_intensities)
+    phi_values = -phase_sign * np.sum(norm_detunings * ods_imaged, axis = -1)
+    abs_values = np.exp(-0.5 * np.sum(ods_imaged, axis = -1))
+    results = 0.5 + np.square(abs_values) / 2.0 - abs_values * np.sin(phi_values) 
+    return results
 
 @jit(nopython = True)
-def od_lorentzian(detuning, linewidth, intensity, intensity_sat):
-    return 1.0 / (1 + np.square(2 * detuning / linewidth) + intensity / intensity_sat)
+def od_lorentzian(norm_detuning, sat_intensity):
+    return 1.0 / (1 + np.square(2 * norm_detuning) + sat_intensity)
 
-def generate_polrot_lookup_table(detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None, res_cross_section = None, phase_sign = 1.0, 
+def generate_polrot_lookup_table(detunings, linewidth = None, res_cross_section = None, phase_sign = 1.0, 
                                 species = '6Li', num_samps = 1000, abs_min = 0.0, abs_max = 2.0):
     abs_values = np.linspace(abs_min, abs_max, num = num_samps, endpoint = True)
-    my_abs_A_grid = np.zeros((num_samps, num_samps)) 
-    my_abs_B_grid = np.zeros((num_samps, num_samps)) 
+    my_abs_A_grid = np.zeros((num_samps, num_samps))
+    my_abs_B_grid = np.zeros((num_samps, num_samps))
     for i, abs in enumerate(abs_values):
-        my_abs_A_grid[i] = abs * np.ones(num_samps) 
-        my_abs_B_grid[:, i] = abs * np.ones(num_samps) 
-    my_densities_1_grid, my_densities_2_grid = get_atom_density_from_polrot_images(my_abs_A_grid, my_abs_B_grid, detuning_1A, detuning_1B, detuning_2A, 
-                                                detuning_2B, linewidth = linewidth, res_cross_section = res_cross_section, phase_sign = phase_sign,
+        my_abs_A_grid[i] = abs * np.ones(num_samps)
+        my_abs_B_grid[:, i] = abs * np.ones(num_samps)
+    my_abs_grid = np.stack([my_abs_A_grid, my_abs_B_grid])
+    my_densities_1_grid, my_densities_2_grid = get_atom_density_from_polrot_images(my_abs_grid, detunings, 
+                                                linewidth = linewidth, res_cross_section = res_cross_section, phase_sign = phase_sign,
                                                  species = species)
     np.save("Polrot_Lookup_Table.npy", np.stack((my_densities_1_grid, my_densities_2_grid)))
     with open("Polrot_Lookup_Table_Params.txt", 'w') as f:
-        f.write("Detuning 1A: " + str(detuning_1A)) 
-        f.write("Detuning 1B: " + str(detuning_1B))
-        f.write("Detuning_2A: " + str(detuning_2A)) 
-        f.write("Detuning 2B: " + str(detuning_2B))
+        f.write("Detuning A1: " + str(detunings[0][0])) 
+        f.write("Detuning B1: " + str(detunings[1][0]))
+        f.write("Detuning_A2: " + str(detunings[0][1])) 
+        f.write("Detuning B2: " + str(detunings[1][1]))
         f.write("Absorption Min: " + str(abs_min)) 
         f.write("Absorption Max: " + str(abs_max)) 
         f.write("Number samples: " + str(num_samps))
@@ -431,80 +418,96 @@ def _lookup_pixel_polrot_densities(densities_1_lookup, densities_2_lookup, abs_A
     return (corrected_density_1, corrected_density_2)
 
 
-def get_atom_density_from_polrot_images(abs_image_A, abs_image_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
+"""
+Given a set of absorption images and detunings, reconstruct atom densities from polarization rotation imaging.
+
+Parameters: 
+
+abs_images: An (N, M, P) array of N 2D images, each of dimensions (M, P)
+detunings: An (N, N) array of detuning values, with the (i, j) entry denoting the detuning of the jth state 
+    from the light used to take the ith image. 
+res_cross_section: The resonant cross section used to convert optical densities to atomic densities. Defaults to 6Li cycling D2. 
+cross_section_imaging_geometry_factor: A correction to the resonant cross section from imaging geometry.
+sat_intensities: an (N, M, P) array of imaging light intensities at the atoms, in units of saturation intensity. Defaults to 0.0.
+phase_sign: The appropriate sign for the polrot imaging phase shift, set by experimental config.
+"""
+
+def get_atom_density_from_polrot_images(abs_images, detunings, linewidth = None,
                                         res_cross_section = None, cross_section_imaging_geometry_factor = 1.0, 
-                                        intensities_A = None, intensities_B = None, intensities_sat = None, phase_sign = 1.0, 
+                                        sat_intensities = None,  phase_sign = 1.0, 
                                         species = '6Li'):
+    number_images = abs_images.shape[0]
+    image_shape = abs_images.shape[1:]
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
+    norm_detunings = detunings / linewidth
     if not res_cross_section:
         res_cross_section = _get_res_cross_section_from_species(species)
     geometry_adjusted_cross_section = res_cross_section * cross_section_imaging_geometry_factor
-    if ((intensities_A is None or intensities_B is None or intensities_sat is None)
-        and not (intensities_A is None and intensities_B is None and intensities_sat is None)):
-        raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
+    if sat_intensities is None: 
+        sat_intensities = np.zeros(abs_images.shape)
     if(np.abs(phase_sign) != 1.0):
         raise ValueError("The phase sign must be +-1.")
-    atom_densities_list_1 = []
-    atom_densities_list_2 = []
-    if intensities_A is None:
-        intensities_A = np.zeros(abs_image_A.shape)
-        intensities_B = np.zeros(abs_image_A.shape)
-        intensities_sat = np.inf * np.ones(abs_image_A.shape)
-    else:
-        broadcast_intensity_shape = abs_image_A.shape
-        intensities_A = np.broadcast_to(intensities_A, broadcast_intensity_shape)
-        intensities_B = np.broadcast_to(intensities_B, broadcast_intensity_shape)
-        intensities_sat = np.broadcast_to(intensities_sat, broadcast_intensity_shape)
-    map_iterator = zip(abs_image_A.flatten(), abs_image_B.flatten(), generator_factory(detuning_1A), 
-                        generator_factory(detuning_1B), generator_factory(detuning_2A), generator_factory(detuning_2B), 
-                        generator_factory(linewidth), generator_factory(geometry_adjusted_cross_section), intensities_A.flatten(), 
-                        intensities_B.flatten(), intensities_sat.flatten(), generator_factory(phase_sign))
+    
+    #Move the image axis to the end, then flatten the 2D pixel coordinate axes
+    abs_images_moved_axis = np.moveaxis(abs_images, 0, -1) 
+    iterator_reshaped_abs_images = np.reshape(abs_images_moved_axis, (-1, number_images))
+    #Saturation gets an extra axis on the end for correct broadcasting against state index
+    sat_intensities_moved_axis = np.moveaxis(sat_intensities, 0, -1)
+    iterator_reshaped_sat_intensities = np.reshape(sat_intensities_moved_axis, (-1, number_images, 1))
+    
+    flattened_atom_densities_list = []
+
+    map_iterator = zip(iterator_reshaped_abs_images, generator_factory(norm_detunings), 
+                         generator_factory(geometry_adjusted_cross_section), 
+                          iterator_reshaped_sat_intensities,  generator_factory(phase_sign), 
+                          generator_factory(np.zeros(number_images)))
+    #TODO: Paralellize this. For now, it's just written in a parallelizable form. 
     for itr_val in map_iterator:
-        atom_density_1, atom_density_2 = parallelizable_polrot_density_function(*itr_val)
-        atom_densities_list_1.append(atom_density_1)
-        atom_densities_list_2.append(atom_density_2)
-    atom_densities_array_1 = np.reshape(atom_densities_list_1, abs_image_A.shape)
-    atom_densities_array_2 = np.reshape(atom_densities_list_2, abs_image_A.shape)
-    return (atom_densities_array_1, atom_densities_array_2)
+        atom_densities = parallelizable_polrot_density_function(*itr_val)
+        flattened_atom_densities_list.append(atom_densities)
+    flattened_atom_densities_array = np.array(flattened_atom_densities_list) 
+    reshaped_atom_densities_array = np.reshape(flattened_atom_densities_array, (*image_shape, number_images))
+    final_atom_densities_array = np.moveaxis(reshaped_atom_densities_array, -1, 0)
+
+    return final_atom_densities_array 
 
 def generator_factory(value):
     while True:
         yield value
 
-def parallelizable_polrot_density_function(absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                    on_resonance_cross_section, intensity_A, intensity_B, intensity_sat, phase_sign):
-        solver_extra_args = (absorption_A, absorption_B, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                                intensity_A, intensity_B, intensity_sat, phase_sign)
-        root = fsolve(_python_polrot_image_function_with_target_offset, [0, 0], args = solver_extra_args)
-        od_naught_1, od_naught_2 = root 
-        atom_density_1 = od_naught_1 / on_resonance_cross_section 
-        atom_density_2 = od_naught_2 / on_resonance_cross_section 
-        return (atom_density_1, atom_density_2) 
-
+def parallelizable_polrot_density_function(absorptions, norm_detunings, 
+                                    on_resonance_cross_section, sat_intensities, phase_sign, init_guess):
+        solver_extra_args = (absorptions, norm_detunings,
+                                sat_intensities, phase_sign)
+        root = fsolve(_python_polrot_image_function_with_target_offset, init_guess, args = solver_extra_args)
+        od_naughts = root
+        atom_densities = od_naughts / on_resonance_cross_section
+        return atom_densities
 
 #Inverse function for simulating polrot images from atom density. Mostly for testing/debugging purposes.
-def get_polrot_images_from_atom_density(densities_1, densities_2, detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth = None,
+def get_polrot_images_from_atom_density(densities, detunings, linewidth = None,
                                         res_cross_section = None, cross_section_imaging_geometry_factor = 1.0,
-                                        intensities_A = None, intensities_B = None, intensities_sat = None,
-                                        phase_sign = 1.0, species = '6Li'):
-    if not linewidth:
+                                        sat_intensities = None, phase_sign = 1.0, species = '6Li'):
+    if linewidth is None:
         linewidth = _get_linewidth_from_species(species)
-    if not res_cross_section:
+    if res_cross_section is None:
         res_cross_section = _get_res_cross_section_from_species(species)
     geometry_adjusted_cross_section = res_cross_section * cross_section_imaging_geometry_factor
-    if (intensities_A or intensities_B or intensities_sat) and not (intensities_A and intensities_B and intensities_sat):
-        raise ValueError("Either specify the intensities and saturation intensity or don't; no mixing.")
-    if not intensities_A:
-        intensities_A = np.zeros(densities_1.shape)
-        intensities_B = np.zeros(densities_2.shape)
-        intensities_sat = np.inf * np.ones(densities_1.shape)
-    od_naught_1 = densities_1 * geometry_adjusted_cross_section
-    od_naught_2 = densities_2 * geometry_adjusted_cross_section
-    return python_polrot_image_function(np.array([od_naught_1, od_naught_2]), detuning_1A, detuning_1B, detuning_2A, detuning_2B, linewidth, 
-                            intensities_A, intensities_B, intensities_sat, phase_sign)
+    od_naughts = densities * geometry_adjusted_cross_section
+    #Reshape od_naughts and sat_intensities so that the last two axes broadcast against norm_detunings
+    od_naughts_moved_axis = np.moveaxis(od_naughts, 0, -1)
+    od_naughts_reshaped = np.expand_dims(od_naughts_moved_axis, axis = -2)
 
-
+    if sat_intensities is None:
+        sat_intensities = np.zeros(densities.shape)
+    sat_intensities_moved_axis = np.moveaxis(sat_intensities, 0, -1)
+    sat_intensities_reshaped = np.expand_dims(sat_intensities_moved_axis, axis = -1)
+    norm_detunings = detunings / linewidth
+    results =  python_polrot_image_function(od_naughts_reshaped, norm_detunings, 
+                            sat_intensities_reshaped, phase_sign)
+    results_moved_axis = np.moveaxis(results, -1, 0)
+    return results_moved_axis
 
 """
 Given an image, return an angle to rotate it into the xy plane.

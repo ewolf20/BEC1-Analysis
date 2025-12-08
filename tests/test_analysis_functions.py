@@ -487,15 +487,20 @@ def test_get_atom_densities_top_polrot():
         frequency_B = run_param_values_polrot["ImagFreq2"]
         resonance_1 = experiment_param_values_polrot["state_1_unitarity_res_freq_MHz"]
         resonance_2 = experiment_param_values_polrot["state_3_unitarity_res_freq_MHz"]
-        detuning_1A = imaging_multiplier * (frequency_A - resonance_1) + hf_lock_offset
-        detuning_1B = imaging_multiplier * (frequency_B - resonance_1) + hf_lock_offset
-        detuning_2A = imaging_multiplier * (frequency_A - resonance_2) + hf_lock_offset 
-        detuning_2B = imaging_multiplier * (frequency_B - resonance_2) + hf_lock_offset 
+        detuning_A1 = imaging_multiplier * (frequency_A - resonance_1) + hf_lock_offset
+        detuning_B1 = imaging_multiplier * (frequency_B - resonance_1) + hf_lock_offset
+        detuning_A2 = imaging_multiplier * (frequency_A - resonance_2) + hf_lock_offset 
+        detuning_B2 = imaging_multiplier * (frequency_B - resonance_2) + hf_lock_offset 
+        detunings = np.array([
+            [detuning_A1, detuning_A2],
+            [detuning_B1, detuning_B2]
+        ])
         #First do it without saturation 
         single_pixel_abs_array = np.array([1.0 / np.e])
+        single_pixel_abs_array_stack = np.stack((single_pixel_abs_array, single_pixel_abs_array))
         single_pixel_polrot_return_arrays = image_processing_functions.get_atom_density_from_polrot_images(
-            single_pixel_abs_array, single_pixel_abs_array, 
-            detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
+            single_pixel_abs_array_stack, 
+            detunings, 
             phase_sign = experiment_param_values_polrot["polrot_phase_sign"]
         )
         single_pixel_polrot_density_1, single_pixel_polrot_density_2 = single_pixel_polrot_return_arrays
@@ -519,12 +524,12 @@ def test_get_atom_densities_top_polrot():
         saturation_counts = analysis_functions.get_saturation_counts_top(my_measurement, my_run, apply_ramsey_fudge = True)
         intensity_A = BASE_LIGHT_LEVEL
         intensity_B = BASE_LIGHT_LEVEL
+        sat_intensities = np.stack((intensity_A, intensity_B)) / saturation_counts
         single_pixel_polrot_return_arrays_saturated = image_processing_functions.get_atom_density_from_polrot_images(
-            single_pixel_abs_array, single_pixel_abs_array, 
-            detuning_1A, detuning_1B, detuning_2A, detuning_2B, 
+            single_pixel_abs_array_stack, 
+            detunings, 
             phase_sign = experiment_param_values_polrot["polrot_phase_sign"],
-            intensities_A = intensity_A, intensities_B = intensity_B, 
-            intensities_sat = saturation_counts
+            sat_intensities = sat_intensities
         )
         single_pixel_polrot_density_1_saturated, single_pixel_polrot_density_2_saturated = single_pixel_polrot_return_arrays_saturated
         expected_polrot_density_1_saturated = generate_default_image_density_pattern(crop_to_roi = True, density_value = single_pixel_polrot_density_1_saturated[0])

@@ -244,10 +244,14 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     nominal_frequency_B = my_run.parameters["ImagFreq2"]
     frequency_multiplier = my_measurement.experiment_parameters["li_hf_freq_multiplier"]
     hf_lock_frequency_adjustment = _get_hf_lock_frequency_adjustment_from_b_field_condition(my_measurement, b_field_condition)
-    detuning_1A = frequency_multiplier * (nominal_frequency_A - first_state_resonance_frequency) + hf_lock_frequency_adjustment
-    detuning_1B = frequency_multiplier * (nominal_frequency_B - first_state_resonance_frequency) + hf_lock_frequency_adjustment
-    detuning_2A = frequency_multiplier * (nominal_frequency_A - second_state_resonance_frequency) + hf_lock_frequency_adjustment
-    detuning_2B = frequency_multiplier * (nominal_frequency_B - second_state_resonance_frequency) + hf_lock_frequency_adjustment
+    detuning_A1 = frequency_multiplier * (nominal_frequency_A - first_state_resonance_frequency) + hf_lock_frequency_adjustment
+    detuning_B1 = frequency_multiplier * (nominal_frequency_B - first_state_resonance_frequency) + hf_lock_frequency_adjustment
+    detuning_A2 = frequency_multiplier * (nominal_frequency_A - second_state_resonance_frequency) + hf_lock_frequency_adjustment
+    detuning_B2 = frequency_multiplier * (nominal_frequency_B - second_state_resonance_frequency) + hf_lock_frequency_adjustment
+    detunings = np.array([
+        [detuning_A1, detuning_A2],
+        [detuning_B1, detuning_B2]]
+    )
     top_cross_section_geometry_factor = my_measurement.experiment_parameters["li_top_sigma_multiplier"]
     polrot_phase_sign = my_measurement.experiment_parameters["polrot_phase_sign"]
     image_array_A = get_raw_pixels_top_A(my_measurement, my_run, memmap = True)
@@ -259,28 +263,31 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
     abs_image_B = image_processing_functions.get_absorption_image(image_array_B, ROI = my_measurement.measurement_parameters["ROI"], 
                                                     norm_box_coordinates=my_measurement.measurement_parameters["norm_box"], 
                                                     rebin_pixel_num = rebin_pixel_num)
+    
+    abs_images = np.stack((abs_image_A, abs_image_B))
+
     if not use_saturation:        
-        intensities_A = None 
-        intensities_B = None 
-        intensities_sat = None
+        sat_intensities = None
     else:
         intensities_sat = get_saturation_counts_top(my_measurement, my_run)
-        intensities_A = image_processing_functions.get_without_atoms_counts(image_array_A, 
+        raw_intensities_A = image_processing_functions.get_without_atoms_counts(image_array_A, 
                                                                 ROI = my_measurement.measurement_parameters["ROI"], 
                                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
                                                                 rebin_pixel_num = rebin_pixel_num)
-        intensities_B = image_processing_functions.get_without_atoms_counts(image_array_B, 
+        raw_intensities_B = image_processing_functions.get_without_atoms_counts(image_array_B, 
                                                                 ROI = my_measurement.measurement_parameters["ROI"], 
                                                                 norm_box_coordinates = my_measurement.measurement_parameters["norm_box"], 
                                                                 rebin_pixel_num = rebin_pixel_num)
-        if average_saturation:
-            intensities_A = np.average(intensities_A)
-            intensities_B = np.average(intensities_B)
-    atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_image_A, abs_image_B,
-                                                                detuning_1A, detuning_1B, detuning_2A, detuning_2B, phase_sign = polrot_phase_sign, 
+        raw_intensities = np.stack((raw_intensities_A, raw_intensities_B))
+        if average_saturation: 
+            raw_intensities = np.average(raw_intensities, axis = (1, 2), keepdims = True) * np.ones(raw_intensities.shape)
+        sat_intensities = raw_intensities / intensities_sat
+        print(sat_intensities.shape)
+
+    atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_images,
+                                                                detunings, phase_sign = polrot_phase_sign, 
                                                                 cross_section_imaging_geometry_factor = top_cross_section_geometry_factor,
-                                                                intensities_A = intensities_A, intensities_B = intensities_B,  
-                                                                intensities_sat = intensities_sat)
+                                                                sat_intensities = sat_intensities)
     atom_density_first = atom_density_first * first_state_fudge
     atom_density_second = atom_density_second * second_state_fudge
     return (atom_density_first, atom_density_second)
