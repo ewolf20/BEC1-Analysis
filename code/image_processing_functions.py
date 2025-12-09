@@ -314,14 +314,6 @@ def get_atom_density_from_stack_sat_beer_lambert(image_stack, od_image, detuning
 
 #POLROT IMAGING
 
-@jit(nopython = True)
-def _python_polrot_image_function_with_target_offset(od_naught_vector, abs, norm_detunings, 
-                                        sat_intensities, phase_sign):
-    fun_val = _compiled_python_polrot_image_function(od_naught_vector, norm_detunings,
-                                        sat_intensities, phase_sign)
-    fun_val -= abs
-    return fun_val
-
 """
 Polrot image function, implemented in python. More readable & accessible, but slower."""
 @jit(nopython = True)
@@ -361,7 +353,7 @@ def generate_polrot_lookup_table(detunings, linewidth = None, res_cross_section 
     with open("Polrot_Lookup_Table_Params.txt", 'w') as f:
         f.write("Detuning A1: " + str(detunings[0][0])) 
         f.write("Detuning B1: " + str(detunings[1][0]))
-        f.write("Detuning_A2: " + str(detunings[0][1])) 
+        f.write("Detuning A2: " + str(detunings[0][1])) 
         f.write("Detuning B2: " + str(detunings[1][1]))
         f.write("Absorption Min: " + str(abs_min)) 
         f.write("Absorption Max: " + str(abs_max)) 
@@ -424,20 +416,56 @@ Given a set of absorption images and detunings, reconstruct atom densities from 
 Parameters: 
 
 abs_images: An (N, M, P) array of N 2D images, each of dimensions (M, P)
-detunings: An (N, N) array of detuning values, with the (i, j) entry denoting the detuning of the jth state 
-    from the light used to take the ith image. 
+detunings: An (N, N') array of detuning values, with the (i, j) entry denoting the detuning of the jth state 
+    from the light used to take the ith image. Normally N' = N, but see constraint, below.
 res_cross_section: The resonant cross section used to convert optical densities to atomic densities. Defaults to 6Li cycling D2. 
 cross_section_imaging_geometry_factor: A correction to the resonant cross section from imaging geometry.
 sat_intensities: an (N, M, P) array of imaging light intensities at the atoms, in units of saturation intensity. Defaults to 0.0.
 phase_sign: The appropriate sign for the polrot imaging phase shift, set by experimental config.
+
+constraint: If not None, then a length-N or (Q, N) array which encodes a constraint that allows additional densities to be extracted 
+from N absorption images. See additional notes, below. 
+
+Returns: An (N', M, P) array of N' 2D atom density profiles. 
+
+Notes: 
+
+If constraint is specified, then the N absorption images are combined with Q constraints to extract a total of N' = N + Q atomic 
+densities. The indices for the detunings for these additional densities are appended to the second axis of detunings, after the unconstrained 
+densities. The constrained densities are calculated from the constraint as follows: 
+
+N_constraint = np.sum(constraint * unconstrained_densities, axis = -1)
+
+
+As an example, if we had two images, A and B, and wished to extract densities 1, 2, 3 with the constraint 
+N_2 = N_3 - N_1 then we would pass: 
+
+detunings = [
+    [delta_A1, delta_A3, delta_A2], 
+    [delta_B1, delta_B3, delta_B2]
+    ]
+
+constraint = [-1, 1]
+
 """
 
 def get_atom_density_from_polrot_images(abs_images, detunings, linewidth = None,
                                         res_cross_section = None, cross_section_imaging_geometry_factor = 1.0, 
-                                        sat_intensities = None,  phase_sign = 1.0, 
+                                        sat_intensities = None,  phase_sign = 1.0, constraint = None,
                                         species = '6Li'):
     number_images = abs_images.shape[0]
     image_shape = abs_images.shape[1:]
+
+    if constraint is None: 
+        constraint_increment = 0
+    elif len(constraint.shape) == 1:
+        constraint_increment = 1 
+    else:
+        constraint_increment = constraint.shape[0]
+
+    if not detunings.shape == (number_images, number_images + constraint_increment):
+        raise ValueError("Detunings incorrectly specified - see docs.")
+
     if not linewidth:
         linewidth = _get_linewidth_from_species(species)
     norm_detunings = detunings / linewidth
@@ -458,32 +486,79 @@ def get_atom_density_from_polrot_images(abs_images, detunings, linewidth = None,
     
     flattened_atom_densities_list = []
 
-    map_iterator = zip(iterator_reshaped_abs_images, generator_factory(norm_detunings), 
-                         generator_factory(geometry_adjusted_cross_section), 
-                          iterator_reshaped_sat_intensities,  generator_factory(phase_sign), 
-                          generator_factory(np.zeros(number_images)))
-    #TODO: Paralellize this. For now, it's just written in a parallelizable form. 
-    for itr_val in map_iterator:
-        atom_densities = parallelizable_polrot_density_function(*itr_val)
-        flattened_atom_densities_list.append(atom_densities)
-    flattened_atom_densities_array = np.array(flattened_atom_densities_list) 
-    reshaped_atom_densities_array = np.reshape(flattened_atom_densities_array, (*image_shape, number_images))
+    def generator_factory(value):
+        while True:
+            yield value
+
+    if constraint is None:
+        map_iterator = zip(iterator_reshaped_abs_images, generator_factory(norm_detunings), 
+                            generator_factory(geometry_adjusted_cross_section), 
+                            iterator_reshaped_sat_intensities,  generator_factory(phase_sign), 
+                            generator_factory(np.zeros(number_images)))
+        #TODO: Paralellize this. For now, it's just written in a parallelizable form. 
+        for itr_val in map_iterator:
+            atom_densities = parallelizable_polrot_density_function(*itr_val)
+            flattened_atom_densities_list.append(atom_densities)
+        flattened_atom_densities_array = np.array(flattened_atom_densities_list) 
+        reshaped_atom_densities_array = np.reshape(flattened_atom_densities_array, (*image_shape, number_images))
+    else:
+        map_iterator = zip(iterator_reshaped_abs_images, generator_factory(constraint), generator_factory(norm_detunings), 
+                            generator_factory(geometry_adjusted_cross_section), 
+                            iterator_reshaped_sat_intensities,  generator_factory(phase_sign), 
+                            generator_factory(np.zeros(number_images)))
+        #TODO: Paralellize this. For now, it's just written in a parallelizable form. 
+        for itr_val in map_iterator:
+            atom_densities = parallelizable_polrot_density_function_constrained(*itr_val)
+            flattened_atom_densities_list.append(atom_densities)
+        flattened_atom_densities_array = np.array(flattened_atom_densities_list)
+        reshaped_atom_densities_array_partial = np.reshape(flattened_atom_densities_array, (*image_shape, number_images))
+        reshaped_atom_densities_array = np.append(
+            reshaped_atom_densities_array_partial, 
+            np.sum(reshaped_atom_densities_array_partial * constraint, axis = -1, keepdims = True), 
+            axis = -1
+        )
     final_atom_densities_array = np.moveaxis(reshaped_atom_densities_array, -1, 0)
-
     return final_atom_densities_array 
-
-def generator_factory(value):
-    while True:
-        yield value
 
 def parallelizable_polrot_density_function(absorptions, norm_detunings, 
                                     on_resonance_cross_section, sat_intensities, phase_sign, init_guess):
-        solver_extra_args = (absorptions, norm_detunings,
-                                sat_intensities, phase_sign)
-        root = fsolve(_python_polrot_image_function_with_target_offset, init_guess, args = solver_extra_args)
-        od_naughts = root
-        atom_densities = od_naughts / on_resonance_cross_section
-        return atom_densities
+    solver_extra_args = (absorptions, norm_detunings,
+                            sat_intensities, phase_sign)
+    root = fsolve(_python_polrot_image_function_with_target_offset, init_guess, args = solver_extra_args)
+    od_naughts = root
+    atom_densities = od_naughts / on_resonance_cross_section
+    return atom_densities
+
+
+@jit(nopython = True)
+def _python_polrot_image_function_with_target_offset(od_naught_vector, abs, norm_detunings, 
+                                        sat_intensities, phase_sign):
+    fun_val = _compiled_python_polrot_image_function(od_naught_vector, norm_detunings,
+                                        sat_intensities, phase_sign)
+    return fun_val - abs
+
+def parallelizable_polrot_density_function_constrained(absorptions, constraint, norm_detunings, 
+                                                       on_resonance_cross_section, sat_intensities, phase_sign, 
+                                                       init_guess):
+    solver_extra_args = (constraint, absorptions, norm_detunings, sat_intensities, 
+                         phase_sign)
+    root = fsolve(_python_polrot_image_function_with_target_offset_constrained, init_guess, args = solver_extra_args)
+    od_naughts = root
+    atom_densities = od_naughts / on_resonance_cross_section
+    return atom_densities
+
+
+@jit(nopython = True)
+def _python_polrot_image_function_with_target_offset_constrained(od_naught_vector, constraint, abs, norm_detunings, 
+                                                                 sat_intensities, phase_sign): 
+    extended_od_naught_vector = np.append(od_naught_vector, np.sum(constraint * od_naught_vector, axis = -1))
+    fun_val = _compiled_python_polrot_image_function(extended_od_naught_vector, norm_detunings, 
+                                                     sat_intensities, phase_sign)
+    return fun_val - abs
+
+    
+
+
 
 #Inverse function for simulating polrot images from atom density. Mostly for testing/debugging purposes.
 def get_polrot_images_from_atom_density(densities, detunings, linewidth = None,
