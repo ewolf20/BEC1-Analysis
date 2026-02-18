@@ -211,17 +211,15 @@ def test_get_atom_density_absorption():
     assert np.isclose(np.sum(atom_number_image_pixel_averaged), np.sum(atom_number_image_full) / 4, rtol = 2e-1)
 
 
-POLROT_DETUNING_1A = 5
-POLROT_DETUNING_2A = -10
-POLROT_DETUNING_1B = 10
-POLROT_DETUNING_2B = -5
+POLROT_DETUNING_A1 = 5
+POLROT_DETUNING_A2 = -10
+POLROT_DETUNING_B1 = 10
+POLROT_DETUNING_B2 = -5
 
 def _generate_fake_polrot_images():
     IMAGE_PIXEL_SIZE = 300
     SIGMA_1 = 2.0 
     SIGMA_2 = 1.3
-    li_cross_section = image_processing_functions._get_res_cross_section_from_species('6Li')
-    li_linewidth = image_processing_functions._get_linewidth_from_species('6Li')
     fake_image_x = np.linspace(-5, 5, IMAGE_PIXEL_SIZE)
     fake_image_y = np.linspace(-5, 5, IMAGE_PIXEL_SIZE)
     fake_image_x_grid, fake_image_y_grid = np.meshgrid(fake_image_x, fake_image_y) 
@@ -229,8 +227,14 @@ def _generate_fake_polrot_images():
         return np.exp(-(np.square(x) + np.square(y)) / (2 * np.square(sigma))) 
     fake_density_1 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_1)
     fake_density_2 = gaussian_density_function(fake_image_x_grid, fake_image_y_grid, SIGMA_2)
-    return image_processing_functions.get_polrot_images_from_atom_density(fake_density_1, fake_density_2, POLROT_DETUNING_1A, POLROT_DETUNING_1B,
-                                                        POLROT_DETUNING_2A, POLROT_DETUNING_2B, phase_sign = -1.0)
+    fake_densities = np.stack((fake_density_1, fake_density_2))
+    detunings = np.array(
+        [
+            [POLROT_DETUNING_A1, POLROT_DETUNING_A2],
+            [POLROT_DETUNING_B1, POLROT_DETUNING_B2]
+        ]
+    )
+    return image_processing_functions.get_polrot_images_from_atom_density(fake_densities, detunings, phase_sign = -1.0)
 """
 Makes sure that the polrot _generation_, and thus the base polrot image function, hasn't changed"""
 def test_polrot_images_function():
@@ -245,10 +249,10 @@ def test_python_polrot_image_function():
     REF_OD_1 = 1.2 
     REF_OD_2 = 3.6
     REF_LINEWIDTH = 3 
-    REF_DETUNING_1A = 5
-    REF_DETUNING_1B = 7
-    REF_DETUNING_2A = 9
-    REF_DETUNING_2B = 11 
+    REF_DETUNING_A1 = 5
+    REF_DETUNING_B1 = 7
+    REF_DETUNING_A2 = 9
+    REF_DETUNING_B2 = 11 
     REF_INTENSITY_A = 0.7
     REF_INTENSITY_B = 1.6
     REF_INTENSITY_SAT = 2 
@@ -257,9 +261,19 @@ def test_python_polrot_image_function():
     EXPECTED_RESULT_A = 1.3071046
     EXPECTED_RESULT_B = 1.2745582
 
+    detunings = np.array([
+        [REF_DETUNING_A1, REF_DETUNING_A2],
+        [REF_DETUNING_B1, REF_DETUNING_B2]
+    ])
+
+    norm_detunings = detunings / REF_LINEWIDTH
+    ref_ods = np.stack((REF_OD_1, REF_OD_2))
+    ref_ods_reshaped = np.expand_dims(ref_ods, axis = 0)
+    sat_intensities = np.stack((REF_INTENSITY_A, REF_INTENSITY_B)) / REF_INTENSITY_SAT
+    sat_intensities_reshaped = np.expand_dims(sat_intensities, axis = 1)
+
     calculated_result_A, calculated_result_B = image_processing_functions.python_polrot_image_function(
-                    (REF_OD_1, REF_OD_2), REF_DETUNING_1A, REF_DETUNING_1B, REF_DETUNING_2A, REF_DETUNING_2B, 
-                    REF_LINEWIDTH, REF_INTENSITY_A, REF_INTENSITY_B, REF_INTENSITY_SAT, REF_PHASE_SIGN
+                    ref_ods_reshaped, norm_detunings, sat_intensities_reshaped, REF_PHASE_SIGN
     )
     assert np.isclose(EXPECTED_RESULT_A, calculated_result_A) 
     assert np.isclose(EXPECTED_RESULT_B, calculated_result_B)
@@ -268,50 +282,63 @@ def test_python_and_jit_polrot_image_function_agreement():
     REF_OD_1 = 1.2 
     REF_OD_2 = 3.6
     REF_LINEWIDTH = 3 
-    REF_DETUNING_1A = 5
-    REF_DETUNING_1B = 7
-    REF_DETUNING_2A = 9
-    REF_DETUNING_2B = 11 
+    REF_DETUNING_A1 = 5
+    REF_DETUNING_B1 = 7
+    REF_DETUNING_A2 = 9
+    REF_DETUNING_B2 = 11 
     REF_INTENSITY_A = 0.7
     REF_INTENSITY_B = 1.6
     REF_INTENSITY_SAT = 2 
     REF_PHASE_SIGN = 1.0
+    
+    ref_ods = np.stack((REF_OD_1, REF_OD_2))
+
+    detunings = np.array([
+        [REF_DETUNING_A1, REF_DETUNING_A2], 
+        [REF_DETUNING_B1, REF_DETUNING_B2]
+    ])
+
+    norm_detunings = detunings / REF_LINEWIDTH
+    sat_intensities = np.stack((REF_INTENSITY_A, REF_INTENSITY_B)) / REF_INTENSITY_SAT
+    sat_intensities_reshaped = np.expand_dims(sat_intensities, axis = 1)
 
     calculated_result_A_python, calculated_result_B_python = image_processing_functions.python_polrot_image_function(
-                    (REF_OD_1, REF_OD_2), REF_DETUNING_1A, REF_DETUNING_1B, REF_DETUNING_2A, REF_DETUNING_2B, 
-                    REF_LINEWIDTH, REF_INTENSITY_A, REF_INTENSITY_B, REF_INTENSITY_SAT, REF_PHASE_SIGN
-    )
+                    ref_ods, norm_detunings, sat_intensities_reshaped, REF_PHASE_SIGN)
 
     calculated_result_A_compiled, calculated_result_B_compiled = image_processing_functions._compiled_python_polrot_image_function(
-                    (REF_OD_1, REF_OD_2), REF_DETUNING_1A, REF_DETUNING_1B, REF_DETUNING_2A, REF_DETUNING_2B, 
-                    REF_LINEWIDTH, REF_INTENSITY_A, REF_INTENSITY_B, REF_INTENSITY_SAT, REF_PHASE_SIGN
-    )
+                    ref_ods, norm_detunings, sat_intensities_reshaped, REF_PHASE_SIGN)
 
 
 def test_get_atom_density_from_polrot_images():
-    fake_image_A, fake_image_B = _generate_fake_polrot_images()
-    reconstructed_density_1, reconstructed_density_2 = image_processing_functions.get_atom_density_from_polrot_images(fake_image_A, fake_image_B, 
-                                                                                                                    POLROT_DETUNING_1A, POLROT_DETUNING_1B,
-                                                                                                                    POLROT_DETUNING_2A, POLROT_DETUNING_2B,
+    fake_images = _generate_fake_polrot_images()
+    detunings = np.array([
+        [POLROT_DETUNING_A1, POLROT_DETUNING_A2],
+        [POLROT_DETUNING_B1, POLROT_DETUNING_B2]
+    ])
+    reconstructed_density_1, reconstructed_density_2 = image_processing_functions.get_atom_density_from_polrot_images(fake_images, 
+                                                                                                                    detunings,
                                                                                                                     phase_sign = -1.0)
     saved_density_1 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_1.npy"))
     saved_density_2 = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Fake_Polrot_Atom_Density_2.npy"))
     assert np.all(np.isclose(saved_density_1, reconstructed_density_1))
     assert np.all(np.isclose(saved_density_2, reconstructed_density_2))
     reconstructed_geo_adjusted_density_1, reconstructed_geo_adjusted_density_2 = image_processing_functions.get_atom_density_from_polrot_images(
-                                                                            fake_image_A, fake_image_B, POLROT_DETUNING_1A, POLROT_DETUNING_1B, 
-                                                                            POLROT_DETUNING_2A, POLROT_DETUNING_2B, phase_sign = -1.0, 
+                                                                            fake_images, detunings, phase_sign = -1.0, 
                                                                             cross_section_imaging_geometry_factor = 0.5)
     assert np.all(np.isclose(2 * saved_density_1, reconstructed_geo_adjusted_density_1))
     assert np.all(np.isclose(2 * saved_density_2, reconstructed_geo_adjusted_density_2))
 
 
 def test_generate_polrot_lookup_table():
+    detunings = np.array([
+        [POLROT_DETUNING_A1, POLROT_DETUNING_A2],
+        [POLROT_DETUNING_B1, POLROT_DETUNING_B2]
+    ])
     try:
-        image_processing_functions.generate_polrot_lookup_table(POLROT_DETUNING_1A, POLROT_DETUNING_1B, POLROT_DETUNING_2A, POLROT_DETUNING_2B, phase_sign = -1.0,
+        image_processing_functions.generate_polrot_lookup_table(detunings, phase_sign = -1.0,
                                                             num_samps = 100)
         generated_array = np.load("Polrot_Lookup_Table.npy") 
-        stored_array = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Polrot_Lookup_Table_Small.npy")) 
+        stored_array = np.load(os.path.join(RESOURCES_DIRECTORY_PATH, "Polrot_Lookup_Table_Small.npy"))
         assert np.all(np.isclose(generated_array, stored_array, rtol = 1e-3, atol = 1e-2))
     finally:
         os.remove("Polrot_Lookup_Table.npy") 
