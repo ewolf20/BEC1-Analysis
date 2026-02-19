@@ -682,3 +682,22 @@ def polaron_eos_minority_to_majority_ratio(betamu_up, betamu_down):
 def polaron_eos_pressure_to_ideal_majority_pressure_ratio(betamu_up, betamu_down):
     prefactor = 10 / np.cbrt(36 * np.pi)
     return prefactor * polaron_f(betamu_up, betamu_down) / np.power(polaron_f_once_deriv_up(betamu_up, betamu_down), 5/3)
+
+
+#Transport coefficient functions 
+#Expression and values taken from https://doi.org/10.1103/PhysRevResearch.6.L042021
+
+TRANSPORT_ALPHA_3_2 = (45 * np.power(np.pi, 3/2)) / (64 * np.sqrt(2))
+TRANSPORT_ALPHA_ETA = 0.45 
+TRANSPORT_ALPHA_KAPPA = 0.22
+
+#Given a reduced temperature T_over_TF, return the value of nu = eta / rho in 
+#units of hbar/m for the unitary balanced gas
+def balanced_nu_hbar_over_m(T_over_TF):
+    return TRANSPORT_ALPHA_3_2 * np.power(T_over_TF, 3/2) + TRANSPORT_ALPHA_ETA
+
+#As above, but return the value of kappa', defined as:
+#kappa' = (m k_B / rho) kappa
+#This combination is chosen such that the units are also hbar/m
+def balanced_kappa_prime_hbar_over_m(T_over_TF): 
+    return 15/4 * (TRANSPORT_ALPHA_3_2 * np.power(T_over_TF, 3/2) + TRANSPORT_ALPHA_KAPPA)
