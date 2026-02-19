@@ -291,7 +291,6 @@ def get_atom_densities_top_polrot(my_measurement, my_run, first_state_index = 1,
         if average_saturation: 
             raw_intensities = np.average(raw_intensities, axis = (1, 2), keepdims = True) * np.ones(raw_intensities.shape)
         sat_intensities = raw_intensities / intensities_sat
-        print(sat_intensities.shape)
 
     if constraint is None:
         atom_density_first, atom_density_second = image_processing_functions.get_atom_density_from_polrot_images(abs_images,
