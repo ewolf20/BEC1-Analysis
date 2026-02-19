@@ -427,3 +427,22 @@ def test_polaron_eos_pressure_to_ideal_majority_pressure_ratio():
     print(expected_pressure_to_ideal_pressure_ratio) 
     print(calculated_pressure_to_ideal_pressure_ratio)
     assert np.isclose(expected_pressure_to_ideal_pressure_ratio, calculated_pressure_to_ideal_pressure_ratio)
+
+
+#Check that formula is correctly entered...
+def test_balanced_nu_hbar_over_m():
+    SAMPLE_T_OVER_TF = 0.25 
+
+    #Independently calculated
+    EXPECTED_NU_VALUE = 0.796060765
+    returned_nu_value = eos_functions.balanced_nu_hbar_over_m(SAMPLE_T_OVER_TF) 
+    assert np.isclose(returned_nu_value, EXPECTED_NU_VALUE)
+
+
+def test_balanced_kappa_prime_hbar_over_m():
+    SAMPLE_T_OVER_TF = 0.25
+
+    #Again, value independently calculated 
+    EXPECTED_KAPPA_PRIME_VALUE = 2.12272787
+    returned_kappa_prime_value = eos_functions.balanced_kappa_prime_hbar_over_m(SAMPLE_T_OVER_TF)
+    assert np.isclose(returned_kappa_prime_value, EXPECTED_KAPPA_PRIME_VALUE)
