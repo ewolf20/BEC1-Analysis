@@ -446,3 +446,35 @@ def test_balanced_kappa_prime_hbar_over_m():
     EXPECTED_KAPPA_PRIME_VALUE = 2.12272787
     returned_kappa_prime_value = eos_functions.balanced_kappa_prime_hbar_over_m(SAMPLE_T_OVER_TF)
     assert np.isclose(returned_kappa_prime_value, EXPECTED_KAPPA_PRIME_VALUE)
+
+#Just check formulas... 
+def test_balanced_viscous_diffusivity_hbar_over_m():
+    SAMPLE_T_OVER_TF = 0.25 
+    #Same as above 
+    EXPECTED_NU_VALUE = 0.796060765
+    expected_diffusivity = 4/3 * EXPECTED_NU_VALUE 
+    returned_diffusivity = eos_functions.balanced_viscous_diffusivity_hbar_over_m(SAMPLE_T_OVER_TF)
+    assert np.isclose(expected_diffusivity, returned_diffusivity)
+
+#Again, just testing formula implementation
+def test_balanced_thermal_diffusivity_hbar_over_m():
+    SAMPLE_T_OVER_TF = 0.25 
+    #Same as above 
+    EXPECTED_KAPPA_PRIME_VALUE = 2.12272787
+    #By inspection from Ku data
+    APPROXIMATE_P_OVER_P0 = 0.69 
+    expected_diffusivity = 2/3 * (SAMPLE_T_OVER_TF / APPROXIMATE_P_OVER_P0) * EXPECTED_KAPPA_PRIME_VALUE
+    returned_diffusivity = eos_functions.balanced_thermal_diffusivity_hbar_over_m(SAMPLE_T_OVER_TF) 
+    assert np.isclose(expected_diffusivity, returned_diffusivity, rtol = 2e-2)
+
+#Finally check sum 
+def test_balanced_diffusivity_hbar_over_m():
+    SAMPLE_T_OVER_TF = 0.25
+    #Value eyeballed from https://doi.org/10.1103/PhysRevResearch.6.L042021
+    APPROXIMATE_EXPERIMENTAL_DIFFUSIVITY = 1.6 
+    returned_thermal_diffusivity = eos_functions.balanced_thermal_diffusivity_hbar_over_m(SAMPLE_T_OVER_TF)
+    returned_viscous_diffusivity = eos_functions.balanced_viscous_diffusivity_hbar_over_m(SAMPLE_T_OVER_TF)
+    expected_diffusivity = returned_thermal_diffusivity + returned_viscous_diffusivity
+    returned_diffusivity = eos_functions.balanced_diffusivity_hbar_over_m(SAMPLE_T_OVER_TF) 
+    assert np.isclose(returned_diffusivity, expected_diffusivity)
+    assert np.isclose(returned_diffusivity, APPROXIMATE_EXPERIMENTAL_DIFFUSIVITY, rtol = 3e-2)

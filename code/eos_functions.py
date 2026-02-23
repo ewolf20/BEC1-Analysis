@@ -696,8 +696,20 @@ TRANSPORT_ALPHA_KAPPA = 0.22
 def balanced_nu_hbar_over_m(T_over_TF):
     return TRANSPORT_ALPHA_3_2 * np.power(T_over_TF, 3/2) + TRANSPORT_ALPHA_ETA
 
+def balanced_viscous_diffusivity_hbar_over_m(T_over_TF):
+    return 4/3 * balanced_nu_hbar_over_m(T_over_TF)
+
 #As above, but return the value of kappa', defined as:
 #kappa' = (m k_B / rho) kappa
 #This combination is chosen such that the units are also hbar/m
 def balanced_kappa_prime_hbar_over_m(T_over_TF): 
     return 15/4 * (TRANSPORT_ALPHA_3_2 * np.power(T_over_TF, 3/2) + TRANSPORT_ALPHA_KAPPA)
+
+def balanced_thermal_diffusivity_hbar_over_m(T_over_TF):
+    kappa_prime_hbar_over_m = balanced_kappa_prime_hbar_over_m(T_over_TF)
+    P_over_P0_func = get_balanced_eos_functions("P_over_P0", independent_variable = "T_over_TF")
+    P_over_P0 = P_over_P0_func(T_over_TF)
+    return 2/3 * (T_over_TF / P_over_P0) * kappa_prime_hbar_over_m
+
+def balanced_diffusivity_hbar_over_m(T_over_TF):
+    return balanced_viscous_diffusivity_hbar_over_m(T_over_TF) + balanced_thermal_diffusivity_hbar_over_m(T_over_TF)
