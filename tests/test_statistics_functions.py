@@ -200,8 +200,60 @@ def test_average_over_like_x():
     EXPECTED_2D_ERRORS_OF_MEAN = EXPECTED_2D_DEVIATIONS / np.sqrt(X_REPEATS_2D)
     assert np.all(np.isclose(errors_of_mean_2d, EXPECTED_2D_ERRORS_OF_MEAN))
 
-    
-    
+
+def test_estimate_local_linear_deviation():
+    RNG_SEED = 1337
+    rng = np.random.default_rng(seed = RNG_SEED)
+    NUM_POINTS = 1000
+    SAMPLE_A = 2.3 
+    SAMPLE_B = 0.35 
+    SAMPLE_SIGMA = 0.1 
+    my_random_normals = rng.normal(loc = 0.0, scale = SAMPLE_SIGMA, size = NUM_POINTS)
+    X_RANGE_MIN = -1
+    X_RANGE_MAX = 1
+    x_range = np.linspace(X_RANGE_MIN, X_RANGE_MAX, NUM_POINTS)
+    noiseless_y_vals = SAMPLE_A * x_range + SAMPLE_B
+    noisy_y_vals = noiseless_y_vals + my_random_normals
+    extracted_sigma = statistics_functions.estimate_local_linear_deviation(x_range, noisy_y_vals)
+    EXPECTED_SIGMA = 0.1017952
+    assert np.isclose(extracted_sigma, EXPECTED_SIGMA) 
+    assert np.isclose(extracted_sigma, SAMPLE_SIGMA, rtol = 2e-2)
+    #Now test the coefficient fitting 
+    _, extracted_A, extracted_B = statistics_functions.estimate_local_linear_deviation(x_range, noisy_y_vals, return_coeffs = True)
+    EXPECTED_A = 2.2995546
+    EXPECTED_B = 0.3475212
+    assert np.isclose(extracted_A, EXPECTED_A) 
+    assert np.isclose(extracted_A, SAMPLE_A, rtol = 1e-2) 
+    assert np.isclose(extracted_B, EXPECTED_B)
+    assert np.isclose(extracted_B, SAMPLE_B, rtol = 1e-2)
+    #Now try the broadcasting
+    noisy_y_vals_stacked = np.repeat(np.expand_dims(noisy_y_vals, axis = 0), 2, axis = 0)   
+    x_range_stacked = np.repeat(np.expand_dims(x_range, axis = 0), 2, axis = 0) 
+    (extracted_sigma_stacked, extracted_A_stacked,
+      extracted_B_stacked) = statistics_functions.estimate_local_linear_deviation(x_range_stacked, noisy_y_vals_stacked, 
+                                                                                  return_coeffs = True) 
+    assert extracted_sigma_stacked.shape == (2,)
+    assert extracted_A_stacked.shape == (2,) 
+    assert extracted_B_stacked.shape == (2,) 
+    assert np.allclose(extracted_sigma_stacked, EXPECTED_SIGMA)
+    assert np.allclose(extracted_A_stacked, EXPECTED_A)
+    assert np.allclose(extracted_B_stacked, EXPECTED_B)
+    #Now check to make sure we're using an unbiased estimator
+    SMALL_NUM_POINTS = 10
+    small_x_range = np.linspace(X_RANGE_MIN, X_RANGE_MAX, SMALL_NUM_POINTS)
+    NUM_SMALL_ITERATIONS = 1000
+    small_sigmas_list = []
+    for i in range(NUM_SMALL_ITERATIONS):
+        my_small_random_normals = rng.normal(loc = 0.0, scale = SAMPLE_SIGMA, size = SMALL_NUM_POINTS)
+        noiseless_small_y_vals = SAMPLE_A * small_x_range + SAMPLE_B 
+        noisy_small_y_vals = noiseless_small_y_vals + my_small_random_normals
+        extracted_small_sigma = statistics_functions.estimate_local_linear_deviation(small_x_range, noisy_small_y_vals)
+        small_sigmas_list.append(extracted_small_sigma) 
+    small_sigmas = np.array(small_sigmas_list)
+    average_small_sigma = np.average(small_sigmas) 
+    EXPECTED_AVERAGE_SMALL_SIGMA = 0.096513512
+    assert np.isclose(average_small_sigma, EXPECTED_AVERAGE_SMALL_SIGMA)
+    assert np.isclose(average_small_sigma, SAMPLE_SIGMA, rtol = 5e-2)
 
 
 #Random normals contains 100 normal deviates of standard deviation 1

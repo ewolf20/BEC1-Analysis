@@ -345,3 +345,38 @@ def average_over_like_x(x_data, y_data, return_deviations = False, return_error_
         errors_of_mean = np.array([np.std(y_data[x_data == x_val], ddof = 1, axis = 0) / np.sqrt(np.count_nonzero(x_data == x_val)) for x_val in unique_x_data])
         return_list.append(errors_of_mean) 
     return tuple(return_list)
+
+
+"""
+Given data x_i, y_i, return the linear-fit-corrected deviation. 
+
+Given a set of input data {(x_i, y_i)}, assume that the data points are given by: 
+    y_i = A x_i + B + e_i 
+
+with errors e_i assumed normal and homoscedastic, and return an estimate of the characteristic width 
+of the error distribution using least-squares fitting. 
+
+Parameters:
+    x: An array of shape (..., N) encoding the x values. All axes but the last are broadcast over. 
+    y: An array of the same shape as x, encoding the y values. 
+    return_coeffs: If True, return the fitted coefficients A and B as well as sigma. 
+
+Returns: 
+    sigma, of shape (...), if return_coeffs is False; otherwise, (sigma, A, B), with A and B also 
+    of shape (...).
+"""
+
+def estimate_local_linear_deviation(x, y, return_coeffs = False): 
+    x_0 = np.average(x, axis = -1, keepdims = True) 
+    x_prime = x - x_0 
+    B_prime = np.average(y, axis = -1, keepdims = True)
+    A = np.average(x_prime * y, axis = -1, keepdims = True) / np.average(np.square(x_prime), axis = -1, keepdims = True)
+    B = B_prime + x_0 * A
+    residuals = y - A * x - B
+    NUM_PARAMS = 2
+    estimated_sigmas = np.std(residuals, axis = -1, ddof = NUM_PARAMS)
+    if return_coeffs: 
+        return (estimated_sigmas, np.squeeze(A, axis = -1), np.squeeze(B, axis = -1))
+    else:
+        return estimated_sigmas
+
