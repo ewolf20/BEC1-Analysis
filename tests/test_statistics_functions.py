@@ -209,7 +209,7 @@ def test_estimate_local_linear_deviation():
     SAMPLE_B = 0.35 
     SAMPLE_SIGMA = 0.1 
     my_random_normals = rng.normal(loc = 0.0, scale = SAMPLE_SIGMA, size = NUM_POINTS)
-    X_RANGE_MIN = -1
+    X_RANGE_MIN = 0
     X_RANGE_MAX = 1
     x_range = np.linspace(X_RANGE_MIN, X_RANGE_MAX, NUM_POINTS)
     noiseless_y_vals = SAMPLE_A * x_range + SAMPLE_B
@@ -220,8 +220,8 @@ def test_estimate_local_linear_deviation():
     assert np.isclose(extracted_sigma, SAMPLE_SIGMA, rtol = 2e-2)
     #Now test the coefficient fitting 
     _, extracted_A, extracted_B = statistics_functions.estimate_local_linear_deviation(x_range, noisy_y_vals, return_coeffs = True)
-    EXPECTED_A = 2.2995546
-    EXPECTED_B = 0.3475212
+    EXPECTED_A = 2.2991092
+    EXPECTED_B = 0.3479666
     assert np.isclose(extracted_A, EXPECTED_A) 
     assert np.isclose(extracted_A, SAMPLE_A, rtol = 1e-2) 
     assert np.isclose(extracted_B, EXPECTED_B)

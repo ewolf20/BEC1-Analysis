@@ -371,7 +371,7 @@ def estimate_local_linear_deviation(x, y, return_coeffs = False):
     x_prime = x - x_0 
     B_prime = np.average(y, axis = -1, keepdims = True)
     A = np.average(x_prime * y, axis = -1, keepdims = True) / np.average(np.square(x_prime), axis = -1, keepdims = True)
-    B = B_prime + x_0 * A
+    B = B_prime - x_0 * A
     residuals = y - A * x - B
     NUM_PARAMS = 2
     estimated_sigmas = np.std(residuals, axis = -1, ddof = NUM_PARAMS)
