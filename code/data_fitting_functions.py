@@ -375,6 +375,58 @@ def rf_spect_detuning_scan(rf_freqs, tau, center, rabi_freq):
     return populations_excited
 
 
+#For fitting the response of a damped, driven harmonic oscillator in the finite drive time limit.
+
+def fit_damped_driven_oscillator_response(omegas, responses, taus, force_phase = -np.pi / 2, F_amp_guess = None,
+                                           omega_0_guess = None, gamma_guess = None):
+    if omega_0_guess is None: 
+        #Assume we're fitting the out-of-phase response
+        peak_index = np.argmax(np.abs(responses))
+        omega_0_guess = omegas[peak_index] 
+    if gamma_guess is None: 
+        #Very crude - just assume it's an appreciable fraction of the x width
+        omega_range = np.max(omegas) - np.min(omegas)
+        gamma_guess = omega_range / 2.0
+    if F_amp_guess is None: 
+        #Again, assume we're fitting the out-of-phase response
+        #Also assume that tau is an integer number of cycles...
+        peak_response_index = np.argmax(np.abs(responses)) 
+        peak_response_val = responses[peak_response_index]
+        force_sign = np.sign(np.sin(force_phase))
+        F_amp_guess = peak_response_val * (force_sign * gamma_guess * omega_0_guess)
+    
+    def wrapped_damped_driven_oscillator_response(omegas, F_amp, omega_0, gamma):
+        return damped_driven_oscillator_response(omegas, taus, force_phase, F_amp, omega_0, gamma)
+    
+    p_init = [
+        F_amp_guess, 
+        omega_0_guess, 
+        gamma_guess
+    ]
+
+    return curve_fit(wrapped_damped_driven_oscillator_response, omegas, responses, p0 = p_init)
+
+def damped_driven_oscillator_response(omega, tau, force_phase, F_amp, omega_0, gamma):
+    omega_0_prime = np.sqrt(np.square(omega_0) - np.square(gamma) / 4)
+    phi_prime = omega_0_prime * tau 
+    phi = omega * tau 
+
+    Delta = np.square(omega_0) - np.square(omega)
+    denom = np.square(Delta) + np.square(gamma * omega)
+
+    particular_real_part_t0 = F_amp * (np.cos(force_phase) * Delta / denom + np.sin(force_phase) * gamma * omega / denom)
+    particular_im_part_t0 = F_amp * (np.cos(force_phase) * gamma * omega / denom - np.sin(force_phase) * Delta / denom)
+
+    K_0 = -particular_real_part_t0
+    K_1 = -1.0 / omega_0_prime * (omega * particular_im_part_t0 + gamma /2 * particular_real_part_t0)
+
+    homogeneous_part = (K_0 * np.exp(-gamma * tau / 2) * np.cos(phi_prime) + 
+                        K_1 * np.exp(-gamma * tau / 2) * np.sin(phi_prime) ) 
+    
+    particular_part = particular_real_part_t0 * np.cos(phi) + particular_im_part_t0 * np.sin(phi)
+
+    return homogeneous_part + particular_part
+
 def hybrid_trap_center_finder(image_to_fit, tilt_deg, hybrid_pixel_width, hybrid_pixel_length, center_guess = None):
     width_sigma = hybrid_pixel_width / 4
     length_sigma = hybrid_pixel_length / 4
