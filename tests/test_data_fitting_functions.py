@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
+from scipy.integrate import RK45
 
 path_to_file = os.path.dirname(os.path.abspath(__file__))
 path_to_analysis = path_to_file + "/../../"
@@ -229,6 +230,91 @@ def test_fit_rf_spect_detuning_scan():
     center_o, rabi_freq_o = popt_o
     assert (np.abs((center_o - SAMPLE_CENTER) / SAMPLE_CENTER) < 3e-2) 
     assert (np.abs((rabi_freq_o - SAMPLE_RABI) / SAMPLE_RABI) < 3e-2)
+
+
+def test_fit_damped_driven_oscillator_response():
+    RNG_SEED = 1337
+    rng = np.random.default_rng(seed = RNG_SEED)
+
+    SAMPLE_GAMMA = 2 * np.pi * 13 
+    SAMPLE_OMEGA_0 = 2 * np.pi * 197
+    OMEGA_RANGE_WIDTH = 2 * np.pi * 20
+    SAMPLE_FORCE_AMP = 0.52
+    SAMPLE_FORCE_PHASE = -np.pi / 2.0
+    #Use integer number of cycles to ensure that the assumptions of guesses work
+    SAMPLE_NUM_CYCLES = 10
+    NUM_POINTS = 1000
+    omega_range = np.linspace(SAMPLE_OMEGA_0 - OMEGA_RANGE_WIDTH, SAMPLE_OMEGA_0 + OMEGA_RANGE_WIDTH, NUM_POINTS)
+    sample_taus = 2 * np.pi * SAMPLE_NUM_CYCLES / omega_range
+    noiseless_data = data_fitting_functions.damped_driven_oscillator_response(
+        omega_range, sample_taus, SAMPLE_FORCE_PHASE, SAMPLE_FORCE_AMP, SAMPLE_OMEGA_0, SAMPLE_GAMMA
+    )
+
+    noiseless_data_amp = np.max(np.abs(noiseless_data)) 
+    noise_amplitude = 0.01 * noiseless_data_amp 
+    noise_values = rng.normal(loc = 0.0, scale = noise_amplitude, size = NUM_POINTS)
+    noisy_data = noiseless_data + noise_values 
+    fit_results = data_fitting_functions.fit_damped_driven_oscillator_response(omega_range, noisy_data, 
+                                        sample_taus, force_phase = SAMPLE_FORCE_PHASE)
+    fit_popt, fit_pcov = fit_results 
+
+    EXPECTED_F_AMP = 0.519968
+    EXPECTED_OMEGA_0 = 1237.77386
+    EXPECTED_GAMMA = 81.530275
+
+    fitted_F_amp, fitted_omega_0, fitted_gamma = fit_popt
+
+    assert np.isclose(fitted_F_amp, EXPECTED_F_AMP) 
+    assert np.isclose(fitted_omega_0, EXPECTED_OMEGA_0)
+    assert np.isclose(fitted_gamma, EXPECTED_GAMMA)
+
+    assert np.isclose(fitted_F_amp, EXPECTED_F_AMP, rtol = 1e-4)
+    assert np.isclose(fitted_omega_0, EXPECTED_OMEGA_0, rtol = 1e-4)
+    assert np.isclose(fitted_gamma, SAMPLE_GAMMA, rtol = 2e-3)
+
+def test_damped_driven_oscillator_response():
+    #Formula is a little complicated, so test against a numerical solver 
+    #Randomly chosen values to avoid any accidental cancellations of terms... 
+    SAMPLE_GAMMA = 2 * np.pi * 13 
+    SAMPLE_OMEGA_0 = 2 * np.pi * 197
+    OMEGA_RANGE_WIDTH = 2 * np.pi * 20
+    SAMPLE_FORCE_AMP = 0.52
+    SAMPLE_FORCE_PHASE = 1
+    SAMPLE_TAU = 0.13
+    omega_range = np.linspace(SAMPLE_OMEGA_0 - OMEGA_RANGE_WIDTH, SAMPLE_OMEGA_0 + OMEGA_RANGE_WIDTH, 10)
+
+    def force_func_factory(omega):
+        def force_func(t):
+            return SAMPLE_FORCE_AMP * np.cos(omega * t + SAMPLE_FORCE_PHASE)
+        return force_func    
+
+    def oscillator_func_factory(force_func):
+        def oscillator_func(t, y_stack):
+            y, y_dot = y_stack 
+            y_update = y_dot 
+            y_dot_update = -np.square(SAMPLE_OMEGA_0) * y - SAMPLE_GAMMA * y_dot + force_func(t)  
+            return np.stack((y_update, y_dot_update))
+        return oscillator_func
+
+    rk45_y_values_list = []
+    for omega in omega_range:
+        force_func = force_func_factory(omega) 
+        oscillator_func = oscillator_func_factory(force_func)
+        solver = RK45(oscillator_func, 0, np.zeros(2), SAMPLE_TAU, rtol = 1e-5, atol = 1e-7)
+        while solver.status == "running":
+            solver.step() 
+        if solver.status == "failed":
+            raise RuntimeError("Solver Failed") 
+        rk45_y_values_list.append(solver.y[0])
+    rk45_y_values = np.array(rk45_y_values_list)
+
+    extracted_values = data_fitting_functions.damped_driven_oscillator_response(
+        omega_range, SAMPLE_TAU, SAMPLE_FORCE_PHASE, SAMPLE_FORCE_AMP, SAMPLE_OMEGA_0, 
+        SAMPLE_GAMMA)
+    
+    
+    assert np.allclose(extracted_values, rk45_y_values, rtol = 1e-5, atol = 1e-7)
+
 
 
 def test_hybrid_trap_center_finder():
